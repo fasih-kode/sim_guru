@@ -1,0 +1,17 @@
+{
+  "name": "sim-guru-assets",
+  "private": true,
+  "scripts": {
+    "build": "tailwindcss -i web/styles/app.css -o internal/web/static/app.css --minify && node scripts/copy-assets.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "htmx.org": "2.0.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.0",
+    "tailwindcss": "4.3.0"
+  }
+}

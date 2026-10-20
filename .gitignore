@@ -1,0 +1,9 @@
+# Local secrets and runtime
+.env
+.env.*
+!.env.example
+.local/
+node_modules/
+/bin/
+/coverage/
+*.log

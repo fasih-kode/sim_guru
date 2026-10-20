@@ -1,0 +1,20 @@
+// Package migrations embeds immutable, versioned SQL migrations.
+package migrations
+
+import (
+	"database/sql"
+	"embed"
+	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
+)
+
+//go:embed *.sql
+var Files embed.FS
+
+func Provider(db *sql.DB) (*goose.Provider, error) {
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return nil, err
+	}
+	return goose.NewProvider(goose.DialectPostgres, db, Files, goose.WithSessionLocker(locker))
+}

@@ -1,0 +1,17 @@
+/* TailAdmin theme/layout adaptation. See third_party/tailadmin/LICENSE. */
+@import "tailwindcss";
+@source "../../internal/web/templates";
+@theme {
+ --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+ --color-brand-50: #ecf3ff;
+ --color-brand-500: #465fff;
+ --color-brand-600: #3641f5;
+ --color-gray-50: #f9fafb;
+ --color-gray-200: #e4e7ec;
+ --color-gray-500: #667085;
+ --color-gray-800: #1d2939;
+ --color-gray-900: #101828;
+}
+@layer base { body { @apply bg-gray-50 text-gray-800 antialiased; } button,a { @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-500; } }
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
