@@ -3,9 +3,14 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/fasih-kode/sim_guru/internal/auth"
 )
 
 func TestRoutes(t *testing.T) {
@@ -15,13 +20,13 @@ func TestRoutes(t *testing.T) {
 		status                         int
 		contains, excludes             string
 	}{
-		{name: "full page", path: "/", method: "GET", status: 200, contains: "<!doctype html>"},
-		{name: "htmx fragment", path: "/", method: "GET", hx: "true", status: 200, contains: "id=\"overview\"", excludes: "<!doctype html>"},
+		{name: "full page", path: "/login", method: "GET", status: 200, contains: "<!doctype html>"},
+		{name: "htmx session expired", path: "/", method: "GET", hx: "true", status: 401, excludes: "<!doctype html>"},
 		{name: "liveness independent", path: "/health/live", method: "GET", failed: true, status: 200, contains: "ok"},
 		{name: "ready", path: "/health/ready", method: "GET", status: 200, contains: "ready"},
 		{name: "unready redacts errors", path: "/health/ready", method: "GET", failed: true, status: 503, contains: "belum siap", excludes: "secret"},
 		{name: "unknown", path: "/students", method: "GET", status: 404},
-		{name: "no mutation", path: "/", method: "POST", status: 405},
+		{name: "missing csrf", path: "/login", method: "POST", status: 403},
 		{name: "cross origin blocked", path: "/", method: "POST", origin: "https://evil.example", status: 403},
 		{name: "css", path: "/static/app.css", method: "GET", status: 200, contains: "tailwindcss"},
 		{name: "htmx", path: "/static/htmx.min.js", method: "GET", status: 200, contains: "htmx"},
@@ -33,7 +38,7 @@ func TestRoutes(t *testing.T) {
 					return errors.New("secret")
 				}
 				return nil
-			})
+			}, Options{Accounts: &auth.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -56,9 +61,58 @@ func TestRoutes(t *testing.T) {
 			if w.Header().Get("Content-Security-Policy") == "" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
 				t.Fatal("missing security headers")
 			}
-			if tc.path == "/" && tc.method == "GET" && w.Header().Get("Vary") != "HX-Request" {
-				t.Fatal("missing Vary")
+			if tc.hx == "true" && w.Header().Get("HX-Redirect") != "/login" {
+				t.Fatal("missing login redirect for expired htmx request")
 			}
 		})
+	}
+}
+
+func TestLoginLimiter(t *testing.T) {
+	var limiter loginLimiter
+	now := time.Now()
+	for i := 0; i < 10; i++ {
+		if !limiter.allow("127.0.0.1", "same-user", now) {
+			t.Fatal("limited too soon")
+		}
+	}
+	if limiter.allow("another-ip", "same-user", now) {
+		t.Fatal("username limit bypassed")
+	}
+	if !limiter.allow("127.0.0.1", "same-user", now.Add(16*time.Minute)) {
+		t.Fatal("limit did not expire")
+	}
+	for i := 0; i < 29; i++ {
+		if !limiter.allow("127.0.0.2", fmt.Sprintf("user-%d", i), now) {
+			t.Fatal("IP limited too soon")
+		}
+	}
+	if !limiter.allow("127.0.0.2", "last-user", now) {
+		t.Fatal("IP limit early")
+	}
+	if limiter.allow("127.0.0.2", "other-user", now) {
+		t.Fatal("IP limit bypassed")
+	}
+}
+
+func TestSessionCookieAttributes(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		app := application{options: Options{SecureCookies: secure}}
+		w := httptest.NewRecorder()
+		app.setSession(w, strings.Repeat("a", 64))
+		cookies := w.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatal("missing session cookie")
+		}
+		c := cookies[0]
+		if !c.HttpOnly || c.Secure != secure || c.Domain != "" || c.Path != "/" || c.SameSite != http.SameSiteLaxMode || c.MaxAge != int(auth.SessionLifetime.Seconds()) {
+			t.Fatal("unsafe cookie attributes")
+		}
+		w = httptest.NewRecorder()
+		app.clearSession(w)
+		c = w.Result().Cookies()[0]
+		if c.MaxAge != -1 || c.Value != "" || c.Secure != secure {
+			t.Fatal("cookie was not expired correctly")
+		}
 	}
 }

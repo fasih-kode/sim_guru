@@ -1,26 +1,200 @@
+{{define "head"}}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIM-GURU · {{.Title}}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer>
+</script>
+<script src="/static/app.js" defer>
+</script>{{end}}
+{{define "messages"}}{{if .Error}}<p role="alert" class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{{.Error}}</p>{{end}}{{if .Message}}<p role="status" class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{{.Message}}</p>{{end}}{{end}}
+{{define "login"}}<!doctype html>
+<html lang="id">
+<head>{{template "head" .}}</head>
+<body>
+<main class="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-12">
+<a href="/login" class="mb-8 text-2xl font-semibold text-brand-600">SIM-GURU</a>
+<section class="panel">
+<h1 class="text-2xl font-semibold">Masuk ke akun Anda</h1>
+<p class="mt-2 mb-7 text-sm text-gray-500">Gunakan akun personel yang diberikan Admin sekolah.</p>{{template "messages" .}}<form method="post" action="/login" class="space-y-5">{{.CSRF}}<div>
+<label for="username">Nama pengguna</label>
+<input id="username" name="username" autocomplete="username" required maxlength="64" autocapitalize="none">
+</div>
+<div>
+<label for="password">Kata sandi</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required>
+</div>
+<button class="button-primary w-full" type="submit">Masuk</button>
+</form>
+<p class="mt-6 text-sm text-gray-500">Kesulitan mengakses akun? Hubungi Admin sekolah.</p>
+</section>
+</main>
+</body>
+</html>{{end}}
 {{define "page"}}<!doctype html>
 <html lang="id">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SIM-GURU · Beranda</title><link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/app.css"><script src="/static/htmx.min.js" defer></script><script src="/static/app.js" defer></script></head>
-<body><a href="#content" class="sr-only focus:not-sr-only">Langsung ke konten</a>
+<head>{{template "head" .}}</head>
+<body>
+<a href="#content" class="sr-only focus:not-sr-only">Langsung ke konten</a>
 <div class="min-h-screen lg:flex">
- <aside class="border-b border-gray-200 bg-white px-6 py-6 lg:fixed lg:inset-y-0 lg:w-64 lg:border-r lg:border-b-0">
-  <a href="/" class="flex items-center gap-3 text-xl font-semibold"><span class="rounded-xl bg-brand-500 px-3 py-2 text-white" aria-hidden="true">S</span> SIM-GURU</a>
-  <p class="mt-2 text-sm text-gray-500">Sistem Informasi Guru</p>
-  <nav aria-label="Navigasi utama" class="mt-8"><p class="mb-3 text-xs font-medium uppercase tracking-wider text-gray-500">Menu</p><a href="/" aria-current="page" class="block rounded-lg bg-brand-50 px-4 py-3 text-sm font-medium text-brand-600">Beranda</a></nav>
-  <p class="mt-8 text-sm text-gray-500">Ruang kerja akademik sekolah.</p>
- </aside>
- <div class="min-w-0 flex-1 lg:ml-64">
-  <header class="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-5"><span class="text-sm text-gray-500">SIM-GURU</span><span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">Tahap persiapan</span></header>
-  <main id="content" class="mx-auto max-w-7xl p-5 md:p-8" tabindex="-1">
-   <div class="mb-7 flex flex-wrap items-center justify-between gap-4"><div><p class="text-sm text-gray-500">Selamat datang</p><h1 class="mt-1 text-2xl font-semibold">Beranda</h1></div><a href="/" hx-get="/" hx-target="#overview" hx-swap="outerHTML" hx-indicator="#loading" class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium">Muat ulang <span id="loading" class="htmx-indicator" role="status">Memuat…</span></a></div>
-   <p id="request-error" role="alert" hidden class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">Halaman belum dapat diperbarui. Coba muat ulang.</p>
-   {{template "overview" .}}
-  </main>
- </div>
-</div></body></html>{{end}}
-{{define "overview"}}<section id="overview" aria-labelledby="overview-title" class="rounded-2xl border border-gray-200 bg-white p-6 md:p-10">
- <span class="inline-block rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-600">Persiapan layanan</span>
- <h2 id="overview-title" class="mt-5 text-xl font-semibold">Ruang kerja sekolah sedang disiapkan</h2>
- <p class="mt-3 max-w-2xl leading-7 text-gray-500">SIM-GURU akan membantu pengelolaan data sekolah, kegiatan mengajar, kehadiran, dan penilaian. Layanan operasional belum tersedia.</p>
- <div class="mt-8 grid gap-4 md:grid-cols-3"><div class="rounded-xl border border-gray-200 p-5"><h3 class="font-medium">Data sekolah</h3><p class="mt-2 text-sm text-gray-500">Identitas siswa dan guru yang terhubung.</p></div><div class="rounded-xl border border-gray-200 p-5"><h3 class="font-medium">Kegiatan akademik</h3><p class="mt-2 text-sm text-gray-500">Penugasan, jadwal, dan jurnal mengajar.</p></div><div class="rounded-xl border border-gray-200 p-5"><h3 class="font-medium">Kehadiran dan nilai</h3><p class="mt-2 text-sm text-gray-500">Pencatatan dan laporan sesuai kewenangan.</p></div></div>
+<aside class="border-b border-gray-200 bg-white px-6 py-6 lg:fixed lg:inset-y-0 lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0">
+<a href="/" class="flex items-center gap-3 text-xl font-semibold">
+<span class="rounded-xl bg-brand-500 px-3 py-2 text-white" aria-hidden="true">S</span>SIM-GURU</a>
+<p class="mt-2 text-sm text-gray-500">Sistem Informasi Guru</p>
+<nav aria-label="Navigasi utama" class="mt-8 space-y-2">
+<a class="nav-link" href="/">Beranda</a>{{if .User.HasRole "admin"}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Administrasi</p>
+<a class="nav-link" href="/admin/users">Pengguna dan role</a>
+<a class="nav-link" href="/admin/audit">Riwayat perubahan akses</a>{{end}}{{if .User.HasRole "kurikulum"}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Kurikulum</p>
+<a class="nav-link" href="/akademik">Akademik</a>{{end}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Akun saya</p>
+<a class="nav-link" href="/account/password">Kata sandi</a>
+</nav>
+</aside>
+<div class="min-w-0 flex-1 lg:ml-64">
+<header class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
+<div>
+<p class="font-medium">{{.User.DisplayName}}</p>
+<p class="text-xs text-gray-500">{{.User.RoleNames}}</p>
+</div>
+<form method="post" action="/logout">{{.CSRF}}<button type="submit" class="button-secondary">Keluar</button>
+</form>
+</header>
+<main id="content" class="mx-auto max-w-7xl p-5 md:p-8" tabindex="-1">
+<h1 class="mb-6 text-2xl font-semibold">{{.Title}}</h1>{{template "messages" .}}<p id="request-error" role="alert" hidden class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">Halaman belum dapat diperbarui. Coba muat ulang.</p>{{if eq .Page "home"}}<a href="/" hx-get="/" hx-target="#overview" hx-swap="outerHTML" hx-indicator="#loading" class="button-secondary mb-5 inline-block">Muat ulang <span id="loading" class="htmx-indicator" role="status">Memuat…</span>
+</a>{{template "overview" .}}{{else if eq .Page "users"}}{{template "users" .}}{{else if eq .Page "user-form"}}{{template "user-form" .}}{{else if eq .Page "password"}}{{template "password" .}}{{else if eq .Page "audit"}}{{template "audit" .}}{{else if eq .Page "academic"}}<section class="panel">
+<h2 class="text-lg font-semibold">Ruang kerja Kurikulum</h2>
+<p class="mt-3 text-gray-500">Role Kurikulum Anda aktif. Pengelolaan tahun ajaran, kelas, dan penugasan akan tersedia pada tahap pengembangan berikutnya.</p>
+</section>{{end}}</main>
+</div>
+</div>
+</body>
+</html>{{end}}
+{{define "overview"}}<section id="overview" aria-labelledby="overview-title" class="panel">
+<span class="rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-600">Akun aktif</span>
+<h2 id="overview-title" class="mt-5 text-xl font-semibold">Selamat datang, {{.User.DisplayName}}</h2>
+<p class="mt-3 leading-7 text-gray-500">Akses Anda mengikuti role dan penugasan yang aktif. Modul kegiatan akademik sedang disiapkan.</p>
+<dl class="mt-6 grid gap-5 sm:grid-cols-2">
+<div>
+<dt class="text-sm text-gray-500">Nama pengguna</dt>
+<dd class="mt-1 font-medium">{{.User.Username}}</dd>
+</div>
+<div>
+<dt class="text-sm text-gray-500">Role aktif</dt>
+<dd class="mt-1 font-medium">{{.User.RoleNames}}</dd>
+</div>
+</dl>
+</section>{{end}}
+{{define "users"}}<div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+<p class="text-sm text-gray-500">Kelola akses personel. Penugasan akademik dikelola Kurikulum.</p>
+<a href="/admin/users/new" class="button-primary">Tambah pengguna</a>
+</div>
+<section class="panel">
+<form method="get" action="/admin/users" class="mb-6 grid items-end gap-4 sm:grid-cols-4">
+<div>
+<label for="q">Cari pengguna</label>
+<input id="q" name="q" value="{{.Filter.Search}}" maxlength="120" placeholder="Nama atau username">
+</div>
+<div>
+<label for="role">Role</label>
+<select id="role" name="role">
+<option value="">Semua role</option>{{range .RoleChoices}}<option value="{{.Code}}" {{if eq $.Filter.Role .Code}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+</div>
+<div>
+<label for="status">Status</label>
+<select id="status" name="status">
+<option value="">Semua status</option>
+<option value="active" {{if eq .Filter.Status "active"}}selected{{end}}>Aktif</option>
+<option value="inactive" {{if eq .Filter.Status "inactive"}}selected{{end}}>Nonaktif</option>
+</select>
+</div>
+<button class="button-secondary" type="submit">Terapkan</button>
+</form>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm">
+<caption class="sr-only">Daftar pengguna dan hak akses</caption>
+<thead>
+<tr class="border-b border-gray-200 text-gray-500">
+<th class="p-3">Nama</th>
+<th class="p-3">Nama pengguna</th>
+<th class="p-3">Role</th>
+<th class="p-3">Status</th>
+<th class="p-3">Tindakan</th>
+</tr>
+</thead>
+<tbody>{{range .Users}}<tr class="border-b border-gray-200">
+<td class="p-3 font-medium">{{.DisplayName}}</td>
+<td class="p-3">{{.Username}}</td>
+<td class="p-3">{{.RoleNames}}</td>
+<td class="p-3">{{if .Active}}Aktif{{else}}Nonaktif{{end}}</td>
+<td class="p-3">
+<a href="/admin/users/{{.ID}}/edit" class="text-brand-600 underline">Edit<span class="sr-only"> {{.DisplayName}}</span>
+</a>
+</td>
+</tr>{{else}}<tr>
+<td colspan="5" class="p-8 text-center text-gray-500">Tidak ada pengguna yang sesuai pencarian.</td>
+</tr>{{end}}</tbody>
+</table>
+</div>
+<nav aria-label="Halaman daftar pengguna" class="mt-6 flex gap-4">{{if .Previous}}<a class="text-brand-600 underline" href="/admin/users?page={{.Previous}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">Sebelumnya</a>{{end}}{{if .Next}}<a class="text-brand-600 underline" href="/admin/users?page={{.Next}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">Berikutnya</a>{{end}}</nav>
+</section>{{end}}
+{{define "user-form"}}<section class="panel max-w-2xl">
+<form method="post" action="{{if .Editing}}/admin/users/{{.Editing}}/edit{{else}}/admin/users/new{{end}}" class="space-y-5">{{.CSRF}}<input type="hidden" name="version" value="{{.Input.Version}}">
+<div>
+<label for="display_name">Nama tampilan</label>
+<input id="display_name" name="display_name" value="{{.Input.DisplayName}}" maxlength="120" required>
+<p class="mt-1 text-xs text-gray-500">Nama akun; data induk guru dikelola terpisah pada tahap berikutnya.</p>
+</div>
+<div>
+<label for="username">Nama pengguna</label>
+<input id="username" name="username" value="{{.Input.Username}}" minlength="3" maxlength="64" autocomplete="off" required>
+<p class="mt-1 text-xs text-gray-500">3–64 karakter: huruf, angka, titik, garis bawah, atau tanda hubung.</p>
+</div>
+<div>
+<label for="new_password">{{if .Editing}}Kata sandi baru (opsional){{else}}Kata sandi awal{{end}}</label>
+<input id="new_password" name="password" type="password" autocomplete="new-password" minlength="12" {{if not .Editing}}required{{end}}>
+<p class="mt-1 text-xs text-gray-500">Minimal 12 karakter, maksimal 72 byte. {{if .Editing}}Kosongkan agar tetap. Mengganti kata sandi mencabut semua sesi akun.{{end}}</p>
+</div>
+<fieldset>
+<legend class="mb-3 text-sm font-medium">Role</legend>
+<div class="grid gap-3 sm:grid-cols-2">{{range .RoleChoices}}<label class="flex items-center gap-2">
+<input type="checkbox" name="roles" value="{{.Code}}" {{if .Checked}}checked{{end}}>{{.Name}}</label>{{end}}</div>
+<p class="mt-3 text-sm text-gray-500">Role langsung berlaku setelah disimpan. Role Guru Mapel/Wali Kelas tetap memerlukan penugasan Kurikulum untuk akses kelas.</p>
+</fieldset>
+<label class="flex items-center gap-2">
+<input type="checkbox" name="active" value="true" {{if .Input.Active}}checked{{end}}>Akun aktif</label>
+<p class="text-sm text-gray-500">Menonaktifkan akun mencabut seluruh sesinya. Minimal satu Admin aktif dipertahankan.</p>
+<div class="flex flex-wrap gap-3">
+<button type="submit" class="button-primary">Simpan pengguna</button>
+<a href="/admin/users" class="button-secondary">Batal</a>
+</div>
+</form>
+</section>{{end}}
+{{define "password"}}<section class="panel max-w-xl">
+<p class="mb-6 text-sm text-gray-500">Perubahan kata sandi mengakhiri seluruh sesi Anda. Setelah berhasil, masuk kembali dengan kata sandi baru.</p>
+<form method="post" action="/account/password" class="space-y-5">{{.CSRF}}<div>
+<label for="current_password">Kata sandi saat ini</label>
+<input id="current_password" type="password" name="current_password" autocomplete="current-password" required>
+</div>
+<div>
+<label for="password">Kata sandi baru</label>
+<input id="password" type="password" name="password" autocomplete="new-password" minlength="12" required>
+<p class="mt-1 text-xs text-gray-500">Minimal 12 karakter dan maksimal 72 byte UTF-8.</p>
+</div>
+<div>
+<label for="confirm_password">Ulangi kata sandi baru</label>
+<input id="confirm_password" type="password" name="confirm_password" autocomplete="new-password" minlength="12" required>
+</div>
+<button class="button-primary" type="submit">Ubah kata sandi</button>
+</form>
+</section>{{end}}
+{{define "audit"}}<section class="panel">
+<p class="mb-6 text-sm text-gray-500">100 catatan akses terbaru. Kata sandi dan token sesi tidak dicatat.</p>
+<div class="space-y-4">{{range .Audits}}<article class="rounded-lg border border-gray-200 p-4">
+<p class="font-medium">{{.Action}} · {{.Target}}</p>
+<p class="mt-1 text-sm text-gray-500">{{.At.Format "2006-01-02 15:04:05 MST"}} · oleh {{.Actor}}</p>{{if or .Before .After}}<details class="mt-3 text-sm">
+<summary class="cursor-pointer text-brand-600">Lihat perubahan</summary>
+<p class="mt-3 font-medium">Sebelum</p>
+<pre class="mt-1 overflow-x-auto rounded bg-gray-50 p-3 text-xs">{{.Before}}</pre>
+<p class="mt-3 font-medium">Sesudah</p>
+<pre class="mt-1 overflow-x-auto rounded bg-gray-50 p-3 text-xs">{{.After}}</pre>
+</details>{{end}}</article>{{else}}<p class="text-gray-500">Belum ada riwayat perubahan akses.</p>{{end}}</div>
 </section>{{end}}

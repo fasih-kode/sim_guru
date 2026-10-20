@@ -21,5 +21,18 @@ TailAdmin Free HTML 2.4.0 commit 1bd2dc42a8467ae0281cf00bd0050da4c9c4be07 berlis
 ## D-007 — Patch toolchain proyek (pilihan teknis keamanan, 21 Oktober 2026)
 Govulncheck pada Go 1.27.1 melaporkan sembilan kerentanan standard library yang terjangkau. go.mod dinaikkan ke 1.27.3 melalui pemilihan toolchain Go otomatis, tanpa mengganti /usr/local/go milik proyek lain. [Release history resmi](https://go.dev/doc/devel/release) mencatat patch keamanan 1.27.2 dan 1.27.3. Hasil verifikasi ulang dicatat di HANDOVER.
 
+## D-008 — Autentikasi dan administrasi akses (pilihan teknis, 21 Oktober 2026)
+Pengguna mengotorisasi implementasi autentikasi dan pengelolaan pengguna/role. Tambahkan migration 00002 tanpa mengubah 00001; delapan role mengikuti PRD. Nama tampilan akun belum menjadi data induk guru. Password bcrypt cost 12, 12 karakter minimum dan batas 72 byte; golang.org/x/crypto v0.58.0. Bootstrap CLI memakai golang.org/x/term v0.47.0 agar password tidak terlihat dan hanya bekerja saat akun kosong; tidak ada credential default.
+
+Sesi token acak 256 bit disimpan sebagai SHA-256, batas 8 jam/idle 30 menit, cookie HttpOnly/SameSite=Lax/Secure production. Status/role dibaca per request; revokasi password/logout/nonaktif berlaku di server. Gorilla CSRF v1.7.3 dengan key lingkungan persisten digunakan bersama NewCrossOriginProtection; tidak memakai TrustedOrigins. Limiter login bounded per proses mengabaikan header forwarding yang tidak dipercaya. Pilihan ini tetap membutuhkan evaluasi deployment sebelum produksi.
+
+Mutasi akun dan audit atomik; advisory lock menghindari race akses/bootstrap, optimistic version menghindari lost update. Minimal satu Admin aktif dilindungi sebagai pengaman operasional, bukan approval tambahan. UI hanya menonaktifkan akun, bukan menghapus histori. Audit tidak memuat credential; UI menampilkan WIB.
+
+## D-009 — Port development 8090 (21 Oktober 2026)
+Pengguna menyampaikan port 8080 dipakai aplikasi lain dan meminta penggantian. Port 8090 tersedia saat diperiksa, dipilih untuk konfigurasi lokal, contoh dan fallback agar konsisten. Restart hanya proses SIM-GURU; akun Admin yang sudah dibuat dipertahankan. APP_PORT tetap dapat dioverride melalui environment.
+
+## D-010 — Port development 18743 menggantikan 8090 (21 Oktober 2026)
+Pengguna menyatakan 8090 juga dipakai aplikasi lain. SIM-GURU dipindahkan ke 18743 setelah pemeriksaan ketersediaan; port 8080 dan 8090 tidak digunakan lagi oleh SIM-GURU. APP_PORT tetap dapat dikonfigurasi.
+
 ## Belum diputuskan
-Schema domain, detail implementasi sesi/login, dan seluruh kebijakan OPEN PRD. Rancangan keamanan tahap berikut ada di ARCHITECTURE, belum fitur selesai. Tidak ada keputusan implisit untuk formula penilaian.
+Schema siswa/guru dan akademik, cakupan penugasan aktual, kebijakan retensi audit/sesi, serta seluruh OPEN PRD. Tidak ada keputusan implisit mengenai formula penilaian atau perubahan kewenangan Admin/Kurikulum. MFA/reset mandiri dan deployment belum dibuat.

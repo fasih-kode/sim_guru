@@ -1,6 +1,6 @@
 # Peta aturan bisnis
 
-Semua rujukan berikut berasal dari [PRD utama](../PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md). Ini indeks, bukan salinan aturan otoritatif. Belum ada aturan yang diverifikasi melalui kode.
+Semua rujukan berikut berasal dari [PRD utama](../PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md). Ini indeks, bukan salinan aturan otoritatif. Implementasi akun/role dan pembatasan Admin/Kurikulum sudah memiliki tes; aturan domain akademik berikut belum diimplementasikan.
 
 | Sumber | Ketentuan terdokumentasi |
 |---|---|
@@ -14,3 +14,6 @@ Semua rujukan berikut berasal dari [PRD utama](../PRD_SIM_GURU_v1.0_REVISI_PEMBA
 
 ## OPEN
 Bab 14 adalah daftar otoritatif P0/P1. Termasuk formula/remedial/pembulatan, pengampu bersama, koreksi langsung oleh Kurikulum, QR/fallback, anomali, penutupan semester, penempatan khusus, katalog/cakupan laporan. Jangan menganggapnya disepakati atau menghalangi fondasi yang independen.
+
+## Bukti implementasi akses
+internal/auth dan internal/web menerapkan multi-role Admin, perubahan role langsung pada sesi aktif, serta penolakan akses administrasi bagi non-Admin. /akademik hanya terbuka untuk Kurikulum dan belum memiliki operasi penugasan. Cakupan kelas/mapel dan larangan edit identitas siswa/guru baru dapat diuji setelah modul terkait dibuat; jangan menganggapnya selesai dari tes akun saja.

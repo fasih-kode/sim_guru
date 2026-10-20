@@ -10,7 +10,7 @@ assets:
 test:
 	go test -race ./...
 integration:
-	go test -race -tags=integration ./internal/database ./migrations
+	go test -race -tags=integration ./internal/database ./migrations ./internal/auth ./internal/web
 check:
 	test -z "$$(gofmt -l cmd internal migrations)"
 	go vet ./...

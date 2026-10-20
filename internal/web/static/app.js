@@ -4,9 +4,11 @@ htmx.config.selfRequestsOnly = true;
 htmx.config.historyCacheSize = 0;
 for (const event of ['htmx:responseError', 'htmx:sendError', 'htmx:timeout']) {
   document.body.addEventListener(event, () => {
-    document.getElementById('request-error').hidden = false;
+    const message = document.getElementById('request-error');
+    if (message) message.hidden = false;
   });
 }
 document.body.addEventListener('htmx:beforeRequest', () => {
-  document.getElementById('request-error').hidden = true;
+  const message = document.getElementById('request-error');
+  if (message) message.hidden = true;
 });

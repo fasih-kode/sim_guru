@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/url"
@@ -10,7 +11,10 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Config struct{ Environment, Address, DatabaseURL string }
+type Config struct {
+	Environment, Address, DatabaseURL string
+	CSRFKey                           []byte
+}
 
 // Load reads optional local configuration without overriding exported variables.
 func Load() (Config, error) {
@@ -37,7 +41,7 @@ func Parse(get func(string) string) (Config, error) {
 	}
 	port := get("APP_PORT")
 	if port == "" {
-		port = "8080"
+		port = "18743"
 	}
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 1 || n > 65535 {
@@ -51,5 +55,9 @@ func Parse(get func(string) string) (Config, error) {
 	if env == "production" && u.Query().Get("sslmode") != "verify-full" {
 		return Config{}, errors.New("production membutuhkan sslmode=verify-full")
 	}
-	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw}, nil
+	key, err := hex.DecodeString(get("CSRF_AUTH_KEY"))
+	if err != nil || len(key) != 32 {
+		return Config{}, errors.New("CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak")
+	}
+	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key}, nil
 }

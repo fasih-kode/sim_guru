@@ -31,7 +31,7 @@ make migrate-status
 make run
 ```
 
-Buka http://127.0.0.1:8080. APP_HOST default 127.0.0.1; APP_PORT default 8080. APP_ENV menerima development/test/production. DATABASE_URL wajib berupa URL PostgreSQL dengan nama database; production mensyaratkan sslmode=verify-full. File .env.example menyediakan nama variabel tanpa rahasia. Jangan menggunakan .env development pada produksi.
+Buka http://127.0.0.1:18743. APP_HOST default 127.0.0.1; APP_PORT default 18743. APP_ENV menerima development/test/production. DATABASE_URL wajib berupa URL PostgreSQL dengan nama database; production mensyaratkan sslmode=verify-full. File .env.example menyediakan nama variabel tanpa rahasia. Jangan menggunakan .env development pada produksi.
 
 Untuk binary mandiri dengan template/aset embed: make build lalu ./bin/sim-guru dari root agar .env ditemukan. Aset harus dibangun sebelum binary ketika CSS/htmx berubah. Server tidak menjalankan migrasi otomatis dan menolak mulai bila database belum siap. Ctrl+C atau SIGTERM memicu graceful shutdown.
 
@@ -40,7 +40,7 @@ Toolchain proyek memerlukan Go 1.27.3; instalasi global tidak diubah. Biarkan GO
 Migrasi up/status hanya menarget DATABASE_URL. Tidak ada perintah reset/down otomatis. Jangan mengedit migrasi 00001 yang sudah diterapkan. Tambahkan migrasi berikutnya; rencana rollback harus melindungi data dan mendapat persetujuan sebelum dijalankan.
 
 ## Belum selesai
-Belum ada login, sesi/RBAC, audit bisnis, schema domain, integrasi operasional, CI, backup/restore teruji atau deployment. PostgreSQL lokal sudah aktif; aplikasi hanya fondasi. Kebijakan OPEN PRD belum berubah.
+Login, sesi, pengguna/role dan audit akses tersedia. Belum ada master siswa/guru dan modul akademik, CI, backup/restore teruji atau deployment. Kebijakan OPEN PRD belum berubah.
 
 ## Bootstrap pada mesin baru — prosedur belum dijalankan ulang
 Periksa versi toolchain dan port 55436 dahulu. Instruksi ini hanya untuk direktori proyek baru yang belum memiliki .env atau .local/postgres/data; jangan jalankan pada cluster yang sudah berisi data.
@@ -58,3 +58,20 @@ chmod 600 .env
 ```
 
 Isi kedua URL dalam .env secara lokal memakai password kuat yang dimasukkan melalui prompt createuser. Jangan memasukkan password dalam argumen shell atau Git. User OS menjadi administrator cluster melalui peer socket; role aplikasi hanya memiliki dua database proyek. Jika bootstrap gagal sebagian, inspeksi kondisi dan laporkan; jangan menghapus/reset cluster otomatis.
+
+## Mengaktifkan autentikasi
+CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak. Key development lokal sudah dibuat tanpa ditampilkan. Pada mesin baru, ganti placeholder .env.example di .env dengan secrets.token_hex(32) melalui editor lokal atau script yang tidak mencetak key ke log. Pertahankan key antar restart; rotasi key membuat form/cookie CSRF lama tidak berlaku. Jangan menyalin key antar lingkungan.
+
+Migrasi terbaru adalah versi 2. Jalankan make migrate-up sebelum menjalankan server versi ini. Tidak ada akun/password bawaan dan tidak ada akun development yang dibuat oleh pengujian.
+
+Buat Admin pertama melalui terminal sendiri:
+
+```sh
+go run ./cmd/admin -username admin -name "Administrator Sekolah"
+```
+
+Password diminta dua kali tanpa echo, lalu konfirmasi BUAT. Bootstrap hanya berhasil jika tabel akun kosong; tidak mengubah password/role akun yang sudah ada. Jangan memberikan password melalui argumen, chat, environment, pipe, atau source code. Setelah bootstrap, buka http://127.0.0.1:18743/login lalu buat akun personel melalui Pengguna dan role.
+
+Perubahan/reset password dan penonaktifan mencabut seluruh sesi target. Ganti password sendiri memerlukan password saat ini dan mengarahkan kembali ke login. Role baru langsung tampil pada sesi aktif tanpa approval; Guru Mapel/Wali Kelas belum memiliki fitur operasional sebelum modul penugasan dibuat.
+
+Production belum dideploy: diperlukan HTTPS/reverse proxy yang benar, role DB least privilege terpisah dari migrator, prosedur backup/restore, limiter lintas instance bila relevan, serta pemeriksaan keamanan operasional. Cookie Secure hanya aktif ketika APP_ENV=production; HTTP loopback development memakai cookie non-Secure agar browser dapat mengirimkannya.

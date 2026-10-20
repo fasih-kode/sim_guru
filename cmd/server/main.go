@@ -3,16 +3,18 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/fasih-kode/sim_guru/internal/config"
-	"github.com/fasih-kode/sim_guru/internal/database"
-	"github.com/fasih-kode/sim_guru/internal/web"
-	"github.com/fasih-kode/sim_guru/migrations"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/fasih-kode/sim_guru/internal/auth"
+	"github.com/fasih-kode/sim_guru/internal/config"
+	"github.com/fasih-kode/sim_guru/internal/database"
+	"github.com/fasih-kode/sim_guru/internal/web"
+	"github.com/fasih-kode/sim_guru/migrations"
 )
 
 func run() error {
@@ -47,7 +49,11 @@ func run() error {
 	if err != nil {
 		return errors.New("database belum siap; jalankan migrasi dan periksa koneksi")
 	}
-	handler, err := web.New(ready)
+	accounts, err := auth.New(db)
+	if err != nil {
+		return errors.New("inisialisasi autentikasi gagal")
+	}
+	handler, err := web.New(ready, web.Options{Accounts: accounts, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
 	if err != nil {
 		return errors.New("inisialisasi template gagal")
 	}

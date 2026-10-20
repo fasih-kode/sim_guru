@@ -12,10 +12,13 @@ func TestParse(t *testing.T) {
 		valid  bool
 	}{
 		{"defaults", map[string]string{}, true},
+		{"custom port", map[string]string{"APP_PORT": "9095"}, true},
 		{"invalid port", map[string]string{"APP_PORT": "0"}, false},
 		{"port overflow", map[string]string{"APP_PORT": "65536"}, false},
 		{"environment", map[string]string{"APP_ENV": "staging"}, false},
 		{"invalid host", map[string]string{"APP_HOST": "bad host"}, false},
+		{"missing csrf", map[string]string{"CSRF_AUTH_KEY": ""}, false},
+		{"invalid csrf", map[string]string{"CSRF_AUTH_KEY": "secret-invalid"}, false},
 		{"missing database", map[string]string{"DATABASE_URL": ""}, false},
 		{"invalid secret url", map[string]string{"DATABASE_URL": "postgres://user:secret%xx@localhost/db"}, false},
 		{"missing db name", map[string]string{"DATABASE_URL": "postgres://localhost/"}, false},
@@ -23,7 +26,7 @@ func TestParse(t *testing.T) {
 		{"production verified", map[string]string{"APP_ENV": "production", "DATABASE_URL": "postgres://localhost/db?sslmode=verify-full"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost/db"}
+			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost/db", "CSRF_AUTH_KEY": strings.Repeat("a", 64)}
 			for k, v := range tc.values {
 				values[k] = v
 			}
@@ -34,7 +37,10 @@ func TestParse(t *testing.T) {
 			if err != nil && strings.Contains(err.Error(), "secret") {
 				t.Fatal("error exposed credential")
 			}
-			if tc.name == "defaults" && cfg.Address != "127.0.0.1:8080" {
+			if tc.name == "custom port" && cfg.Address != "127.0.0.1:9095" {
+				t.Fatalf("custom port ignored: %s", cfg.Address)
+			}
+			if tc.name == "defaults" && cfg.Address != "127.0.0.1:18743" {
 				t.Fatalf("unexpected address %s", cfg.Address)
 			}
 		})
