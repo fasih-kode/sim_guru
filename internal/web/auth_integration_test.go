@@ -18,8 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/fasih-kode/sim_guru/internal/database"
+	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/fasih-kode/sim_guru/migrations"
 	"github.com/joho/godotenv"
 )
@@ -109,7 +111,7 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	}
 	key := make([]byte, 32)
 	rand.Read(key)
-	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: accounts, CSRFKey: key})
+	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: &academic.Store{DB: db}, CSRFKey: key})
 	if err != nil {
 		t.Fatal(err)
 	}

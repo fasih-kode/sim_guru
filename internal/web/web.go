@@ -10,19 +10,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/gorilla/csrf"
 )
 
-//go:embed templates/*.html static/*
+//go:embed templates/*.html static/* import_templates/*.xlsx
 var content embed.FS
 
 type Check func(context.Context) error
 
 func New(check Check, options Options) (http.Handler, error) {
-	if options.Accounts == nil || len(options.CSRFKey) != 32 {
-		return nil, errors.New("auth store dan CSRF key 32 byte wajib tersedia")
+	if options.Accounts == nil || options.Masters == nil || options.Academics == nil || len(options.CSRFKey) != 32 {
+		return nil, errors.New("auth/master/academic store dan CSRF key 32 byte wajib tersedia")
 	}
-	templates, err := template.ParseFS(content, "templates/*.html")
+	templates, err := template.New("web").Funcs(template.FuncMap{
+		"rowNumber": func(page, index int) int {
+			if page < 1 {
+				page = 1
+			}
+			return (page-1)*10 + index + 1
+		},
+	}).ParseFS(content, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -58,9 +66,33 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("POST /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("GET /admin/audit", a.require("admin", a.audit))
-	mux.HandleFunc("GET /akademik", a.require("kurikulum", func(w http.ResponseWriter, r *http.Request) {
-		a.render(w, r, "page", 200, view{Page: "academic", Title: "Akademik"})
-	}))
+	mux.HandleFunc("GET /admin/placements", a.require("", a.studentPlacements))
+	mux.HandleFunc("POST /admin/placements", a.require("admin", a.studentPlacements))
+	mux.HandleFunc("GET /master/{kind}/import", a.require("", a.masterImport))
+	mux.HandleFunc("POST /master/{kind}/import", a.require("", a.masterImport))
+	mux.HandleFunc("GET /master/{kind}/import/template", a.require("", a.importTemplate))
+	mux.HandleFunc("POST /master/{kind}/import/confirm", a.require("", a.confirmImport))
+	mux.HandleFunc("GET /master/{kind}", a.require("", a.masterList))
+	mux.HandleFunc("GET /master/{kind}/new", a.require("", a.masterForm))
+	mux.HandleFunc("POST /master/{kind}/new", a.require("", a.masterForm))
+	mux.HandleFunc("GET /master/{kind}/{id}", a.require("", a.masterDetail))
+	mux.HandleFunc("GET /master/{kind}/{id}/edit", a.require("", a.masterForm))
+	mux.HandleFunc("POST /master/{kind}/{id}/edit", a.require("", a.masterForm))
+	mux.HandleFunc("GET /master/{kind}/{id}/history", a.require("", a.masterHistory))
+	mux.HandleFunc("GET /akademik", a.require("kurikulum", a.academicHome))
+	mux.HandleFunc("GET /akademik/tahun-ajaran", a.require("kurikulum", a.academicYears))
+	mux.HandleFunc("POST /akademik/tahun-ajaran", a.require("kurikulum", a.academicYears))
+	mux.HandleFunc("POST /akademik/tahun-ajaran/{id}/aktifkan", a.require("kurikulum", a.activateYear))
+	mux.HandleFunc("GET /akademik/semester", a.require("kurikulum", a.academicSemesters))
+	mux.HandleFunc("POST /akademik/semester/{id}/aktifkan", a.require("kurikulum", a.activateSemester))
+	// Class reads and history are authorized by domain; only Admin may write classes.
+	mux.HandleFunc("GET /akademik/kelas", a.require("", a.academicClasses))
+	mux.HandleFunc("GET /akademik/kelas/new", a.require("admin", a.academicClassForm))
+	mux.HandleFunc("POST /akademik/kelas/new", a.require("admin", a.academicClassForm))
+	mux.HandleFunc("GET /akademik/kelas/{id}/edit", a.require("admin", a.academicClassForm))
+	mux.HandleFunc("POST /akademik/kelas/{id}/edit", a.require("admin", a.academicClassForm))
+	mux.HandleFunc("GET /akademik/histori/{entity}/{id}", a.require("", a.academicHistory))
+	mux.HandleFunc("GET /akademik/histori/penempatan/{id}", a.require("", a.placementHistory))
 	mux.HandleFunc("GET /{$}", a.require("", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Vary", "HX-Request")
 		name := "page"
@@ -79,7 +111,20 @@ func New(check Check, options Options) (http.Handler, error) {
 			mux.ServeHTTP(w, r)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
+		limit := int64(32 << 10)
+		if r.Method == "POST" && (r.URL.Path == "/master/students/import" || r.URL.Path == "/master/teachers/import") {
+			limit = master.MaxImportBytes + (256 << 10)
+		}
+		if r.ContentLength > limit {
+			http.Error(w, "Ukuran unggahan melebihi batas.", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		defer func() {
+			if r.MultipartForm != nil {
+				r.MultipartForm.RemoveAll()
+			}
+		}()
 		if !options.SecureCookies {
 			r = csrf.PlaintextHTTPRequest(r)
 		}

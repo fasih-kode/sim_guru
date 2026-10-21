@@ -25,9 +25,9 @@
 | Menu utama | Submenu | Siapa melihat |
 |---|---|---|
 | Dashboard | Ringkasan, tugas hari ini, perhatian | Semua pengguna sesuai role |
-| Administrasi | Data Siswa, Data Guru, Pengguna, Role, Riwayat Perubahan | Admin |
+| Administrasi | Data Siswa, Data Guru, Kelas, Penempatan Awal, Pengguna, Role, Riwayat Perubahan | Admin |
 | Data Induk | Siswa, Guru (baca sesuai cakupan); Mata Pelajaran (kelola Kurikulum) | Kurikulum dan role lain sesuai kebutuhan |
-| Akademik | Tahun Ajaran, Semester, Kelas, Penempatan, Wali Kelas, Penugasan Mengajar, Transisi | Kurikulum |
+| Akademik | Tahun Ajaran, Semester, Kelas/Penempatan (baca-saja), Wali Kelas, Penugasan Mengajar, Transisi | Kurikulum |
 | Jadwal | Jam Pelajaran, Jadwal, Riwayat Perubahan | Kurikulum; Guru melihat Jadwal Saya |
 | Absensi | Guru QR, Siswa Harian, Absensi Pelajaran, Koreksi | Sesuai role/penugasan |
 | Jurnal | Jurnal Saya, Riwayat Koreksi | Guru Mapel; pengawasan sesuai role |
@@ -39,8 +39,8 @@
 
 ## 2A. Pemisahan layar data induk dan operasional — FINAL
 
-- **Admin:** CRUD identitas siswa dan guru, kelengkapan data, pencarian/duplikat, akun, dan role. Hanya Admin melihat tombol Tambah/Edit Identitas siswa/guru.
-- **Kurikulum:** siswa/guru tampil **baca-saja** sebagai sumber pilihan ketika mengatur kelas, penempatan, wali kelas, guru pengampu, dan jadwal. Tombol Simpan Penugasan di halaman Kurikulum langsung berlaku setelah validasi.
+- **Admin:** CRUD identitas siswa dan guru, kelengkapan data, pencarian/duplikat, akun, role, pembuatan/koreksi kelas dan penempatan awal siswa. Hanya Admin melihat tombol Tambah/Edit Identitas siswa/guru dan Tambah/Edit Kelas.
+- **Kurikulum:** siswa/guru tampil **baca-saja** bersama kelas/penempatan awal sebagai sumber pilihan ketika mengatur wali kelas, guru pengampu, dan jadwal. Kurikulum menyiapkan tahun ajaran beserta dua semester dan mengaktifkannya; mengelola mapel, transisi kenaikan/kelulusan serta pemeriksaan koreksi nilai Final. Tombol Simpan Penugasan di halaman Kurikulum langsung berlaku setelah validasi.
 - **Guru Mapel/Wali/BK/Kesiswaan/Kepala Sekolah:** tampilan data siswa/guru sesuai cakupan dan kebutuhan; tidak ada tombol edit identitas.
 - Jika data induk keliru, tampilkan petunjuk **Hubungi Admin** tanpa membuat alur mandat/delegasi/persetujuan digital.
 - Validasi hak edit di backend; menghilangkan tombol tidak cukup.
@@ -51,18 +51,20 @@
 - Login personel, keluar, ganti kata sandi, penanganan sesi kedaluwarsa. Tidak ada login siswa/orang tua.
 - Dashboard setelah login disusun dari role dan penugasan aktif.
 
-### 3.2 Admin: Data Siswa, Data Guru, Pengguna dan Role
+### 3.2 Admin: Data Siswa, Data Guru, Kelas, Penempatan Awal, Pengguna dan Role
 - Daftar pengguna: cari/filter role/status, tambah, edit, aktif/nonaktif.
 - Form pengguna: identitas, username/kredensial, pilihan multi-role sesuai kebutuhan.
 - Form data induk siswa/guru: tambah, ubah, status aktif/nonaktif, pemeriksaan duplikat, dan riwayat koreksi identitas.
-- Form role: tetapkan role tanpa mengatur kelas, guru pengampu, atau wali kelas.
-- Penugasan akademik dipindahkan ke halaman Kurikulum, bukan halaman Admin.
+- Form role: tetapkan role tanpa menyisipkan pengaturan kelas, guru pengampu, atau wali kelas.
+- Halaman Kelas terpisah: Admin membuat/mengoreksi kelas dan melihat histori; tahun dipilih dari kalender yang disiapkan Kurikulum. Jika belum ada tahun, arahkan untuk menghubungi Kurikulum.
+- Penempatan awal siswa menjadi halaman Admin; jangan menampilkan kontrol mutasinya kepada Kurikulum.
+- Penugasan wali/pengampu dan jadwal tetap di halaman Kurikulum, terpisah dari pengelolaan kelas/penempatan awal oleh Admin.
 - Tampilkan ringkasan hak yang akan diperoleh dan histori perubahan role/penugasan.
 - **Jangan** menampilkan tombol “Ajukan ke Kepala Sekolah”, “Minta Mandat”, atau “Tunggu Persetujuan”.
 
 ### 3.3 Kurikulum: Akademik
-- Tahun/semester: daftar, status, aktifkan, tutup dengan pemeriksaan kewajiban; cegah status aktif ganda.
-- Kelas: daftar tingkat, nama, wali kelas, kesiapan; penempatan siswa dengan pencarian dan filter.
+- Tahun/semester: siapkan tahun beserta dua semester, daftar, status, aktifkan, tutup dengan pemeriksaan kewajiban; cegah status aktif ganda.
+- Kelas/penempatan awal: baca-saja, daftar tingkat, nama, wali kelas, kesiapan dan siswa dengan pencarian/filter; hubungi Admin untuk pembuatan/koreksi kelas dan penempatan awal. Akun multi-role Admin+Kurikulum tetap dapat mengelola kelas melalui kewenangan Admin.
 - Perpindahan tengah tahun: form siswa, kelas asal/tujuan, tanggal efektif, alasan, **catatan keputusan Kepala Sekolah** (tanggal/rujukan); simpan setelah validasi, bukan approval digital.
 - Transisi tahun: pratinjau daftar naik/tidak naik/lulus/keluar, konflik, konfirmasi eksekusi; tanpa inbox persetujuan digital.
 

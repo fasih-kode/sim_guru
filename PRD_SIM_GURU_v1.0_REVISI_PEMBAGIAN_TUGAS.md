@@ -7,7 +7,7 @@
 ## 0. Instruksi yang mengikat agen AI
 
 1. Baca ketiga dokumen. Keputusan bertanda **FINAL** mengikat; **OPEN** hanya menahan fitur yang terdampak; **RANCANGAN** boleh diputuskan secara teknis tanpa mengubah kebijakan sekolah.
-2. **Jangan membangun sistem mandat, delegasi, inbox approval, atau persetujuan digital berlapis.** Sekolah memutuskan penugasan di luar aplikasi; Admin menyediakan data induk siswa/guru, membuat akun, dan menetapkan role; Kurikulum mengatur penugasan akademik; hak mengikuti role dan penugasan yang aktif.
+2. **Jangan membangun sistem mandat, delegasi, inbox approval, atau persetujuan digital berlapis.** Sekolah memutuskan penugasan di luar aplikasi; Admin menyediakan data induk siswa/guru, membuat akun, menetapkan role, membuat kelas dan menempatkan siswa pada awal tahun; Kurikulum mengatur penugasan akademik; hak mengikuti role dan penugasan yang aktif.
 3. Kepala Sekolah **bukan pemberi persetujuan rutin**. Hanya tindakan khusus yang secara eksplisit disebut memerlukan persetujuan beliau. Persetujuan dalam rapat/offline tidak harus direplikasi menjadi tombol persetujuan digital.
 4. Periksa hak akses di server untuk setiap tindakan. Catat perubahan penting: pelaku, waktu, objek, nilai sebelum/sesudah bila relevan, dan alasan untuk koreksi.
 5. Jangan menambahkan integrasi E-SPP, Tabungan Siswa, E-Ujian, WhatsApp, akun siswa/orang tua, rapor resmi, atau modul di luar v1.
@@ -37,12 +37,12 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 
 ## 3. Model kewenangan sederhana — FINAL (menggantikan rumusan mandat/delegasi sebelumnya)
 
-**Alur tunggal:** rapat/keputusan sekolah di luar aplikasi → **Admin mengelola data siswa, data guru, akun, dan role; Kurikulum menetapkan penugasan akademik** → hak akses langsung aktif → personel bekerja sesuai tugas. Tidak ada permintaan dan approval digital untuk penetapan rutin.
+**Alur tunggal:** rapat/keputusan sekolah di luar aplikasi → **Admin mengelola data siswa/guru, akun, role, kelas dan penempatan awal; Kurikulum mengelola kalender, penugasan dan jadwal akademik** → hak akses langsung aktif → personel bekerja sesuai tugas. Tidak ada permintaan dan approval digital untuk penetapan rutin.
 
 | Peran | Hak utama | Batas |
 |---|---|---|
-| Admin | Satu-satunya pengelola identitas/data induk siswa dan guru, akun pengguna, role, status akses, dan konfigurasi teknis | Tidak menetapkan kelas, wali kelas, guru pengampu, jadwal, nilai, atau keputusan akademik |
-| Kurikulum | Kelola mata pelajaran dan data akademik, tahun/semester, kelas, penempatan, wali kelas, penugasan pengampu, jadwal, dan transisi sesuai keputusan sekolah | Tidak membutuhkan persetujuan digital untuk pekerjaan rutin |
+| Admin | Pengelola identitas siswa/guru, akun, role, status akses, konfigurasi teknis, pembuatan/koreksi kelas dan penempatan awal siswa | Tidak otomatis mengelola kalender, mapel, wali kelas, pengampu, jadwal, transisi atau nilai |
+| Kurikulum | Menyiapkan tahun ajaran beserta dua semester dan mengaktifkannya; kelola mapel, wali kelas, pengampu, jadwal, transisi kenaikan/kelulusan dan pemeriksaan koreksi nilai Final | Kelas dan penempatan awal siswa baca-saja; tidak mengubah identitas siswa/guru; tidak membutuhkan persetujuan digital rutin |
 | Guru Mapel | Absensi per pelajaran, jurnal, TP/komponen/nilai/remedial pada kelas-mapel yang ditugaskan | Tidak boleh mengubah kelas/mapel di luar penugasan |
 | Wali Kelas | Pantau siswa dan absensi kelas yang ditugaskan, tindak lanjut kelas | Tidak otomatis mengubah nilai seluruh mapel |
 | Kepala Sekolah | Lihat ringkasan/laporan sekolah; menangani keputusan akademik khusus | Tidak menjadi antrean persetujuan pekerjaan harian |
@@ -69,26 +69,29 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 ## 3A. Kepemilikan data induk dan batas tugas — FINAL (revisi 21 Oktober 2026)
 
 - **Admin adalah satu-satunya pihak yang membuat, mengubah, menonaktifkan, mengoreksi, dan melengkapi identitas induk siswa dan guru.** Ini meliputi identitas, NIS/NISN jika ada, data kontak yang diperlukan, status siswa/guru, dan identitas akun terkait. Hak baca bagi role lain diberikan sesuai kebutuhan tugas, bukan hak mengubah identitas.
-- **Admin mengelola akun dan role**, tetapi tidak mengatur penempatan kelas, penugasan guru mapel, wali kelas, jadwal, atau keputusan akademik.
-- **Kurikulum menerima data induk** dan mengelola data akademik: mata pelajaran, tahun/semester, kelas, penempatan siswa, penugasan guru pengampu, wali kelas, jadwal, dan transisi. Kurikulum tidak mengubah identitas induk siswa/guru.
+- **Admin mengelola akun dan role, membuat/mengoreksi kelas, serta melakukan penempatan awal siswa.** Admin membaca pilihan tahun ajaran untuk kelas; hak ini tidak memberikan kewenangan menyiapkan/mengaktifkan kalender, mengelola mapel, wali kelas, pengampu, jadwal, transisi atau nilai.
+- **Kurikulum menerima data induk dan kelas secara baca-saja**, menyiapkan tahun ajaran beserta dua semester, mengaktifkan tahun/semester, mengelola mata pelajaran, penugasan guru pengampu, wali kelas, jadwal, transisi kenaikan/kelulusan, serta pemeriksaan koreksi nilai Final. Kurikulum tidak membuat/mengoreksi kelas, melakukan penempatan awal, atau mengubah identitas induk siswa/guru. Perpindahan tengah tahun tetap mengikuti ketentuan khusus bab 3.1/5; perubahan penempatan hasil transisi mengikuti eksekusi transisi oleh Kurikulum, bukan hak mengedit penempatan awal secara bebas.
 - **Guru Mapel, Wali Kelas, BK, Kesiswaan, dan Kepala Sekolah** membaca data siswa/guru sesuai cakupan role; hanya mengubah data operasional milik modul mereka. Permintaan pembetulan identitas diteruskan ke Admin melalui komunikasi sekolah biasa, tanpa membangun workflow approval digital.
 - **Satu sumber data:** siswa/guru dibuat sekali oleh Admin dan dipakai melalui referensi ID internal pada seluruh modul; tidak boleh ada salinan identitas yang diedit bebas oleh modul lain.
 - **Hak akses gabungan:** role diberikan Admin; cakupan kelas/mapel/wali berasal dari penugasan Kurikulum. Akses server harus memeriksa keduanya bila diperlukan.
 - Audit perubahan identitas dan penugasan mencatat pelaku, waktu, objek, serta sebelum/sesudah. Jangan menghapus histori yang telah digunakan modul akademik.
 
-**Acceptance criteria:** Kurikulum tidak bisa mengubah nama/NISN siswa atau identitas guru; Admin tidak bisa menetapkan guru pengampu/kelas; Admin dapat memperbaiki identitas dan perubahannya tercermin pada seluruh modul; penugasan oleh Kurikulum langsung mengaktifkan cakupan akses Guru Mapel/Wali Kelas tanpa persetujuan digital.
+**Acceptance criteria:** Kurikulum tidak bisa mengubah nama/NISN siswa atau identitas guru; Admin dapat membuat/mengoreksi kelas dan melakukan penempatan awal; Kurikulum tanpa role Admin tidak dapat melakukannya; Admin tanpa Kurikulum tidak bisa menetapkan pengampu atau mengubah kalender; Admin dapat memperbaiki identitas dan perubahannya tercermin pada seluruh modul; penugasan oleh Kurikulum langsung mengaktifkan cakupan akses Guru Mapel/Wali Kelas tanpa persetujuan digital.
+
+**Revisi disetujui pemilik proyek 21 Oktober 2026:** pembuatan/koreksi kelas dan penempatan awal beralih ke Admin; kalender dan seluruh tugas Kurikulum yang disebut di atas tetap Kurikulum. ID kelas dan histori sebelum perubahan kebijakan dipertahankan. Rujukan keputusan: [D-015](docs/DECISIONS.md#d-015--pemisahan-kelasadmin-dan-kalenderkurikulum-disetujui-21-oktober-2026).
 
 ## 4. Master Data — FINAL inti
 
 - **Siswa:** ID internal permanen; nama, tanggal lahir, jenis kelamin wajib; NIS/NISN opsional, bukan primary key. Jika NIS diisi, unik di sekolah; NISN tidak boleh digunakan dua siswa berbeda. Koreksi identitas tidak memutus riwayat.
 - **Guru:** ID permanen, nama, status aktif; NIP/NUPTK/email/telepon opsional. Status akun, status kepegawaian, dan penugasan berbeda. Guru nonaktif tidak menerima penugasan baru; penugasan lama tetap historis.
 - **Mata pelajaran:** ID permanen, kode unik sekolah, nama, status. Kode historis tidak dialihkan kepada mapel lain.
-- Admin mengelola identitas siswa/guru, akun dan role. Kurikulum mengelola data akademik; keduanya tidak memerlukan persetujuan digital satu sama lain untuk operasi normal.
+- Admin mengelola identitas siswa/guru, akun, role, kelas dan penempatan awal. Kurikulum mengelola kalender dan penugasan akademik; keduanya tidak memerlukan persetujuan digital satu sama lain untuk operasi normal.
 
 **AC:** siswa tanpa NIS/NISN dapat disimpan; NIS duplikat ditolak; guru nonaktif tidak bisa diberi penugasan baru; ubah nama mapel tidak menghapus riwayat.
 
 ## 5. Tahun Ajaran, Semester, Kelas, Penempatan — FINAL inti
 
+- Kurikulum menyiapkan tahun ajaran beserta dua semester dan mengaktifkan tahun/semester. Admin membuat/mengoreksi kelas pada tahun yang sudah disiapkan serta melakukan penempatan awal siswa. Kurikulum dapat membaca kelas/penempatan awal untuk penugasan dan jadwal.
 - Satu tahun ajaran aktif. Setiap tahun ajaran memiliki dua semester berurutan; maksimal satu semester aktif.
 - Kelas memiliki ID stabil, tingkat, nama, tahun ajaran; nama unik pada tingkat+tahun yang sama. Nama boleh dipakai lagi di tahun berikutnya dengan ID baru.
 - Kelas dapat dibuat sebelum wali kelas ditetapkan; sebelum dipakai secara operasional tampilkan pemeriksaan kesiapan.
@@ -158,8 +161,8 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 
 ## 12. Workflow per peran
 
-1. **Admin:** lengkapi data siswa dan guru → buat akun → pilih role → simpan. **Kurikulum:** tetapkan kelas/mapel/wali → hak operasional mengikuti penugasan aktif.
-2. **Kurikulum:** buat tahun/semester/kelas → cek penempatan → susun jadwal → publikasi → kelola transisi dengan pratinjau dan validasi.
+1. **Admin:** lengkapi data siswa/guru → buat akun/role → buat kelas pada tahun yang disiapkan Kurikulum → tempatkan siswa. **Kurikulum:** tetapkan mapel/wali/pengampu → hak operasional mengikuti penugasan aktif.
+2. **Kurikulum:** siapkan tahun beserta dua semester → aktifkan kalender → baca kelas/penempatan dari Admin → susun penugasan/jadwal → publikasi → kelola transisi dengan pratinjau dan validasi.
 3. **Guru Mapel:** buka jadwal saya → catat absensi pelajaran → isi/finalkan jurnal → input/remedial/finalkan nilai.
 4. **Wali Kelas:** buka kelas saya → pantau kehadiran/kelengkapan → tindak lanjut.
 5. **Kepala Sekolah:** lihat dashboard dan laporan → keputusan khusus di luar alur rutin; untuk perpindahan tengah tahun, keputusan dicatat.

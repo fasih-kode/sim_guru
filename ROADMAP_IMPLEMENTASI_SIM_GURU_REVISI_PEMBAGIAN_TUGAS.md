@@ -15,7 +15,7 @@
 
 1. Baca PRD utama dan PRD FE sebelum menulis kode. Jadikan bab **Model kewenangan sederhana** sebagai aturan terbaru yang menggantikan mandat/delegasi lama.
 2. Kerjakan fase kecil dengan tes dan review; jangan menambah fitur tanpa dasar PRD.
-3. **Admin mengelola data induk siswa/guru, akun, dan role; Kurikulum mengelola penugasan akademik.** Hak mengikuti role dan penugasan aktif. Jangan buat tabel/modul/inbox mandat, delegasi, atau persetujuan digital rutin. **Jangan buat Guru Pengganti/Cadangan, penugasan sementara, atau hak sementara untuk menggantikan guru berhalangan.**
+3. **Admin mengelola data induk siswa/guru, akun, role, kelas dan penempatan awal; Kurikulum mengelola kalender dan penugasan akademik.** Hak mengikuti role dan penugasan aktif. Jangan buat tabel/modul/inbox mandat, delegasi, atau persetujuan digital rutin. **Jangan buat Guru Pengganti/Cadangan, penugasan sementara, atau hak sementara untuk menggantikan guru berhalangan.**
 4. Kepala Sekolah hanya menerima dashboard/laporan dan terlibat pada keputusan akademik khusus. Perpindahan tengah tahun menyimpan catatan keputusan Kepala Sekolah, tanpa workflow digital.
 5. Untuk koreksi jurnal/absensi gunakan alasan+histori. Untuk nilai Final gunakan pemeriksaan Kurikulum sederhana; bukan approval Kepala Sekolah.
 6. Bila P0 belum ditetapkan, hentikan fitur terdampak saja. Jangan mengulang audit kontrak lama tanpa alasan konkret.
@@ -23,11 +23,11 @@
 
 ## 1A. Kontrak kepemilikan data — FINAL (revisi 21 Oktober 2026)
 
-- **Admin:** membuat, melengkapi, memperbarui, menonaktifkan data induk siswa/guru; mengelola akun dan role.
-- **Kurikulum:** hanya membaca identitas siswa/guru, lalu mengelola mata pelajaran, kelas, penempatan, wali kelas, pengampu resmi, jadwal, tahun/semester dan transisi.
+- **Admin:** membuat, melengkapi, memperbarui, menonaktifkan data induk siswa/guru; mengelola akun/role, membuat/mengoreksi kelas dan melakukan penempatan awal siswa.
+- **Kurikulum:** hanya membaca identitas siswa/guru, lalu membaca kelas/penempatan awal dan mengelola mata pelajaran, wali kelas, pengampu resmi, jadwal, persiapan tahun beserta dua semester, aktivasi tahun/semester, transisi kenaikan/kelulusan dan pemeriksaan koreksi nilai Final.
 - Role lain hanya mengelola data operasional sesuai tugas; identitas siswa/guru baca-saja.
-- Penugasan akademik **bukan** tugas Admin. Perubahan role oleh Admin dan perubahan penugasan oleh Kurikulum langsung berlaku setelah validasi, tanpa approval digital.
-- Uji negatif wajib: Kurikulum tidak bisa PATCH identitas siswa/guru; Admin tidak bisa POST penempatan atau penugasan guru; guru lain tidak bisa mengubah identitas. Uji positif: perubahan identitas Admin tercermin di seluruh modul melalui ID internal stabil.
+- Penugasan wali/pengampu, jadwal dan transisi **bukan** tugas Admin; kelas dan penempatan awal adalah tugas Admin. Perubahan role oleh Admin dan perubahan penugasan oleh Kurikulum langsung berlaku setelah validasi, tanpa approval digital.
+- Uji negatif wajib: Kurikulum tidak bisa PATCH identitas siswa/guru; Kurikulum tanpa Admin tidak bisa POST kelas/penempatan awal; Admin tanpa Kurikulum tidak bisa POST kalender atau penugasan guru; guru lain tidak bisa mengubah identitas. Uji positif: perubahan identitas Admin tercermin di seluruh modul melalui ID internal stabil.
 
 ## 2. Urutan fase
 
@@ -38,8 +38,8 @@
 | 2 | Fondasi Go, config, koneksi DB, migrasi, layout TailAdmin, htmx | Server hidup; halaman SSR; fragmen htmx; DB ping; tes |
 | 3 | Login, Admin pengguna dan role | Admin memberi role Kurikulum → akses modul Kurikulum aktif; audit dan akses negatif lulus |
 | 4 | Admin CRUD data induk siswa/guru; Kurikulum master mata pelajaran | Validasi, unik, nonaktif, histori teruji; Kurikulum tidak dapat edit identitas |
-| 5 | Tahun ajaran, semester, kelas | Aktif tunggal, dua semester, kelas unik teruji |
-| 6 | Penempatan, penugasan wali kelas oleh Kurikulum, transisi | Penempatan normal unik; pratinjau; batch atomik; tidak ada approval digital rutin |
+| 5 | Kurikulum menyiapkan/mengaktifkan tahun beserta dua semester; Admin mengelola kelas | Aktif tunggal, dua semester, kelas unik teruji |
+| 6 | Penempatan awal oleh Admin; penugasan wali kelas dan transisi oleh Kurikulum | Penempatan normal unik; pratinjau; batch atomik; tidak ada approval digital rutin |
 | 7 | Penugasan pengampu resmi oleh Kurikulum, jadwal, perubahan efektif dan histori | Konflik ditolak; histori utuh; tidak ada penugasan atau akses Guru Pengganti/Cadangan |
 | 8 | Absensi guru QR dan siswa harian/pelajaran | QR tidak menyimpulkan mengajar; status belum dicatat aman |
 | 9 | Jurnal, koreksi, anomali | Draf/Final, alasan koreksi, histori; tanpa inbox approval |

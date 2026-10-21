@@ -1,3 +1,17 @@
+{{define "notification-success"}}<div class="app-notification app-notification--success" data-notification role="status" aria-live="polite"><span class="app-notification-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="m8 12 2.5 2.5L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><p class="app-notification-message">{{.}}</p><button class="app-notification-close" type="button" data-notification-close aria-label="Tutup notifikasi"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="app-notification-progress" aria-hidden="true"></span></div>{{end}}
+{{define "notification-error"}}<div class="app-notification app-notification--error" data-notification role="alert" aria-live="assertive"><span class="app-notification-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 8.5 4.8v8.4L12 21l-8.5-4.8V7.8L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 8v5m0 3h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><p class="app-notification-message">{{.}}</p><button class="app-notification-close" type="button" data-notification-close aria-label="Tutup notifikasi"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="app-notification-progress" aria-hidden="true"></span></div>{{end}}
+{{define "icon-plus"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>{{end}}
+{{define "icon-save"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h12l3 3v13H4V4h1Z" stroke-linejoin="round"/><path d="M8 4v6h8V4M8 20v-6h8v6" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-close"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-linecap="round"/></svg>{{end}}
+{{define "icon-back"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 19-7-7 7-7M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-logout"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7" stroke-linecap="round"/></svg>{{end}}
+{{define "icon-refresh"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-import"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 15V3m0 0L8 7m4-4 4 4M4 14v6h16v-6" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-download"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v4h16v-4" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-view"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>{{end}}
+{{define "icon-edit"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m14 6 4 4M4 20l4-.8L19 8a2.1 2.1 0 0 0-3-3L5 16l-1 4Z" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-check"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+{{define "icon-login"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 8l4 4-4 4M18 12H4m9-8h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
 {{define "head"}}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SIM-GURU · {{.Title}}</title>
@@ -7,7 +21,7 @@
 </script>
 <script src="/static/app.js" defer>
 </script>{{end}}
-{{define "messages"}}{{if .Error}}<p role="alert" class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{{.Error}}</p>{{end}}{{if .Message}}<p role="status" class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{{.Message}}</p>{{end}}{{end}}
+{{define "messages"}}{{if and .Error (not .ModalOpen)}}{{template "notification-error" .Error}}{{end}}{{if .Message}}{{template "notification-success" .Message}}{{end}}{{end}}
 {{define "login"}}<!doctype html>
 <html lang="id">
 <head>{{template "head" .}}</head>
@@ -24,7 +38,7 @@
 <label for="password">Kata sandi</label>
 <input id="password" name="password" type="password" autocomplete="current-password" required>
 </div>
-<button class="button-primary w-full" type="submit">Masuk</button>
+<button class="button-primary w-full" type="submit">{{template "icon-login" .}}Masuk</button>
 </form>
 <p class="mt-6 text-sm text-gray-500">Kesulitan mengakses akun? Hubungi Admin sekolah.</p>
 </section>
@@ -36,34 +50,53 @@
 <head>{{template "head" .}}</head>
 <body>
 <a href="#content" class="sr-only focus:not-sr-only">Langsung ke konten</a>
-<div class="min-h-screen lg:flex">
-<aside class="border-b border-gray-200 bg-white px-6 py-6 lg:fixed lg:inset-y-0 lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0">
-<a href="/" class="flex items-center gap-3 text-xl font-semibold">
-<span class="rounded-xl bg-brand-500 px-3 py-2 text-white" aria-hidden="true">S</span>SIM-GURU</a>
-<p class="mt-2 text-sm text-gray-500">Sistem Informasi Guru</p>
-<nav aria-label="Navigasi utama" class="mt-8 space-y-2">
-<a class="nav-link" href="/">Beranda</a>{{if .User.HasRole "admin"}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Administrasi</p>
-<a class="nav-link" href="/admin/users">Pengguna dan role</a>
-<a class="nav-link" href="/admin/audit">Riwayat perubahan akses</a>{{end}}{{if .User.HasRole "kurikulum"}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Kurikulum</p>
-<a class="nav-link" href="/akademik">Akademik</a>{{end}}<p class="pt-4 text-xs font-medium uppercase text-gray-500">Akun saya</p>
-<a class="nav-link" href="/account/password">Kata sandi</a>
-</nav>
-</aside>
-<div class="min-w-0 flex-1 lg:ml-64">
-<header class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
-<div>
-<p class="font-medium">{{.User.DisplayName}}</p>
-<p class="text-xs text-gray-500">{{.User.RoleNames}}</p>
+<div class="min-h-screen">
+<div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+<aside id="app-sidebar" class="sidebar-panel" aria-label="Navigasi SIM-GURU" aria-hidden="true">
+<div class="sidebar-brand">
+<a href="/" class="brand-lockup"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19V10m7 9V5m7 14v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M3 19.5h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span><span>SIM-GURU</span></a>
+<button class="sidebar-close" type="button" data-sidebar-close aria-label="Tutup menu"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
 </div>
-<form method="post" action="/logout">{{.CSRF}}<button type="submit" class="button-secondary">Keluar</button>
-</form>
+<p class="sidebar-caption">Sistem Informasi Guru</p>
+<nav aria-label="Menu utama" class="sidebar-nav">
+<p class="nav-section-label">MENU</p>
+<a class="nav-link{{if eq .NavActive "home"}} is-active{{end}}" href="/"{{if eq .NavActive "home"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg><span>Beranda</span></a>
+{{if .User.HasRole "admin"}}<details class="nav-group"{{if eq .NavGroup "admin"}} open{{end}}>
+<summary class="nav-group-toggle{{if eq .NavGroup "admin"}} is-active{{end}}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V7.5L12 3l8 4.5V20H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 20v-5h6v5M8 9h.01M12 9h.01M16 9h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Administrasi</span><svg class="nav-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+<div class="nav-submenu">
+<a class="nav-link{{if eq .NavActive "students"}} is-active{{end}}" href="/master/students"{{if eq .NavActive "students"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20m7-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6-7.5a4 4 0 0 1 0 7.7M21 20v-1.5a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Data Siswa</span></a>
+<a class="nav-link{{if eq .NavActive "teachers"}} is-active{{end}}" href="/master/teachers"{{if eq .NavActive "teachers"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5 12 3l8 2.5v6c0 4.5-3.3 7.5-8 9.5-4.7-2-8-5-8-9.5v-6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 10a3 3 0 1 0 6 0 3 3 0 0 0-6 0Zm-1 7c.8-1.4 2.2-2.2 4-2.2s3.2.8 4 2.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Data Guru</span></a>
+<a class="nav-link{{if eq .NavActive "classes"}} is-active{{end}}" href="/akademik/kelas"{{if eq .NavActive "classes"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 9h17M9 9v11m6-11v11" stroke="currentColor" stroke-width="1.6"/></svg><span>Kelas</span></a>
+<a class="nav-link{{if eq .NavActive "placements"}} is-active{{end}}" href="/admin/placements"{{if eq .NavActive "placements"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1m7-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm11-3v6m-3-3h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Penempatan Siswa</span></a>
+<a class="nav-link{{if eq .NavActive "users"}} is-active{{end}}" href="/admin/users"{{if eq .NavActive "users"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.7"/><path d="M3 20v-1a6 6 0 0 1 12 0v1m3-13v6m-3-3h6m-3 6v2m-3-2h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Pengguna dan Role</span></a>
+<a class="nav-link{{if eq .NavActive "audit"}} is-active{{end}}" href="/admin/audit"{{if eq .NavActive "audit"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Riwayat Akses</span></a>
+</div></details>{{end}}
+{{if .User.HasRole "kurikulum"}}<details class="nav-group"{{if eq .NavGroup "curriculum"}} open{{end}}>
+<summary class="nav-group-toggle{{if eq .NavGroup "curriculum"}} is-active{{end}}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19V5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5M4 17.5A2.5 2.5 0 0 1 6.5 15H20M8 7h8m-8 4h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Kurikulum</span><svg class="nav-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+<div class="nav-submenu">
+<a class="nav-link{{if eq .NavActive "academic"}} is-active{{end}}" href="/akademik"{{if eq .NavActive "academic"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19V5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5M8 8h8m-8 4h8m-8 4h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Akademik</span></a>
+<a class="nav-link{{if eq .NavActive "years"}} is-active{{end}}" href="/akademik/tahun-ajaran"{{if eq .NavActive "years"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M16 3v4M8 3v4M3 10h18m-13 4h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Tahun Ajaran</span></a>
+<a class="nav-link{{if eq .NavActive "semesters"}} is-active{{end}}" href="/akademik/semester"{{if eq .NavActive "semesters"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M18 14.5v1.7l1.1.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Semester</span></a>
+<a class="nav-link{{if eq .NavActive "subjects"}} is-active{{end}}" href="/master/subjects"{{if eq .NavActive "subjects"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v18H7.5A2.5 2.5 0 0 0 5 22V4.5ZM5 5h12m-8 4h7m-7 4h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Mata Pelajaran</span></a>
+{{if not (.User.HasRole "admin")}}<a class="nav-link{{if eq .NavActive "students"}} is-active{{end}}" href="/master/students"{{if eq .NavActive "students"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20m7-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6-7.5a4 4 0 0 1 0 7.7M21 20v-1.5a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Data Siswa</span></a>
+<a class="nav-link{{if eq .NavActive "teachers"}} is-active{{end}}" href="/master/teachers"{{if eq .NavActive "teachers"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h14v12H5zM8 20h8m-4-4v4m-4-9 3-3 2 2 2-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Data Guru (baca-saja)</span></a>{{end}}
+{{if not (.User.HasRole "admin")}}<a class="nav-link{{if eq .NavActive "classes"}} is-active{{end}}" href="/akademik/kelas"{{if eq .NavActive "classes"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 9h17M9 9v11m6-11v11" stroke="currentColor" stroke-width="1.6"/></svg><span>Kelas (baca-saja)</span></a>
+<a class="nav-link{{if eq .NavActive "placements"}} is-active{{end}}" href="/admin/placements"{{if eq .NavActive "placements"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1m7-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm11-3v6m-3-3h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Penempatan (baca-saja)</span></a>{{end}}
+</div></details>{{end}}
+</nav>
+<div class="sidebar-footer"><span class="sidebar-role-dot"></span><span>{{.User.RoleNames}}</span></div>
+</aside>
+<div class="sidebar-main">
+<header class="app-header">
+<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="false" aria-label="Buka menu"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+<div class="header-user-menu"><details class="header-user-dropdown"><summary aria-label="Menu pengguna {{.User.DisplayName}}"><span class="header-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.6"/><path d="M5 20a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="header-user-copy"><span class="header-user-name">{{.User.DisplayName}}</span><span class="header-user-role">{{.User.RoleNames}}</span></span><svg class="header-user-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+<div class="header-dropdown-panel"><div class="header-dropdown-identity"><p>{{.User.DisplayName}}</p><span>{{.User.RoleNames}}</span></div><a class="header-dropdown-item" href="/account/password?modal=1"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.7"/><path d="m11 12 8-8 2 2-2 2 2 2-3 3-2-2-2 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Kata Sandi</a><div class="header-dropdown-divider"></div><form method="post" action="/logout">{{.CSRF}}<button class="header-dropdown-item header-dropdown-logout" type="submit">{{template "icon-logout" .}}Keluar</button></form></div>
+</details></div>
 </header>
-<main id="content" class="mx-auto max-w-7xl p-5 md:p-8" tabindex="-1">
-<h1 class="mb-6 text-2xl font-semibold">{{.Title}}</h1>{{template "messages" .}}<p id="request-error" role="alert" hidden class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">Halaman belum dapat diperbarui. Coba muat ulang.</p>{{if eq .Page "home"}}<a href="/" hx-get="/" hx-target="#overview" hx-swap="outerHTML" hx-indicator="#loading" class="button-secondary mb-5 inline-block">Muat ulang <span id="loading" class="htmx-indicator" role="status">Memuat…</span>
-</a>{{template "overview" .}}{{else if eq .Page "users"}}{{template "users" .}}{{else if eq .Page "user-form"}}{{template "user-form" .}}{{else if eq .Page "password"}}{{template "password" .}}{{else if eq .Page "audit"}}{{template "audit" .}}{{else if eq .Page "academic"}}<section class="panel">
-<h2 class="text-lg font-semibold">Ruang kerja Kurikulum</h2>
-<p class="mt-3 text-gray-500">Role Kurikulum Anda aktif. Pengelolaan tahun ajaran, kelas, dan penugasan akan tersedia pada tahap pengembangan berikutnya.</p>
-</section>{{end}}</main>
+<main id="content" class="page-content p-5 md:p-8" tabindex="-1">
+<h1 class="mb-6 text-2xl font-semibold">{{.Title}}</h1>{{template "messages" .}}<div id="request-error" class="app-notification app-notification--error mb-4" data-notification data-notification-reusable role="alert" aria-live="assertive" hidden><span class="app-notification-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 8.5 4.8v8.4L12 21l-8.5-4.8V7.8L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 8v5m0 3h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><p class="app-notification-message">Halaman belum dapat diperbarui. Coba muat ulang.</p><button class="app-notification-close" type="button" data-notification-close aria-label="Tutup notifikasi"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="app-notification-progress" aria-hidden="true"></span></div>{{if eq .Page "home"}}<a href="/" hx-get="/" hx-target="#overview" hx-swap="outerHTML" hx-indicator="#loading" class="button-secondary mb-5">{{template "icon-refresh" .}}Muat ulang <span id="loading" class="htmx-indicator" role="status">Memuat…</span>
+</a>{{template "overview" .}}{{else if eq .Page "users"}}{{template "users" .}}{{else if eq .Page "password"}}{{template "password" .}}{{else if eq .Page "audit"}}{{template "audit" .}}{{else if eq .Page "master-import"}}{{template "master-import" .}}{{else if eq .Page "master-list"}}{{template "master-list" .}}{{else if eq .Page "master-detail"}}{{template "master-detail" .}}{{else if eq .Page "master-history"}}{{template "master-history" .}}{{else if eq .Page "academic"}}<section class="panel">
+{{template "academic-home" .}}{{else if eq .Page "academic-years"}}{{template "academic-years" .}}{{else if eq .Page "academic-semesters"}}{{template "academic-semesters" .}}{{else if eq .Page "academic-classes"}}{{template "academic-classes" .}}{{else if eq .Page "academic-history"}}{{template "academic-history" .}}{{else if eq .Page "student-placements"}}{{template "student-placements" .}}{{else if eq .Page "placement-history"}}{{template "placement-history" .}}{{end}}</main>
 </div>
 </div>
 </body>
@@ -85,34 +118,22 @@
 </section>{{end}}
 {{define "users"}}<div class="mb-5 flex flex-wrap items-center justify-between gap-4">
 <p class="text-sm text-gray-500">Kelola akses personel. Penugasan akademik dikelola Kurikulum.</p>
-<a href="/admin/users/new" class="button-primary">Tambah pengguna</a>
+<a href="/admin/users/new" class="button-primary">{{template "icon-plus" .}}Tambah pengguna</a>
 </div>
 <section class="panel">
-<form method="get" action="/admin/users" class="mb-6 grid items-end gap-4 sm:grid-cols-4">
-<div>
-<label for="q">Cari pengguna</label>
-<input id="q" name="q" value="{{.Filter.Search}}" maxlength="120" placeholder="Nama atau username">
+<div class="table-heading"><h2>Daftar pengguna</h2><form method="get" action="/admin/users" class="table-toolbar table-toolbar--filters">
+<div class="table-toolbar-top">
+<div class="table-search"><label class="sr-only" for="q">Cari pengguna</label><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="q" type="search" name="q" data-instant-search value="{{.Filter.Search}}" maxlength="120" placeholder="Cari nama atau username"></div>
+<button class="table-filter-toggle" type="button" data-filter-toggle aria-controls="users-filter-panel" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/></svg>Filter</button>
 </div>
-<div>
-<label for="role">Role</label>
-<select id="role" name="role">
-<option value="">Semua role</option>{{range .RoleChoices}}<option value="{{.Code}}" {{if eq $.Filter.Role .Code}}selected{{end}}>{{.Name}}</option>{{end}}</select>
-</div>
-<div>
-<label for="status">Status</label>
-<select id="status" name="status">
-<option value="">Semua status</option>
-<option value="active" {{if eq .Filter.Status "active"}}selected{{end}}>Aktif</option>
-<option value="inactive" {{if eq .Filter.Status "inactive"}}selected{{end}}>Nonaktif</option>
-</select>
-</div>
-<button class="button-secondary" type="submit">Terapkan</button>
-</form>
-<div class="overflow-x-auto">
-<table class="w-full text-left text-sm">
+<div id="users-filter-panel" class="table-filter-panel" hidden><div><label for="role">Role</label><select id="role" name="role" data-instant-filter><option value="">Semua role</option>{{range .RoleChoices}}<option value="{{.Code}}" {{if eq $.Filter.Role .Code}}selected{{end}}>{{.Name}}</option>{{end}}</select></div><div><label for="status">Status</label><select id="status" name="status" data-instant-filter><option value="">Semua status</option><option value="active" {{if eq .Filter.Status "active"}}selected{{end}}>Aktif</option><option value="inactive" {{if eq .Filter.Status "inactive"}}selected{{end}}>Nonaktif</option></select></div></div>
+</form></div>
+<div class="table-surface">
+<table class="app-table">
 <caption class="sr-only">Daftar pengguna dan hak akses</caption>
 <thead>
 <tr class="border-b border-gray-200 text-gray-500">
+<th class="p-3">No.</th>
 <th class="p-3">Nama</th>
 <th class="p-3">Nama pengguna</th>
 <th class="p-3">Role</th>
@@ -120,23 +141,25 @@
 <th class="p-3">Tindakan</th>
 </tr>
 </thead>
-<tbody>{{range .Users}}<tr class="border-b border-gray-200">
+<tbody>{{range $index, $user := .Users}}<tr class="border-b border-gray-200">
+<td class="p-3 text-gray-500" data-row-number>{{rowNumber $.Filter.Page $index}}</td>
 <td class="p-3 font-medium">{{.DisplayName}}</td>
 <td class="p-3">{{.Username}}</td>
 <td class="p-3">{{.RoleNames}}</td>
-<td class="p-3">{{if .Active}}Aktif{{else}}Nonaktif{{end}}</td>
+<td class="p-3">{{if .Active}}<span class="status-badge status-badge--active">Aktif</span>{{else}}<span class="status-badge status-badge--inactive">Nonaktif</span>{{end}}</td>
 <td class="p-3">
-<a href="/admin/users/{{.ID}}/edit" class="text-brand-600 underline">Edit<span class="sr-only"> {{.DisplayName}}</span>
-</a>
+<details class="table-actions"><summary aria-label="Tindakan untuk {{.DisplayName}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></summary><div class="table-actions-menu"><a href="/admin/users/{{.ID}}/edit">Edit<span class="sr-only"> {{.DisplayName}}</span></a></div></details>
 </td>
 </tr>{{else}}<tr>
-<td colspan="5" class="p-8 text-center text-gray-500">Tidak ada pengguna yang sesuai pencarian.</td>
+<td colspan="6" class="p-8 text-center text-gray-500">Tidak ada pengguna yang sesuai pencarian.</td>
 </tr>{{end}}</tbody>
 </table>
 </div>
-<nav aria-label="Halaman daftar pengguna" class="mt-6 flex gap-4">{{if .Previous}}<a class="text-brand-600 underline" href="/admin/users?page={{.Previous}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">Sebelumnya</a>{{end}}{{if .Next}}<a class="text-brand-600 underline" href="/admin/users?page={{.Next}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">Berikutnya</a>{{end}}</nav>
-</section>{{end}}
-{{define "user-form"}}<section class="panel max-w-2xl">
+<nav aria-label="Halaman daftar pengguna" class="table-pagination">{{if .Previous}}<a class="table-page-arrow" href="/admin/users?page={{.Previous}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Previous</a>{{else}}<button class="table-page-arrow" type="button" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Previous</button>{{end}}<div class="table-page-links"><span class="is-current" aria-current="page">{{.Filter.Page}}</span>{{if .Next}}<a href="/admin/users?page={{.Next}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">{{.Next}}</a>{{end}}</div>{{if .Next}}<a class="table-page-arrow" href="/admin/users?page={{.Next}}&amp;q={{.Filter.Search}}&amp;role={{.Filter.Role}}&amp;status={{.Filter.Status}}">Next<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 18 6-6-6-6m6 6H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{{else}}<button class="table-page-arrow" type="button" disabled>Next<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 18 6-6-6-6m6 6H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>{{end}}</nav>
+</section>{{if .ModalOpen}}{{template "user-form-modal" .}}{{end}}{{end}}
+{{define "user-form-modal"}}<dialog class="form-modal" data-form-modal data-modal-open-on-load data-modal-return="/admin/users" aria-labelledby="user-form-title">
+<div class="form-modal-card"><div class="form-modal-heading"><h2 id="user-form-title">{{if .Editing}}Edit pengguna{{else}}Tambah pengguna{{end}}</h2><button type="button" class="form-modal-close" data-modal-close aria-label="Tutup">×</button></div>
+{{if .Error}}{{template "notification-error" .Error}}{{end}}
 <form method="post" action="{{if .Editing}}/admin/users/{{.Editing}}/edit{{else}}/admin/users/new{{end}}" class="space-y-5">{{.CSRF}}<input type="hidden" name="version" value="{{.Input.Version}}">
 <div>
 <label for="display_name">Nama tampilan</label>
@@ -162,14 +185,12 @@
 <label class="flex items-center gap-2">
 <input type="checkbox" name="active" value="true" {{if .Input.Active}}checked{{end}}>Akun aktif</label>
 <p class="text-sm text-gray-500">Menonaktifkan akun mencabut seluruh sesinya. Minimal satu Admin aktif dipertahankan.</p>
-<div class="flex flex-wrap gap-3">
-<button type="submit" class="button-primary">Simpan pengguna</button>
-<a href="/admin/users" class="button-secondary">Batal</a>
-</div>
+<div class="form-modal-actions"><div class="button-group button-group--primary" role="group" aria-label="Aksi formulir"><button type="button" class="button-secondary" data-modal-close>{{template "icon-close" .}}Tutup</button><button type="submit" class="button-primary">{{template "icon-save" .}}Simpan perubahan</button></div></div>
 </form>
-</section>{{end}}
+</div></dialog>{{end}}
 {{define "password"}}<section class="panel max-w-xl">
-<p class="mb-6 text-sm text-gray-500">Perubahan kata sandi mengakhiri seluruh sesi Anda. Setelah berhasil, masuk kembali dengan kata sandi baru.</p>
+<h2 class="text-lg font-semibold">Perbarui kata sandi</h2><p class="mt-2 mb-5 text-sm text-gray-500">Kata sandi melindungi akses akun dan tidak ditampilkan di halaman ini.</p><button class="button-primary" type="button" data-modal-open="password-modal">{{template "icon-edit" .}}Ubah kata sandi</button></section>
+<dialog id="password-modal" class="form-modal" data-form-modal{{if .ModalOpen}} data-modal-open-on-load{{end}} aria-labelledby="password-modal-title"><div class="form-modal-card"><div class="form-modal-heading"><h2 id="password-modal-title">Ubah kata sandi</h2><button type="button" class="form-modal-close" data-modal-close aria-label="Tutup">×</button></div>{{if .Error}}{{template "notification-error" .Error}}{{end}}<p class="mb-6 text-sm text-gray-500">Perubahan kata sandi mengakhiri seluruh sesi Anda. Setelah berhasil, masuk kembali dengan kata sandi baru.</p>
 <form method="post" action="/account/password" class="space-y-5">{{.CSRF}}<div>
 <label for="current_password">Kata sandi saat ini</label>
 <input id="current_password" type="password" name="current_password" autocomplete="current-password" required>
@@ -183,9 +204,8 @@
 <label for="confirm_password">Ulangi kata sandi baru</label>
 <input id="confirm_password" type="password" name="confirm_password" autocomplete="new-password" minlength="12" required>
 </div>
-<button class="button-primary" type="submit">Ubah kata sandi</button>
-</form>
-</section>{{end}}
+<div class="form-modal-actions"><div class="button-group button-group--primary" role="group" aria-label="Aksi kata sandi"><button type="button" class="button-secondary" data-modal-close>{{template "icon-close" .}}Tutup</button><button class="button-primary" type="submit">{{template "icon-save" .}}Ubah kata sandi</button></div></div>
+</form></div></dialog>{{end}}
 {{define "audit"}}<section class="panel">
 <p class="mb-6 text-sm text-gray-500">100 catatan akses terbaru. Kata sandi dan token sesi tidak dicatat.</p>
 <div class="space-y-4">{{range .Audits}}<article class="rounded-lg border border-gray-200 p-4">

@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
+	"github.com/fasih-kode/sim_guru/internal/master"
 )
 
 func TestRoutes(t *testing.T) {
@@ -38,7 +41,7 @@ func TestRoutes(t *testing.T) {
 					return errors.New("secret")
 				}
 				return nil
-			}, Options{Accounts: &auth.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
+			}, Options{Accounts: &auth.Store{}, Masters: &master.Store{}, Academics: &academic.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -65,6 +68,34 @@ func TestRoutes(t *testing.T) {
 				t.Fatal("missing login redirect for expired htmx request")
 			}
 		})
+	}
+}
+
+func TestPasswordMenuOpensFormModal(t *testing.T) {
+	templates, err := template.New("web").Funcs(template.FuncMap{
+		"rowNumber": func(page, index int) int { return (page-1)*10 + index + 1 },
+	}).ParseFS(content, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &application{templates: templates}
+	user := &auth.User{ID: 1, Username: "personel", DisplayName: "Pengguna Uji", Active: true, Roles: []string{"admin"}}
+	r := httptest.NewRequest(http.MethodGet, "/account/password?modal=1", nil)
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, user))
+	w := httptest.NewRecorder()
+	a.password(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `<dialog id="password-modal" class="form-modal" data-form-modal data-modal-open-on-load`) {
+		t.Fatal("password menu did not render the form modal open")
+	}
+	if !strings.Contains(body, `href="/account/password?modal=1"`) {
+		t.Fatal("password action is missing from the user menu")
+	}
+	if strings.Contains(body, `<span>Kata Sandi</span></a>`) {
+		t.Fatal("password action remains in the sidebar")
 	}
 }
 
@@ -114,5 +145,19 @@ func TestSessionCookieAttributes(t *testing.T) {
 		if c.MaxAge != -1 || c.Value != "" || c.Secure != secure {
 			t.Fatal("cookie was not expired correctly")
 		}
+	}
+}
+
+func TestImportBodyLimit(t *testing.T) {
+	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: &auth.Store{}, Masters: &master.Store{}, Academics: &academic.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/master/students/import", nil)
+	r.ContentLength = master.MaxImportBytes + (256 << 10) + 1
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatal("upload limit not enforced before parsing")
 	}
 }

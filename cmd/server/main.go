@@ -10,9 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/fasih-kode/sim_guru/internal/config"
 	"github.com/fasih-kode/sim_guru/internal/database"
+	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/fasih-kode/sim_guru/internal/web"
 	"github.com/fasih-kode/sim_guru/migrations"
 )
@@ -53,7 +55,7 @@ func run() error {
 	if err != nil {
 		return errors.New("inisialisasi autentikasi gagal")
 	}
-	handler, err := web.New(ready, web.Options{Accounts: accounts, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
+	handler, err := web.New(ready, web.Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: &academic.Store{DB: db}, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
 	if err != nil {
 		return errors.New("inisialisasi template gagal")
 	}

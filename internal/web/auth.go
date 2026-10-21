@@ -13,7 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
+	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/gorilla/csrf"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -22,6 +24,8 @@ const sessionCookie = "sim_guru_session"
 
 type Options struct {
 	Accounts      *auth.Store
+	Masters       *master.Store
+	Academics     *academic.Store
 	CSRFKey       []byte
 	SecureCookies bool
 }
@@ -39,6 +43,8 @@ type view struct {
 	User                        *auth.User
 	CSRF                        template.HTML
 	Page, Title, Error, Message string
+	NavActive, NavGroup         string
+	ModalOpen                   bool
 	Users                       []auth.User
 	Input                       auth.Input
 	Editing                     int64
@@ -46,6 +52,11 @@ type view struct {
 	Audits                      []auth.Audit
 	Filter                      auth.Filter
 	Previous, Next              int
+	Master                      *masterView
+	Import                      *importView
+	Academic                    *academicView
+	Placement                   *placementView
+	PlacementHistory            []academic.PlacementHistory
 }
 
 func principal(r *http.Request) *auth.User {
@@ -55,6 +66,14 @@ func principal(r *http.Request) *auth.User {
 func (a *application) render(w http.ResponseWriter, r *http.Request, name string, status int, v view) {
 	v.User = principal(r)
 	v.CSRF = csrf.TemplateField(r)
+	v.NavActive, v.NavGroup = sidebarState(r.URL.Path)
+	if v.NavGroup == "placements" || v.NavGroup == "classes" {
+		if v.User.HasRole("admin") {
+			v.NavGroup = "admin"
+		} else {
+			v.NavGroup = "curriculum"
+		}
+	}
 	var buf bytes.Buffer
 	if err := a.templates.ExecuteTemplate(&buf, name, v); err != nil {
 		slog.Error("template gagal", "template", name)
@@ -64,6 +83,37 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	w.Write(buf.Bytes())
+}
+
+func sidebarState(path string) (active, group string) {
+	switch {
+	case path == "/":
+		return "home", "menu"
+	case strings.HasPrefix(path, "/master/students"):
+		return "students", "admin"
+	case strings.HasPrefix(path, "/master/teachers"):
+		return "teachers", "admin"
+	case strings.HasPrefix(path, "/master/subjects"):
+		return "subjects", "curriculum"
+	case strings.HasPrefix(path, "/admin/placements"), strings.HasPrefix(path, "/akademik/histori/penempatan/"):
+		return "placements", "placements"
+	case strings.HasPrefix(path, "/admin/users"):
+		return "users", "admin"
+	case strings.HasPrefix(path, "/admin/audit"):
+		return "audit", "admin"
+	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):
+		return "years", "curriculum"
+	case path == "/akademik/semester" || strings.HasPrefix(path, "/akademik/semester/"):
+		return "semesters", "curriculum"
+	case path == "/akademik/kelas" || strings.HasPrefix(path, "/akademik/kelas/") || strings.HasPrefix(path, "/akademik/histori/class/"):
+		return "classes", "classes"
+	case path == "/akademik":
+		return "academic", "curriculum"
+	case path == "/account/password":
+		return "password", "account"
+	default:
+		return "", ""
+	}
 }
 func (a *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +258,7 @@ func (a *application) logout(w http.ResponseWriter, r *http.Request) {
 func (a *application) password(w http.ResponseWriter, r *http.Request) {
 	v := view{Page: "password", Title: "Kata sandi"}
 	if r.Method == "GET" {
+		v.ModalOpen = r.URL.Query().Get("modal") == "1"
 		a.render(w, r, "page", 200, v)
 		return
 	}
@@ -215,12 +266,14 @@ func (a *application) password(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostForm.Get("password") != r.PostForm.Get("confirm_password") {
+		v.ModalOpen = true
 		v.Error = "Konfirmasi kata sandi tidak sesuai."
 		a.render(w, r, "page", 422, v)
 		return
 	}
 	err := a.options.Accounts.ChangePassword(r.Context(), principal(r).ID, r.PostForm.Get("current_password"), r.PostForm.Get("password"))
 	if err != nil {
+		v.ModalOpen = true
 		code, message := publicError(err)
 		v.Error = message
 		a.render(w, r, "page", code, v)
@@ -265,8 +318,10 @@ func (a *application) users(w http.ResponseWriter, r *http.Request) {
 	if page > 1 {
 		v.Previous = page - 1
 	}
-	if len(users) == 50 {
+	if len(users) > 10 {
 		v.Next = page + 1
+		users = users[:10]
+		v.Users = users
 	}
 	for _, role := range auth.Roles {
 		v.RoleChoices = append(v.RoleChoices, roleChoice{Code: role.Code, Name: role.Name})
@@ -286,9 +341,17 @@ func (a *application) userForm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	v := view{Page: "user-form", Title: "Tambah pengguna", Editing: id, Input: auth.Input{Active: true}}
+	v := view{Page: "users", Title: "Pengguna dan role", ModalOpen: true, Editing: id, Input: auth.Input{Active: true}}
+	users, err := a.options.Accounts.List(r.Context(), auth.Filter{Page: 1})
+	if err != nil {
+		a.failure(w, err)
+		return
+	}
+	if len(users) > 10 {
+		users = users[:10]
+	}
+	v.Users = users
 	if id != 0 {
-		v.Title = "Edit pengguna"
 		u, err := a.options.Accounts.Get(r.Context(), id)
 		if err != nil {
 			code, message := publicError(err)

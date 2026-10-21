@@ -15,7 +15,9 @@ import (
 )
 
 const SessionLifetime = 8 * time.Hour
-const mutationLock int64 = 742009
+
+// MutationLock serializes access-sensitive writes across account and master-data modules.
+const MutationLock int64 = 742009
 
 type Store struct {
 	DB        *sql.DB
@@ -114,7 +116,7 @@ func (s *Store) Login(ctx context.Context, username, password, oldToken string) 
 	}
 	defer tx.Rollback()
 	// Serialize login with password/role mutations; recheck the hash after bcrypt.
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, mutationLock); err != nil {
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, MutationLock); err != nil {
 		return "", err
 	}
 	var freshHash string
@@ -180,7 +182,7 @@ func (s *Store) beginMutation(ctx context.Context, actor int64, admin bool) (*sq
 	if err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, mutationLock); err != nil {
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, MutationLock); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -390,7 +392,7 @@ func (s *Store) List(ctx context.Context, f Filter) ([]User, error) {
 	if f.Page > 10000 {
 		return nil, ValidationError("Halaman di luar jangkauan.")
 	}
-	rows, err := s.DB.QueryContext(ctx, userSelect+`WHERE ($1='' OR u.username ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%') AND ($2='' OR EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=u.id AND role_code=$2)) AND ($3='' OR u.active=($3='active')) ORDER BY u.id LIMIT 50 OFFSET $4`, f.Search, f.Role, f.Status, (f.Page-1)*50)
+	rows, err := s.DB.QueryContext(ctx, userSelect+`WHERE ($1='' OR u.username ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%') AND ($2='' OR EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=u.id AND role_code=$2)) AND ($3='' OR u.active=($3='active')) ORDER BY u.id LIMIT 11 OFFSET $4`, f.Search, f.Role, f.Status, (f.Page-1)*10)
 	if err != nil {
 		return nil, err
 	}
