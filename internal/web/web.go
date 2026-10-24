@@ -7,9 +7,11 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/gorilla/csrf"
 )
@@ -29,6 +31,13 @@ func New(check Check, options Options) (http.Handler, error) {
 				page = 1
 			}
 			return (page-1)*10 + index + 1
+		},
+		"weekdayName": func(day int) string {
+			names := []string{"", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"}
+			if day < 1 || day >= len(names) {
+				return strconv.Itoa(day)
+			}
+			return names[day]
 		},
 	}).ParseFS(content, "templates/*.html")
 	if err != nil {
@@ -66,8 +75,38 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("POST /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("GET /admin/audit", a.require("admin", a.audit))
+	mux.HandleFunc("GET /akademik/penempatan/{id}/pindah-kelas", a.require("kurikulum", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "pindah-kelas")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("POST /akademik/penempatan/{id}/pindah-kelas", a.require("kurikulum", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "pindah-kelas")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("GET /master/students/{id}/pindah-sekolah", a.require("admin", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "pindah-sekolah")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("POST /master/students/{id}/pindah-sekolah", a.require("admin", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "pindah-sekolah")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("GET /master/students/{id}/terima-kembali", a.require("admin", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "terima-kembali")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("POST /master/students/{id}/terima-kembali", a.require("admin", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "terima-kembali")
+		a.studentMovement(w, r)
+	}))
+	mux.HandleFunc("GET /students/{id}/perpindahan", a.require("", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("mode", "riwayat")
+		a.studentMovement(w, r)
+	}))
 	mux.HandleFunc("GET /admin/placements", a.require("", a.studentPlacements))
 	mux.HandleFunc("POST /admin/placements", a.require("admin", a.studentPlacements))
+	mux.HandleFunc("GET /akademik/transisi", a.require("kurikulum", a.studentTransition))
+	mux.HandleFunc("POST /akademik/transisi", a.require("kurikulum", a.studentTransition))
 	mux.HandleFunc("GET /master/{kind}/import", a.require("", a.masterImport))
 	mux.HandleFunc("POST /master/{kind}/import", a.require("", a.masterImport))
 	mux.HandleFunc("GET /master/{kind}/import/template", a.require("", a.importTemplate))
@@ -85,8 +124,28 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("POST /akademik/tahun-ajaran/{id}/aktifkan", a.require("kurikulum", a.activateYear))
 	mux.HandleFunc("GET /akademik/semester", a.require("kurikulum", a.academicSemesters))
 	mux.HandleFunc("POST /akademik/semester/{id}/aktifkan", a.require("kurikulum", a.activateSemester))
+	mux.HandleFunc("GET /akademik/pengampu", a.require("kurikulum", a.teachingAssignments))
+	mux.HandleFunc("POST /akademik/pengampu", a.require("kurikulum", a.teachingAssignments))
+	mux.HandleFunc("GET /akademik/jam-pelajaran", a.require("kurikulum", a.lessonPeriods))
+	mux.HandleFunc("POST /akademik/jam-pelajaran", a.require("kurikulum", a.lessonPeriods))
+	mux.HandleFunc("GET /akademik/struktur-kurikulum", a.require("kurikulum", a.curriculumSettings))
+	mux.HandleFunc("POST /akademik/struktur-kurikulum", a.require("kurikulum", a.curriculumSettings))
+	mux.HandleFunc("GET /akademik/waktu-sekolah", a.require("kurikulum", a.curriculumSettings))
+	mux.HandleFunc("POST /akademik/waktu-sekolah", a.require("kurikulum", a.curriculumSettings))
+	mux.HandleFunc("GET /akademik/batasan-jadwal", a.require("kurikulum", a.scheduleConstraints))
+	mux.HandleFunc("POST /akademik/batasan-jadwal", a.require("kurikulum", a.scheduleConstraints))
+	mux.HandleFunc("GET /akademik/jadwal/impor", a.require("kurikulum", a.timetableXMLImport))
+	mux.HandleFunc("POST /akademik/jadwal/impor", a.require("kurikulum", a.timetableXMLImport))
+	mux.HandleFunc("GET /akademik/jadwal", a.require("kurikulum", a.weeklyTimetable))
+	mux.HandleFunc("POST /akademik/jadwal", a.require("kurikulum", a.weeklyTimetable))
+	mux.HandleFunc("GET /jadwal-saya", a.require("guru_mapel", a.myTimetable))
 	// Class reads and history are authorized by domain; only Admin may write classes.
 	mux.HandleFunc("GET /akademik/kelas", a.require("", a.academicClasses))
+	mux.HandleFunc("GET /akademik/kelas/{id}/wali", a.require("kurikulum", a.classHomeroom))
+	mux.HandleFunc("POST /akademik/kelas/{id}/wali", a.require("kurikulum", a.classHomeroom))
+	mux.HandleFunc("GET /akademik/kelas/{id}/wali/histori", a.require("kurikulum", a.classHomeroomHistory))
+	mux.HandleFunc("GET /wali-kelas", a.require("wali_kelas", a.myHomerooms))
+	mux.HandleFunc("GET /wali-kelas/{id}", a.require("wali_kelas", a.myHomeroomRoster))
 	mux.HandleFunc("GET /akademik/kelas/new", a.require("admin", a.academicClassForm))
 	mux.HandleFunc("POST /akademik/kelas/new", a.require("admin", a.academicClassForm))
 	mux.HandleFunc("GET /akademik/kelas/{id}/edit", a.require("admin", a.academicClassForm))
@@ -114,6 +173,13 @@ func New(check Check, options Options) (http.Handler, error) {
 		limit := int64(32 << 10)
 		if r.Method == "POST" && (r.URL.Path == "/master/students/import" || r.URL.Path == "/master/teachers/import") {
 			limit = master.MaxImportBytes + (256 << 10)
+		}
+		if r.Method == "POST" && r.URL.Path == "/akademik/jadwal/impor" {
+			if r.URL.Query().Get("token") == "" {
+				limit = academic.MaxASCBytes + (256 << 10)
+			} else {
+				limit = 512 << 10
+			}
 		}
 		if r.ContentLength > limit {
 			http.Error(w, "Ukuran unggahan melebihi batas.", http.StatusRequestEntityTooLarge)

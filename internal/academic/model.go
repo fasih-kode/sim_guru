@@ -70,6 +70,26 @@ type ClassPlacementCount struct {
 	Count   int
 }
 
+type HomeroomTeacher struct {
+	ID   int64
+	Name string
+}
+
+type HomeroomAssignment struct {
+	ClassID, TeacherID               int64
+	YearName, ClassName, TeacherName string
+	At                               time.Time
+}
+
+type HomeroomHistory struct {
+	BeforeTeacher, AfterTeacher, Actor string
+	At                                 time.Time
+}
+
+type ClassStudent struct {
+	Name, NIS, NISN string
+}
+
 type PlacementHistory struct {
 	ID, PlacementID int64
 	StudentName     string

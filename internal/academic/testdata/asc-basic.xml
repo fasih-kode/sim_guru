@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<timetable ascttversion="2022.8.1">
+<periods><period period="1" starttime="8:00" endtime="8:40"/><period period="2" starttime="8:40" endtime="9:20"/><period period="3" starttime="9:20" endtime="10:00"/></periods>
+<daysdefs><daysdef id="D" days="10,01" name="Any day"/><daysdef id="MON" days="10" name="Senin"/><daysdef id="TUE" days="01" name="Selasa"/></daysdefs>
+<weeksdefs><weeksdef id="W" weeks="1"/></weeksdefs><termsdefs><termsdef id="TERM" terms="1"/></termsdefs>
+<classes><class id="C" name="7A"/></classes>
+<teachers><teacher id="T1" name="Teacher A" email="discard@example.test"/><teacher id="T2" name="Teacher B"/></teachers>
+<subjects><subject id="M" name="Matematika"/><subject id="E" name="Bahasa Inggris"/></subjects>
+<groups><group id="G" classid="C" entireclass="1"/></groups>
+<lessons><lesson id="L1" classids="C" teacherids="T1" subjectid="M" groupids="G" periodspercard="2" periodsperweek="2.0" daysdefid="D" weeksdefid="W" termsdefid="TERM"/><lesson id="L2" classids="C" teacherids="T2" subjectid="E" groupids="G" periodspercard="3" periodsperweek="3.0" daysdefid="D" weeksdefid="W" termsdefid="TERM"/></lessons>
+<cards><card lessonid="L1" period="1" days="10" weeks="1" terms="1"/><card lessonid="L1" period="2" days="10" weeks="1" terms="1"/><card lessonid="L2" period="1" days="01" weeks="1" terms="1"/><card lessonid="L2" period="2" days="01" weeks="1" terms="1"/><card lessonid="L2" period="3" days="01" weeks="1" terms="1"/></cards>
+</timetable>

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -71,9 +73,56 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
+func TestTimetableFilterOptionsUseOnlyAssignedLessonsAndSortByName(t *testing.T) {
+	classes, subjects := timetableFilterOptions([]academic.TimetableEntry{
+		{ClassID: 2, ClassName: "8B", SubjectID: 4, SubjectName: "Matematika"},
+		{ClassID: 1, ClassName: "7A", SubjectID: 3, SubjectName: "Bahasa Indonesia"},
+		{Kind: "activity", ClassName: "Semua rombel", SubjectName: "Upacara"},
+	})
+	if len(classes) != 2 || classes[0].Name != "7A" || classes[1].Name != "8B" {
+		t.Fatalf("unexpected class filter options: %#v", classes)
+	}
+	if len(subjects) != 2 || subjects[0].Name != "Bahasa Indonesia" || subjects[1].Name != "Matematika" {
+		t.Fatalf("unexpected subject filter options: %#v", subjects)
+	}
+}
+
+func TestSidebarKeepsActiveRoleMenuExpanded(t *testing.T) {
+	tests := []struct {
+		name, path, active, group string
+		roles                     []string
+	}{
+		{name: "admin siswa", path: "/master/students", active: "students", group: "admin", roles: []string{"admin"}},
+		{name: "kurikulum siswa", path: "/master/students", active: "students", group: "curriculum-students", roles: []string{"kurikulum"}},
+		{name: "kurikulum guru", path: "/master/teachers", active: "teachers", group: "curriculum-students", roles: []string{"kurikulum"}},
+		{name: "admin guru", path: "/master/teachers", active: "teachers", group: "admin", roles: []string{"admin"}},
+		{name: "kurikulum kelas", path: "/akademik/kelas/4/wali", active: "classes", group: "curriculum-students", roles: []string{"kurikulum"}},
+		{name: "admin penempatan", path: "/admin/placements", active: "placements", group: "admin", roles: []string{"admin"}},
+		{name: "kurikulum penempatan", path: "/admin/placements", active: "placements", group: "curriculum-students", roles: []string{"kurikulum"}},
+		{name: "kalender akademik", path: "/akademik/tahun-ajaran", active: "years", group: "curriculum-calendar", roles: []string{"kurikulum"}},
+		{name: "struktur kurikulum", path: "/akademik/struktur-kurikulum", active: "curriculum-structure", group: "curriculum-subjects", roles: []string{"kurikulum"}},
+		{name: "jadwal mingguan", path: "/akademik/jadwal", active: "weekly-timetable", group: "curriculum-schedule", roles: []string{"kurikulum"}},
+		{name: "impor jadwal", path: "/akademik/jadwal/impor", active: "weekly-timetable", group: "curriculum-schedule", roles: []string{"kurikulum"}},
+		{name: "transisi siswa", path: "/akademik/transisi", active: "transitions", group: "curriculum-students", roles: []string{"kurikulum"}},
+		{name: "gabungan memilih menu admin yang terlihat", path: "/master/students", active: "students", group: "admin", roles: []string{"admin", "kurikulum"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			user := &auth.User{Roles: test.roles}
+			active, group := sidebarState(test.path, user)
+			if active != test.active || group != test.group {
+				t.Fatalf("sidebarState(%q) = (%q, %q), want (%q, %q)", test.path, active, group, test.active, test.group)
+			}
+		})
+	}
+}
+
 func TestPasswordMenuOpensFormModal(t *testing.T) {
 	templates, err := template.New("web").Funcs(template.FuncMap{
 		"rowNumber": func(page, index int) int { return (page-1)*10 + index + 1 },
+		"weekdayName": func(day int) string {
+			return []string{"", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"}[day]
+		},
 	}).ParseFS(content, "templates/*.html")
 	if err != nil {
 		t.Fatal(err)
@@ -159,5 +208,34 @@ func TestImportBodyLimit(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatal("upload limit not enforced before parsing")
+	}
+}
+
+func TestLessonDayTemplatePreservesLegacySlots(t *testing.T) {
+	periods := []academic.LessonPeriod{{Weekday: 1, Number: 1, StartsAt: "07:00:00", EndsAt: "07:40:00"}, {Weekday: 1, Number: 15, StartsAt: "09:00:00", EndsAt: "09:40:00"}, {Weekday: 2, Number: 2, StartsAt: "08:00:00", EndsAt: "08:40:00"}}
+	rows := lessonDayRows(periods, 1)
+	if len(rows) != 13 || rows[0].StartsAt != "07:00" || rows[1].StartsAt != "" || rows[12].Number != 15 {
+		t.Fatal("template lost legacy/day scope", rows)
+	}
+	if len(lessonDayRows(nil, 6)) != 12 {
+		t.Fatal("empty day missing template")
+	}
+}
+
+// CSP intentionally blocks inline handlers; navigation must use external listeners.
+func TestTemplatesAvoidInlineEventHandlers(t *testing.T) {
+	files, err := fs.Glob(content, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inline := regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
+	for _, name := range files {
+		body, err := content.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if inline.Match(body) {
+			t.Errorf("%s contains an inline event handler blocked by CSP", name)
+		}
 	}
 }

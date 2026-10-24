@@ -1,0 +1,32 @@
+{{define "student-transition"}}
+<section class="panel mb-6"><p class="text-sm text-gray-500">Alur: Kurikulum membuat tahun ajaran baru beserta dua semester dan membiarkannya belum aktif → Admin membuat kelas tujuan → Kurikulum memeriksa dan menjalankan transisi saat tahun lama masih aktif → Kurikulum mengaktifkan tahun/semester baru.</p><p class="mt-2 text-sm text-gray-500">Tinjau hasil tiap siswa dari tahun ajaran sumber ke tahun tujuan. Naik/tidak naik memerlukan kelas tujuan; lulus dan keluar tidak membuat penempatan baru. Seluruh batch dicatat sekaligus beserta histori.</p></section>
+<section class="panel mb-6"><form method="get" action="/akademik/transisi" class="grid gap-4 md:grid-cols-3 md:items-end"><div><label for="source-year">Tahun ajaran sumber</label><select id="source-year" name="source_year_id" required>{{range .Transition.Years}}<option value="{{.ID}}" {{if eq .ID $.Transition.SourceYear}}selected{{end}} {{if not .Active}}disabled{{end}}>{{.Name}}{{if .Active}} · aktif{{end}}</option>{{end}}</select></div><div><label for="target-year">Tahun ajaran tujuan</label><select id="target-year" name="target_year_id" required>{{range .Transition.Years}}<option value="{{.ID}}" {{if eq .ID $.Transition.TargetYear}}selected{{end}} {{if .Active}}disabled{{end}}>{{.Name}}{{if .Active}} · aktif{{end}}</option>{{end}}</select></div><button class="button-secondary" type="submit">Tampilkan siswa</button></form>{{if eq .Transition.TargetYear 0}}<p class="mt-3 text-sm text-amber-700">Tahun ajaran tujuan belum dibuat. Kurikulum membuat tahun ajaran dan dua semester; setelah itu Admin membuat kelas tujuan.</p>{{end}}</section>
+{{if .Transition.Preview.Students}}
+<section class="panel"><h2 class="mb-3 font-semibold">Pratinjau transisi · {{len .Transition.Preview.Students}} siswa</h2><p class="mb-4 text-sm text-gray-500">Tahun tujuan harus sudah memiliki kelas. Pilih hasil setiap siswa sesuai keputusan sekolah. Kelas tujuan mengikuti hasil; siswa kelas 9 yang lulus tidak memiliki kelas tujuan. Seluruh keputusan harus lengkap sebelum batch dijalankan.</p>
+<form method="post" action="/akademik/transisi" class="space-y-4" novalidate>{{.CSRF}}<input type="hidden" name="source_year_id" value="{{.Transition.SourceYear}}"><input type="hidden" name="target_year_id" value="{{.Transition.TargetYear}}"><input type="hidden" name="action" value="{{if .Transition.Stage}}execute{{else}}preview{{end}}">
+<div class="table-surface"><table class="app-table" data-table-paginate>
+<thead><tr><th>No.</th><th>Siswa</th><th>Kelas asal</th><th>Hasil</th><th>Kelas tujuan</th></tr></thead>
+<tbody>{{range $i,$s:=.Transition.Preview.Students}}
+<tr data-transition-row data-grade="{{$s.FromGrade}}">
+<td data-row-number>{{rowNumber 1 $i}}</td><td>{{$s.Name}}{{if $s.NIS}}<small class="block text-gray-500">{{$s.NIS}}</small>{{end}}</td><td>{{$s.FromGrade}}{{$s.FromClass}}</td>
+<td>{{if $.Transition.Stage}}
+<input type="hidden" name="outcome_{{$s.StudentID}}" value="{{index $.Transition.Outcome $s.StudentID}}">{{$.Transition.OutcomeLabel $s}}
+{{else}}
+<select name="outcome_{{$s.StudentID}}" class="min-w-[300px]" required data-transition-outcome aria-label="Hasil transisi {{$s.Name}}">
+<option value="">Pilih hasil</option>
+{{if lt $s.FromGrade 9}}<option value="promote" {{if eq (index $.Transition.Outcome $s.StudentID) "promote"}}selected{{end}}>Naik kelas</option>{{else}}<option value="graduate" {{if eq (index $.Transition.Outcome $s.StudentID) "graduate"}}selected{{end}}>Lulus</option>{{end}}
+<option value="repeat" {{if eq (index $.Transition.Outcome $s.StudentID) "repeat"}}selected{{end}}>{{if eq $s.FromGrade 9}}Tidak lulus — mengulang kelas 9{{else}}Tidak naik{{end}}</option>
+<option value="leave" {{if eq (index $.Transition.Outcome $s.StudentID) "leave"}}selected{{end}}>Keluar</option>
+</select>{{end}}</td>
+<td>{{if $.Transition.Stage}}
+<input type="hidden" name="destination_{{$s.StudentID}}" value="{{index $.Transition.Destination $s.StudentID}}">
+{{if $.Transition.TargetGrade $s}}{{range $.Transition.Preview.Classes}}{{if eq .ID (index $.Transition.Destination $s.StudentID)}}{{.Grade}}{{.Name}}{{end}}{{end}}{{else}}—{{end}}
+{{else}}
+<div data-transition-destination {{if eq ($.Transition.TargetGrade $s) 0}}hidden{{end}}>
+<select name="destination_{{$s.StudentID}}" data-transition-class class="min-w-40" aria-label="Kelas tujuan {{$s.Name}}" {{if eq ($.Transition.TargetGrade $s) 0}}disabled{{else}}required{{end}}>
+<option value="">Pilih kelas</option>{{range $.Transition.Preview.Classes}}<option value="{{.ID}}" data-grade="{{.Grade}}" {{if eq .ID (index $.Transition.Destination $s.StudentID)}}selected{{end}}>{{.Grade}}{{.Name}}</option>{{end}}
+</select></div><span data-transition-no-class {{if $.Transition.TargetGrade $s}}hidden{{end}}>—</span>
+{{end}}</td></tr>{{end}}</tbody></table></div>
+{{if .Transition.Stage}}<label class="schedule-confirm"><input type="checkbox" name="confirm" value="yes" required>Saya sudah memeriksa pratinjau dan menyetujui pelaksanaan semua hasil transisi ini.</label><button class="button-primary" type="submit">{{template "icon-check" .}}Jalankan transisi</button>{{else}}<button class="button-primary" type="submit">{{template "icon-view" .}}Periksa pratinjau</button>{{end}}</form></section>
+{{else}}<section class="panel"><p class="text-gray-500">Belum ada siswa yang ditempatkan pada tahun sumber.</p></section>{{end}}
+{{end}}

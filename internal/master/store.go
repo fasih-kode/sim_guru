@@ -39,7 +39,7 @@ func selection(kind Kind) string {
 	// Every identifier is selected from a fixed whitelist, never from user input.
 	switch kind {
 	case Students:
-		return `SELECT id,name,to_char(birth_date,'YYYY-MM-DD') AS birth_date,gender,COALESCE(nis,'') AS nis,COALESCE(nisn,'') AS nisn,phone,active,version FROM app.students`
+		return `SELECT id,name,to_char(birth_date,'YYYY-MM-DD') AS birth_date,gender,COALESCE(nis,'') AS nis,COALESCE(nisn,'') AS nisn,phone,(active AND NOT EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id AND e.effective_date <= (now() AT TIME ZONE 'Asia/Jakarta')::date)),version,EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id AND e.effective_date <= (now() AT TIME ZONE 'Asia/Jakarta')::date),coalesce((SELECT effective_date::text FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id),''),coalesce((SELECT return_date::text FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id),'') FROM app.students`
 	case Teachers:
 		return `SELECT id,name,nip,nuptk,email,phone,COALESCE(user_id,0) AS user_id,active,version FROM app.teachers`
 	case Subjects:
@@ -52,7 +52,7 @@ func scan(kind Kind, row interface{ Scan(...any) error }) (Record, error) {
 	var err error
 	switch kind {
 	case Students:
-		err = row.Scan(&r.ID, &r.Name, &r.BirthDate, &r.Gender, &r.NIS, &r.NISN, &r.Phone, &r.Active, &r.Version)
+		err = row.Scan(&r.ID, &r.Name, &r.BirthDate, &r.Gender, &r.NIS, &r.NISN, &r.Phone, &r.Active, &r.Version, &r.Transferred, &r.ExitDate, &r.ReturnDate)
 	case Teachers:
 		err = row.Scan(&r.ID, &r.Name, &r.NIP, &r.NUPTK, &r.Email, &r.Phone, &r.UserID, &r.Active, &r.Version)
 	case Subjects:
@@ -111,7 +111,11 @@ func (s *Store) List(ctx context.Context, actor int64, kind Kind, f Filter) ([]R
 	case Subjects:
 		searchFields += ` OR code ILIKE $1`
 	}
-	query := selection(kind) + ` WHERE (` + searchFields + `) AND ($2='' OR active=($2='active')) ORDER BY id LIMIT 11 OFFSET $3`
+	statusField := "active"
+	if kind == Students {
+		statusField = "(active AND NOT EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id AND e.effective_date <= (now() AT TIME ZONE 'Asia/Jakarta')::date))"
+	}
+	query := selection(kind) + ` WHERE (` + searchFields + `) AND ($2='' OR ` + statusField + `=($2='active')) ORDER BY id LIMIT 11 OFFSET $3`
 	rows, err := s.DB.QueryContext(ctx, query, "%"+f.Search+"%", f.Status, (f.Page-1)*10)
 	if err != nil {
 		return nil, err
@@ -175,6 +179,16 @@ func saveRecord(ctx context.Context, tx *sql.Tx, actor int64, kind Kind, id int6
 		}
 		if previous.Version != in.Version {
 			return Record{}, ErrConflict
+		}
+		if kind == Students && previous.Transferred && in.Active {
+			return Record{}, ValidationError("Status Pindah sekolah tidak dapat diaktifkan melalui edit identitas.")
+		}
+		if kind == Students && previous.Transferred {
+			// The form reads an effective inactive status during an absence. Preserve
+			// the underlying flag so identity edits do not cancel a scheduled return.
+			if err = tx.QueryRowContext(ctx, `SELECT active FROM app.students WHERE id=$1`, id).Scan(&in.Active); err != nil {
+				return Record{}, err
+			}
 		}
 		before = &previous
 	}

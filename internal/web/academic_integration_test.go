@@ -26,6 +26,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	admin, adminPassword := testutil.User(t, db, "admin")
 	curriculum, curriculumPassword := testutil.User(t, db, "kurikulum")
 	teacher, teacherPassword := testutil.User(t, db, "guru_mapel")
+	wali, waliPassword := testutil.User(t, db, "guru_mapel", "wali_kelas")
 	multi, multiPassword := testutil.User(t, db, "admin", "kurikulum")
 	accounts, err := auth.New(db)
 	if err != nil {
@@ -86,6 +87,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	}
 	ac, kc := login(admin, adminPassword), login(curriculum, curriculumPassword)
 	gc, mc := login(teacher, teacherPassword), login(multi, multiPassword)
+	wc := login(wali, waliPassword)
 	get(newClient(), "/akademik", http.StatusSeeOther)
 	get(ac, "/akademik", http.StatusForbidden)
 	get(kc, "/akademik", http.StatusOK)
@@ -130,6 +132,40 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT id FROM app.classes WHERE school_year_id=$1 AND grade=7 AND name=$2`, yearID, className).Scan(&classID); err != nil {
 		t.Fatal(err)
 	}
+	var teacherID, studentID int64
+	if err = db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Wali Uji',$1) RETURNING id`, wali.ID).Scan(&teacherID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`INSERT INTO app.students(name,birth_date,gender,nis) VALUES('Siswa Wali Uji','2013-01-01','L',$1) RETURNING id`, "WALI"+testutil.Random(t)[:8]).Scan(&studentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = (&academic.Store{DB: db}).CreatePlacement(context.Background(), admin.ID, studentID, classID); err != nil {
+		t.Fatal(err)
+	}
+	assignPath := "/akademik/kelas/" + strconv.FormatInt(classID, 10) + "/wali"
+	assignPage := get(kc, assignPath, http.StatusOK)
+	if !strings.Contains(assignPage, "Wali Kelas 7Rombongan") || !strings.Contains(assignPage, "Guru Wali Uji") {
+		t.Fatal("form penugasan wali kelas tidak tersedia")
+	}
+	assignToken := csrfField.FindStringSubmatch(assignPage)[1]
+	post(kc, assignPath, url.Values{"gorilla.csrf.Token": {assignToken}, "teacher_id": {strconv.FormatInt(teacherID, 10)}}, http.StatusSeeOther)
+	if !strings.Contains(get(kc, "/akademik/kelas", http.StatusOK), "Guru Wali Uji") {
+		t.Fatal("penugasan tidak tampil pada kelas")
+	}
+	homeroomHistory := get(kc, assignPath+"/histori", http.StatusOK)
+	if !strings.Contains(homeroomHistory, "Guru Wali Uji") || !strings.Contains(homeroomHistory, "Histori Wali Kelas") {
+		t.Fatal("histori wali kelas tidak tampil")
+	}
+	get(ac, assignPath+"/histori", http.StatusForbidden)
+	if !strings.Contains(get(wc, "/wali-kelas", http.StatusOK), "Rombongan") {
+		t.Fatal("wali tidak melihat kelas yang ditugaskan")
+	}
+	rosterPage := get(wc, "/wali-kelas/"+strconv.FormatInt(classID, 10), http.StatusOK)
+	if !strings.Contains(rosterPage, "Siswa Wali Uji") {
+		t.Fatal("wali tidak melihat siswa kelasnya")
+	}
+	get(gc, "/wali-kelas/"+strconv.FormatInt(classID, 10), http.StatusForbidden)
+	get(wc, "/wali-kelas/999999", http.StatusForbidden)
 	editPath := "/akademik/kelas/" + strconv.FormatInt(classID, 10) + "/edit"
 	historyPath := "/akademik/histori/class/" + strconv.FormatInt(classID, 10)
 	edit := get(ac, editPath, http.StatusOK)
@@ -140,7 +176,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	values.Set("version", "1")
 	post(ac, editPath, values, http.StatusSeeOther)
 	adminClasses = get(ac, "/akademik/kelas", http.StatusOK)
-	if !strings.Contains(adminClasses, editPath) || !strings.Contains(adminClasses, "Belum siap untuk operasional") {
+	if !strings.Contains(adminClasses, editPath) || !strings.Contains(adminClasses, "Kurikulum menetapkan wali kelas") {
 		t.Fatal("Admin edit link or readiness boundary missing")
 	}
 	readOnly := get(kc, "/akademik/kelas", http.StatusOK)
@@ -156,7 +192,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	}
 	for _, client := range []*http.Client{ac, kc, mc} {
 		history := get(client, historyPath, http.StatusOK)
-		if !strings.Contains(history, "Koreksi nama rombongan oleh Admin") || !strings.Contains(history, `href="/akademik/kelas">Kembali ke Kelas`) {
+		if !strings.Contains(history, "Koreksi nama rombongan oleh Admin") || !strings.Contains(history, `href="/akademik/kelas"`) || !strings.Contains(history, "Kembali ke Kelas") {
 			t.Fatal("class history or accessible back link missing")
 		}
 	}
@@ -172,7 +208,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 	post(ac, "/akademik/tahun-ajaran", url.Values{"gorilla.csrf.Token": {adminToken}, "name": {"Denied " + name}}, http.StatusForbidden)
 	post(ac, "/akademik/semester/"+strconv.FormatInt(semesterID, 10)+"/aktifkan", url.Values{"gorilla.csrf.Token": {adminToken}}, http.StatusForbidden)
 	multiClasses := get(mc, "/akademik/kelas", http.StatusOK)
-	if !strings.Contains(multiClasses, "Tambah kelas") || strings.Count(multiClasses, `href="/akademik/kelas">Kelas</a>`) != 1 {
+	if !strings.Contains(multiClasses, "Tambah kelas") || strings.Count(multiClasses, `href="/akademik/kelas"`) != 1 {
 		t.Fatal("multi-role class management or sidebar incorrect")
 	}
 	get(mc, "/akademik/tahun-ajaran", http.StatusOK)

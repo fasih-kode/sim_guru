@@ -40,11 +40,14 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
+	Movement                    *movementView
+	ASCImport                   *ascImportView
 	User                        *auth.User
 	CSRF                        template.HTML
 	Page, Title, Error, Message string
 	NavActive, NavGroup         string
 	ModalOpen                   bool
+	ModalID                     string
 	Users                       []auth.User
 	Input                       auth.Input
 	Editing                     int64
@@ -57,6 +60,7 @@ type view struct {
 	Academic                    *academicView
 	Placement                   *placementView
 	PlacementHistory            []academic.PlacementHistory
+	Transition                  *transitionView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -66,17 +70,10 @@ func principal(r *http.Request) *auth.User {
 func (a *application) render(w http.ResponseWriter, r *http.Request, name string, status int, v view) {
 	v.User = principal(r)
 	v.CSRF = csrf.TemplateField(r)
-	v.NavActive, v.NavGroup = sidebarState(r.URL.Path)
-	if v.NavGroup == "placements" || v.NavGroup == "classes" {
-		if v.User.HasRole("admin") {
-			v.NavGroup = "admin"
-		} else {
-			v.NavGroup = "curriculum"
-		}
-	}
+	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
 	var buf bytes.Buffer
 	if err := a.templates.ExecuteTemplate(&buf, name, v); err != nil {
-		slog.Error("template gagal", "template", name)
+		slog.Error("template gagal", "template", name, "error", err)
 		http.Error(w, "Halaman tidak dapat ditampilkan.", 500)
 		return
 	}
@@ -85,30 +82,75 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	w.Write(buf.Bytes())
 }
 
-func sidebarState(path string) (active, group string) {
+func sidebarState(path string, user *auth.User) (active, group string) {
+	adminMenu := user != nil && user.HasRole("admin")
+	roleMenu := "curriculum"
+	if adminMenu {
+		roleMenu = "admin"
+	}
 	switch {
 	case path == "/":
 		return "home", "menu"
+	case strings.HasPrefix(path, "/akademik/penempatan/"):
+		if roleMenu == "curriculum" {
+			return "placements", "curriculum-students"
+		}
+		return "placements", roleMenu
+	case strings.HasPrefix(path, "/students/"):
+		if roleMenu == "curriculum" {
+			return "students", "curriculum-students"
+		}
+		return "students", roleMenu
 	case strings.HasPrefix(path, "/master/students"):
-		return "students", "admin"
+		if roleMenu == "curriculum" {
+			return "students", "curriculum-students"
+		}
+		return "students", roleMenu
 	case strings.HasPrefix(path, "/master/teachers"):
-		return "teachers", "admin"
+		if roleMenu == "curriculum" {
+			return "teachers", "curriculum-students"
+		}
+		return "teachers", roleMenu
 	case strings.HasPrefix(path, "/master/subjects"):
-		return "subjects", "curriculum"
+		return "subjects", "curriculum-subjects"
 	case strings.HasPrefix(path, "/admin/placements"), strings.HasPrefix(path, "/akademik/histori/penempatan/"):
-		return "placements", "placements"
+		if roleMenu == "curriculum" {
+			return "placements", "curriculum-students"
+		}
+		return "placements", roleMenu
+	case strings.HasPrefix(path, "/akademik/transisi"):
+		return "transitions", "curriculum-students"
 	case strings.HasPrefix(path, "/admin/users"):
 		return "users", "admin"
 	case strings.HasPrefix(path, "/admin/audit"):
 		return "audit", "admin"
 	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):
-		return "years", "curriculum"
+		return "years", "curriculum-calendar"
 	case path == "/akademik/semester" || strings.HasPrefix(path, "/akademik/semester/"):
-		return "semesters", "curriculum"
+		return "semesters", "curriculum-calendar"
+	case path == "/akademik/pengampu":
+		return "teaching-assignments", "curriculum-schedule"
+	case path == "/akademik/jam-pelajaran":
+		return "lesson-periods", "curriculum-schedule"
+	case path == "/akademik/struktur-kurikulum":
+		return "curriculum-structure", "curriculum-subjects"
+	case path == "/akademik/batasan-jadwal":
+		return "schedule-constraints", "curriculum-schedule"
+	case path == "/akademik/waktu-sekolah":
+		return "school-time-blocks", "curriculum-schedule"
+	case path == "/akademik/jadwal" || path == "/akademik/jadwal/impor":
+		return "weekly-timetable", "curriculum-schedule"
+	case path == "/jadwal-saya":
+		return "my-schedule", "schedule"
+	case strings.HasPrefix(path, "/wali-kelas"):
+		return "my-classes", "wali"
 	case path == "/akademik/kelas" || strings.HasPrefix(path, "/akademik/kelas/") || strings.HasPrefix(path, "/akademik/histori/class/"):
-		return "classes", "classes"
+		if roleMenu == "curriculum" {
+			return "classes", "curriculum-students"
+		}
+		return "classes", roleMenu
 	case path == "/akademik":
-		return "academic", "curriculum"
+		return "academic", "curriculum-calendar"
 	case path == "/account/password":
 		return "password", "account"
 	default:

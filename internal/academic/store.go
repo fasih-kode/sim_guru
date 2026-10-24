@@ -424,7 +424,7 @@ func (s *Store) UnplacedStudents(ctx context.Context, actor int64, yearID int64,
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT s.id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),s.active FROM app.students s WHERE (s.name ILIKE $2 OR COALESCE(s.nis,'') ILIKE $2 OR COALESCE(s.nisn,'') ILIKE $2) AND NOT EXISTS(SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=s.id) ORDER BY s.name,s.id LIMIT 11 OFFSET $3`, yearID, "%"+search+"%", (page-1)*10)
+	rows, err := tx.QueryContext(ctx, `SELECT s.id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),s.active FROM app.students s WHERE (s.name ILIKE $2 OR COALESCE(s.nis,'') ILIKE $2 OR COALESCE(s.nisn,'') ILIKE $2) AND NOT EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=s.id) AND NOT EXISTS(SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=s.id) ORDER BY s.name,s.id LIMIT 11 OFFSET $3`, yearID, "%"+search+"%", (page-1)*10)
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +449,7 @@ func (s *Store) Placements(ctx context.Context, actor int64, yearID, classID int
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT p.id,p.student_id,p.school_year_id,p.class_id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),y.name,c.grade,c.name,u.display_name,p.created_at FROM app.student_placements p JOIN app.students s ON s.id=p.student_id JOIN app.school_years y ON y.id=p.school_year_id JOIN app.classes c ON c.id=p.class_id JOIN app.users u ON u.id=p.actor_id WHERE p.school_year_id=$1 AND ($2=0 OR p.class_id=$2) AND (s.name ILIKE $3 OR COALESCE(s.nis,'') ILIKE $3 OR COALESCE(s.nisn,'') ILIKE $3) ORDER BY c.grade,c.name,s.name,p.id LIMIT 11 OFFSET $4`, yearID, classID, "%"+search+"%", (page-1)*10)
+	rows, err := tx.QueryContext(ctx, `SELECT p.id,p.student_id,p.school_year_id,p.class_id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),y.name,c.grade,c.name,u.display_name,p.created_at FROM app.current_student_placements p JOIN app.students s ON s.id=p.student_id JOIN app.school_years y ON y.id=p.school_year_id JOIN app.classes c ON c.id=p.class_id JOIN app.users u ON u.id=p.actor_id WHERE p.school_year_id=$1 AND ($2=0 OR p.class_id=$2) AND (s.name ILIKE $3 OR COALESCE(s.nis,'') ILIKE $3 OR COALESCE(s.nisn,'') ILIKE $3) ORDER BY c.grade,c.name,s.name,p.id LIMIT 11 OFFSET $4`, yearID, classID, "%"+search+"%", (page-1)*10)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (s *Store) PlacementCounts(ctx context.Context, actor int64) (map[int64]int
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT class_id,count(*) FROM app.student_placements GROUP BY class_id`)
+	rows, err := tx.QueryContext(ctx, `SELECT class_id,count(*) FROM app.current_student_placements GROUP BY class_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -515,6 +515,13 @@ func (s *Store) CreatePlacement(ctx context.Context, actor, studentID, classID i
 	}
 	if err != nil {
 		return 0, err
+	}
+	var departed bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.outstanding_student_school_exits WHERE student_id=$1)`, studentID).Scan(&departed); err != nil {
+		return 0, err
+	}
+	if departed {
+		return 0, ValidationError("Siswa sudah memiliki catatan pindah sekolah.")
 	}
 	var id int64
 	err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id) VALUES($1,$2,$3,$4) RETURNING id`, yearID, studentID, classID, actor).Scan(&id)
@@ -565,6 +572,174 @@ func (s *Store) PlacementHistory(ctx context.Context, actor, placementID int64) 
 		}
 	}
 	return history, nil
+}
+
+// HomeroomTeachers returns only active teacher identities linked to an active account
+// that currently has the wali_kelas role.
+func (s *Store) HomeroomTeachers(ctx context.Context, actor int64) ([]HomeroomTeacher, error) {
+	tx, err := s.reader(ctx, actor, "kurikulum")
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT t.id,t.name FROM app.teachers t JOIN app.users u ON u.id=t.user_id JOIN app.user_roles r ON r.user_id=u.id AND r.role_code='wali_kelas' WHERE t.active AND u.active ORDER BY t.name,t.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HomeroomTeacher
+	for rows.Next() {
+		var x HomeroomTeacher
+		if err = rows.Scan(&x.ID, &x.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) HomeroomAssignments(ctx context.Context, actor int64) ([]HomeroomAssignment, error) {
+	tx, err := s.reader(ctx, actor, "kurikulum")
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT c.id,a.teacher_id,y.name,c.grade::text||c.name,t.name,a.updated_at FROM app.classes c JOIN app.school_years y ON y.id=c.school_year_id LEFT JOIN app.homeroom_assignments a ON a.class_id=c.id LEFT JOIN app.teachers t ON t.id=a.teacher_id ORDER BY y.name DESC,c.grade,c.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HomeroomAssignment
+	for rows.Next() {
+		var x HomeroomAssignment
+		var teacher sql.NullString
+		var teacherID sql.NullInt64
+		var at sql.NullTime
+		if err = rows.Scan(&x.ClassID, &teacherID, &x.YearName, &x.ClassName, &teacher, &at); err != nil {
+			return nil, err
+		}
+		x.TeacherID = teacherID.Int64
+		x.TeacherName = teacher.String
+		x.At = at.Time
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) AssignHomeroom(ctx context.Context, actor, classID, teacherID int64) error {
+	if classID < 1 || teacherID < 1 {
+		return ValidationError("Pilih kelas dan guru wali kelas yang valid.")
+	}
+	tx, err := s.begin(ctx, actor, "kurikulum")
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var classExists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.classes WHERE id=$1)`, classID).Scan(&classExists); err != nil {
+		return err
+	}
+	if !classExists {
+		return ErrNotFound
+	}
+	var eligible bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teachers t JOIN app.users u ON u.id=t.user_id JOIN app.user_roles r ON r.user_id=u.id AND r.role_code='wali_kelas' WHERE t.id=$1 AND t.active AND u.active)`, teacherID).Scan(&eligible)
+	if err != nil {
+		return err
+	}
+	if !eligible {
+		return ValidationError("Guru harus aktif, terhubung ke akun aktif, dan memiliki role Wali Kelas.")
+	}
+	var assignmentID int64
+	var beforeID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT id,teacher_id FROM app.homeroom_assignments WHERE class_id=$1 FOR UPDATE`, classID).Scan(&assignmentID, &beforeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowContext(ctx, `INSERT INTO app.homeroom_assignments(class_id,teacher_id,assigned_by) VALUES($1,$2,$3) RETURNING id`, classID, teacherID, actor).Scan(&assignmentID)
+	} else if err == nil && beforeID.Int64 == teacherID {
+		return tx.Commit()
+	} else if err == nil {
+		_, err = tx.ExecContext(ctx, `UPDATE app.homeroom_assignments SET teacher_id=$1,assigned_by=$2,updated_at=now() WHERE id=$3`, teacherID, actor, assignmentID)
+	}
+	if err != nil {
+		return dbError(err)
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO app.homeroom_assignment_history(assignment_id,class_id,before_teacher_id,after_teacher_id,actor_id) VALUES($1,$2,$3,$4,$5)`, assignmentID, classID, beforeID, teacherID, actor); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) HomeroomAssignmentHistory(ctx context.Context, actor, classID int64) ([]HomeroomHistory, error) {
+	tx, err := s.reader(ctx, actor, "kurikulum")
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT COALESCE(before_t.name,''),after_t.name,u.display_name,h.created_at FROM app.homeroom_assignment_history h LEFT JOIN app.teachers before_t ON before_t.id=h.before_teacher_id JOIN app.teachers after_t ON after_t.id=h.after_teacher_id JOIN app.users u ON u.id=h.actor_id WHERE h.class_id=$1 ORDER BY h.id DESC LIMIT 100`, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HomeroomHistory
+	for rows.Next() {
+		var x HomeroomHistory
+		if err = rows.Scan(&x.BeforeTeacher, &x.AfterTeacher, &x.Actor, &x.At); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) MyHomerooms(ctx context.Context, actor int64) ([]HomeroomAssignment, error) {
+	tx, err := s.reader(ctx, actor, "wali_kelas")
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT c.id,a.teacher_id,y.name,c.grade::text||c.name,t.name,a.updated_at FROM app.homeroom_assignments a JOIN app.classes c ON c.id=a.class_id JOIN app.school_years y ON y.id=c.school_year_id JOIN app.teachers t ON t.id=a.teacher_id WHERE t.user_id=$1 AND t.active AND y.active ORDER BY y.name DESC,c.grade,c.name`, actor)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HomeroomAssignment
+	for rows.Next() {
+		var x HomeroomAssignment
+		if err = rows.Scan(&x.ClassID, &x.TeacherID, &x.YearName, &x.ClassName, &x.TeacherName, &x.At); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) HomeroomRoster(ctx context.Context, actor, classID int64) ([]ClassStudent, error) {
+	tx, err := s.reader(ctx, actor, "wali_kelas")
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var assigned bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.homeroom_assignments a JOIN app.teachers t ON t.id=a.teacher_id JOIN app.classes c ON c.id=a.class_id JOIN app.school_years y ON y.id=c.school_year_id WHERE a.class_id=$1 AND t.user_id=$2 AND t.active AND y.active)`, classID, actor).Scan(&assigned); err != nil {
+		return nil, err
+	}
+	if !assigned {
+		return nil, ErrForbidden
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT s.name,COALESCE(s.nis,''),COALESCE(s.nisn,'') FROM app.current_student_placements p JOIN app.students s ON s.id=p.student_id WHERE p.class_id=$1 ORDER BY s.name,s.id`, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ClassStudent
+	for rows.Next() {
+		var x ClassStudent
+		if err = rows.Scan(&x.Name, &x.NIS, &x.NISN); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
 }
 
 func validEntity(entity string) bool {

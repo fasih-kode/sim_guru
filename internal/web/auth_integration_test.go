@@ -185,7 +185,7 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	}
 	login(adminClient, admin.Username, password)
 	dashboard := get(adminClient, "/", 200)
-	if !strings.Contains(dashboard, "Pengguna dan role") || strings.Contains(dashboard, password) {
+	if !strings.Contains(dashboard, "Pengguna dan Role") || strings.Contains(dashboard, password) {
 		t.Fatal("invalid administrator dashboard")
 	}
 	// A missing session logout is harmless and does not create an audit entry.

@@ -111,6 +111,9 @@ func TestMasterHTTPIntegration(t *testing.T) {
 		t.Fatal("Admin detail escaping or contact view failed")
 	}
 	readOnly := get(kc, "/master/students?q="+suffix, 200)
+	if strings.Count(readOnly, `<details class="nav-group" open>`) != 1 || !strings.Contains(readOnly, `<span>Data dan Penempatan Siswa</span>`) || !strings.Contains(readOnly, `href="/master/students" aria-current="page"`) {
+		t.Fatal("Kurikulum Data dan Penempatan Siswa group did not stay open on Data Siswa")
+	}
 	if !strings.Contains(readOnly, "baca-saja") || strings.Contains(readOnly, "/edit") || strings.Contains(readOnly, "/new") {
 		t.Fatal("read-only list exposed editing")
 	}

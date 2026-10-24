@@ -59,20 +59,23 @@ type ValidationError string
 func (e ValidationError) Error() string { return string(e) }
 
 type Record struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	BirthDate string `json:"birth_date,omitempty"`
-	Gender    string `json:"gender,omitempty"`
-	NIS       string `json:"nis,omitempty"`
-	NISN      string `json:"nisn,omitempty"`
-	NIP       string `json:"nip,omitempty"`
-	NUPTK     string `json:"nuptk,omitempty"`
-	Email     string `json:"email,omitempty"`
-	Phone     string `json:"phone,omitempty"`
-	UserID    int64  `json:"user_id,omitempty"`
-	Code      string `json:"code,omitempty"`
-	Active    bool   `json:"active"`
-	Version   int64  `json:"version"`
+	ReturnDate  string `json:"return_date,omitempty"`
+	ExitDate    string `json:"exit_date,omitempty"`
+	Transferred bool   `json:"transferred,omitempty"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	BirthDate   string `json:"birth_date,omitempty"`
+	Gender      string `json:"gender,omitempty"`
+	NIS         string `json:"nis,omitempty"`
+	NISN        string `json:"nisn,omitempty"`
+	NIP         string `json:"nip,omitempty"`
+	NUPTK       string `json:"nuptk,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Phone       string `json:"phone,omitempty"`
+	UserID      int64  `json:"user_id,omitempty"`
+	Code        string `json:"code,omitempty"`
+	Active      bool   `json:"active"`
+	Version     int64  `json:"version"`
 }
 type Input struct {
 	Record

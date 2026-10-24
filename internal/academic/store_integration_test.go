@@ -223,3 +223,83 @@ func TestClassRoleChangesAndLegacyHistoryIntegration(t *testing.T) {
 		t.Fatal("Admin nonaktif masih dapat membaca kelas")
 	}
 }
+
+func TestHomeroomAssignmentAndScopedAccessIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	s := academic.Store{DB: db}
+	admin, _ := testutil.User(t, db, "admin")
+	curriculum, _ := testutil.User(t, db, "kurikulum")
+	wali, _ := testutil.User(t, db, "guru_mapel", "wali_kelas")
+	otherWali, _ := testutil.User(t, db, "wali_kelas")
+	withoutWaliRole, _ := testutil.User(t, db, "guru_mapel")
+	inactiveAccount, _ := testutil.User(t, db, "wali_kelas")
+	ctx := context.Background()
+	year, err := s.CreateYear(ctx, curriculum.ID, "Wali "+testutil.Random(t)[:10])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ActivateYear(ctx, curriculum.ID, year.ID); err != nil {
+		t.Fatal(err)
+	}
+	classA, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "A", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	classB, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "B", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createTeacher := func(userID int64, active bool) int64 {
+		t.Helper()
+		var id int64
+		if err := db.QueryRow(`INSERT INTO app.teachers(name,user_id,active) VALUES($1,$2,$3) RETURNING id`, "Guru "+testutil.Random(t)[:8], userID, active).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	waliID := createTeacher(wali.ID, true)
+	otherID := createTeacher(otherWali.ID, true)
+	noRoleID := createTeacher(withoutWaliRole.ID, true)
+	inactiveTeacherID := createTeacher(inactiveAccount.ID, false)
+	candidates, err := s.HomeroomTeachers(ctx, curriculum.ID)
+	candidateIDs := map[int64]bool{}
+	for _, candidate := range candidates {
+		candidateIDs[candidate.ID] = true
+	}
+	if err != nil || !candidateIDs[waliID] || !candidateIDs[otherID] || candidateIDs[noRoleID] || candidateIDs[inactiveTeacherID] {
+		t.Fatal("daftar calon tidak membatasi profil dan akun aktif ber-role Wali Kelas", err)
+	}
+	if err = s.AssignHomeroom(ctx, admin.ID, classA.ID, waliID); !errors.Is(err, academic.ErrForbidden) {
+		t.Fatal("Admin dapat menetapkan wali kelas")
+	}
+	if err = s.AssignHomeroom(ctx, curriculum.ID, classA.ID, noRoleID); err == nil {
+		t.Fatal("guru tanpa role Wali Kelas ditetapkan")
+	}
+	if err = s.AssignHomeroom(ctx, curriculum.ID, classA.ID, inactiveTeacherID); err == nil {
+		t.Fatal("guru nonaktif ditetapkan")
+	}
+	if err = s.AssignHomeroom(ctx, curriculum.ID, classA.ID, waliID); err != nil {
+		t.Fatal(err)
+	}
+	classes, err := s.MyHomerooms(ctx, wali.ID)
+	if err != nil || len(classes) != 1 || classes[0].ClassID != classA.ID {
+		t.Fatal("wali tidak hanya menerima kelas penugasannya", err)
+	}
+	if _, err = s.HomeroomRoster(ctx, wali.ID, classB.ID); !errors.Is(err, academic.ErrForbidden) {
+		t.Fatal("wali dapat melihat siswa kelas lain")
+	}
+	if err = s.AssignHomeroom(ctx, curriculum.ID, classA.ID, otherID); err != nil {
+		t.Fatal(err)
+	}
+	classes, err = s.MyHomerooms(ctx, wali.ID)
+	if err != nil || len(classes) != 0 {
+		t.Fatal("wali lama masih memiliki cakupan setelah pergantian", err)
+	}
+	history, err := s.HomeroomAssignmentHistory(ctx, curriculum.ID, classA.ID)
+	if err != nil || len(history) != 2 || history[0].BeforeTeacher == "" || history[0].AfterTeacher == "" {
+		t.Fatal("histori penugasan/pergantian tidak tercatat", err)
+	}
+	if _, err = s.HomeroomTeachers(ctx, admin.ID); !errors.Is(err, academic.ErrForbidden) {
+		t.Fatal("Admin dapat membaca daftar calon penugasan Kurikulum")
+	}
+}

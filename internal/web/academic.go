@@ -2,8 +2,10 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -11,16 +13,56 @@ import (
 )
 
 type academicView struct {
-	Years                        []academic.Year
-	Semesters                    []academic.Semester
-	Classes                      []academic.Class
-	Class                        academic.Class
-	History                      []academic.History
-	CurrentYear, CurrentSemester string
-	Editing                      int64
-	HistoryEntity                string
-	PlacementCounts              map[int64]int
-	NewYearName                  string
+	ConstraintEditor                                     academic.ConstraintEditor
+	ConstraintGrids                                      []academic.ConstraintGrid
+	EditingTimetableEntryID                              int64
+	ScheduleConstraints                                  []academic.ScheduleConstraint
+	TeacherCapacities                                    []academic.TeacherCapacity
+	TeacherPreferenceSummaries                           []academic.TeacherPreferenceSummary
+	ConstraintForm                                       academic.ScheduleConstraint
+	PreferenceViolations                                 []academic.PreferenceViolation
+	CurriculumRules                                      []academic.CurriculumRule
+	EffectiveRules                                       []academic.EffectiveCurriculum
+	SchoolBlocks                                         []academic.SchoolTimeBlock
+	RuleForm                                             academic.CurriculumRule
+	BlockForm                                            academic.SchoolTimeBlock
+	RulePattern, PlanDate, GenerateDate, ScheduleWarning string
+
+	Years                                 []academic.Year
+	Semesters                             []academic.Semester
+	Classes                               []academic.Class
+	Class                                 academic.Class
+	History                               []academic.History
+	CurrentYear, CurrentSemester          string
+	Editing                               int64
+	HistoryEntity                         string
+	PlacementCounts                       map[int64]int
+	NewYearName                           string
+	Homerooms                             []academic.HomeroomAssignment
+	HomeroomByClass                       map[int64]academic.HomeroomAssignment
+	HomeroomTeachers                      []academic.HomeroomTeacher
+	Homeroom                              academic.HomeroomAssignment
+	HomeroomRoster                        []academic.ClassStudent
+	HomeroomHistory                       []academic.HomeroomHistory
+	SelectedSemesterID                    int64
+	TeachingAssignments                   []academic.TeachingAssignment
+	EditingAssignment                     academic.TeachingAssignment
+	EditEffectiveFrom, EditEffectiveUntil string
+	TeachingClasses                       []academic.TeachingOption
+	TeachingTeachers                      []academic.TeachingOption
+	TeachingSubjects                      []academic.TeachingOption
+	TimetableClasses                      []academic.TeachingOption
+	TimetableSubjects                     []academic.TeachingOption
+	LessonPeriods                         []academic.LessonPeriod
+	Timetable                             academic.TimetableRevision
+	TimetableEntries                      []academic.TimetableEntry
+	PublishedTimetables                   []academic.TimetableRevision
+	SelectedWeekday                       int
+	LessonDayRows                         []academic.LessonPeriod
+	LessonWeekdays                        []int
+	EntryClassID, EntrySubjectID          int64
+	EntryWeekday, EntryStart, EntryEnd    int
+	TeacherSchedule                       bool
 }
 
 type placementView struct {
@@ -62,6 +104,455 @@ func (a *application) academicFailure(w http.ResponseWriter, err error) {
 		return
 	}
 	http.Error(w, message, code)
+}
+
+func selectedSemester(r *http.Request, semesters []academic.Semester) int64 {
+	if raw := r.URL.Query().Get("semester_id"); raw != "" {
+		if id, err := strconv.ParseInt(raw, 10, 64); err == nil && id > 0 {
+			return id
+		}
+	}
+	for _, semester := range semesters {
+		if semester.Active {
+			return semester.ID
+		}
+	}
+	if len(semesters) > 0 {
+		return semesters[0].ID
+	}
+	return 0
+}
+
+func (a *application) teachingAssignments(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	semesters, err := a.options.Academics.Semesters(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	semesterID := selectedSemester(r, semesters)
+	v := view{Page: "teaching-assignments", Title: "Guru Pengampu", Academic: &academicView{Semesters: semesters, SelectedSemesterID: semesterID}}
+	load := func() error {
+		if semesterID == 0 {
+			return nil
+		}
+		classes, teachers, subjects, e := a.options.Academics.TeachingOptions(r.Context(), actor, semesterID)
+		if e != nil {
+			return e
+		}
+		assignments, e := a.options.Academics.TeachingAssignments(r.Context(), actor, semesterID)
+		if e != nil {
+			return e
+		}
+		v.Academic.TeachingClasses, v.Academic.TeachingTeachers, v.Academic.TeachingSubjects, v.Academic.TeachingAssignments = classes, teachers, subjects, assignments
+		return nil
+	}
+	if err = load(); err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	if editID, parseErr := strconv.ParseInt(r.URL.Query().Get("edit"), 10, 64); parseErr == nil && editID > 0 {
+		for _, assignment := range v.Academic.TeachingAssignments {
+			if assignment.ID == editID {
+				v.Academic.EditingAssignment = assignment
+				v.Academic.EditEffectiveFrom = assignment.EffectiveFrom.Format("2006-01-02")
+				if assignment.EffectiveUntil.Valid {
+					v.Academic.EditEffectiveUntil = assignment.EffectiveUntil.Time.Format("2006-01-02")
+				}
+				v.ModalOpen, v.ModalID = true, "edit-teaching-assignment-modal"
+				break
+			}
+		}
+		if !v.ModalOpen {
+			a.academicFailure(w, academic.ErrNotFound)
+			return
+		}
+	}
+	if r.Method == http.MethodPost {
+		if !parseForm(w, r) {
+			return
+		}
+		action := r.PostForm.Get("action")
+		if action == "copy" {
+			source, _ := strconv.ParseInt(r.PostForm.Get("source_semester_id"), 10, 64)
+			target, _ := strconv.ParseInt(r.PostForm.Get("target_semester_id"), 10, 64)
+			date, e := time.Parse("2006-01-02", r.PostForm.Get("effective_from"))
+			if e == nil {
+				_, err = a.options.Academics.CopyTeachingAssignments(r.Context(), actor, source, target, date)
+			} else {
+				err = academic.ValidationError("Tanggal berlaku tidak valid.")
+			}
+		} else if action == "correct" {
+			assignmentID, _ := strconv.ParseInt(r.PostForm.Get("assignment_id"), 10, 64)
+			classID, _ := strconv.ParseInt(r.PostForm.Get("class_id"), 10, 64)
+			subjectID, _ := strconv.ParseInt(r.PostForm.Get("subject_id"), 10, 64)
+			teacherID, _ := strconv.ParseInt(r.PostForm.Get("teacher_id"), 10, 64)
+			date, dateErr := time.Parse("2006-01-02", r.PostForm.Get("effective_from"))
+			var until *time.Time
+			if raw := r.PostForm.Get("effective_until"); raw != "" {
+				parsedUntil, untilErr := time.Parse("2006-01-02", raw)
+				if untilErr != nil {
+					dateErr = untilErr
+				} else {
+					until = &parsedUntil
+				}
+			}
+			if dateErr == nil {
+				err = a.options.Academics.CorrectTeachingAssignment(r.Context(), actor, assignmentID, semesterID, classID, subjectID, teacherID, date, until)
+			} else {
+				err = academic.ValidationError("Tanggal berlaku tidak valid.")
+			}
+		} else {
+			classID, _ := strconv.ParseInt(r.PostForm.Get("class_id"), 10, 64)
+			subjectID, _ := strconv.ParseInt(r.PostForm.Get("subject_id"), 10, 64)
+			teacherID, _ := strconv.ParseInt(r.PostForm.Get("teacher_id"), 10, 64)
+			date, e := time.Parse("2006-01-02", r.PostForm.Get("effective_from"))
+			if e == nil {
+				err = a.options.Academics.AssignTeacher(r.Context(), actor, semesterID, classID, subjectID, teacherID, date)
+			} else {
+				err = academic.ValidationError("Tanggal berlaku tidak valid.")
+			}
+		}
+		if err == nil {
+			notice := "saved=1"
+			if action == "correct" {
+				notice = "corrected=1"
+			}
+			http.Redirect(w, r, fmt.Sprintf("/akademik/pengampu?semester_id=%d&%s", semesterID, notice), http.StatusSeeOther)
+			return
+		}
+		_, v.Error = academicError(err)
+		v.ModalOpen = true
+		if action == "copy" {
+			v.ModalID = "copy-assignment-modal"
+		} else if action == "correct" {
+			v.ModalID = "edit-teaching-assignment-modal"
+			v.Academic.EditingAssignment.ID, _ = strconv.ParseInt(r.PostForm.Get("assignment_id"), 10, 64)
+			v.Academic.EditingAssignment.ClassID, _ = strconv.ParseInt(r.PostForm.Get("class_id"), 10, 64)
+			v.Academic.EditingAssignment.SubjectID, _ = strconv.ParseInt(r.PostForm.Get("subject_id"), 10, 64)
+			v.Academic.EditingAssignment.TeacherID, _ = strconv.ParseInt(r.PostForm.Get("teacher_id"), 10, 64)
+			v.Academic.EditEffectiveFrom = r.PostForm.Get("effective_from")
+			v.Academic.EditEffectiveUntil = r.PostForm.Get("effective_until")
+		} else {
+			v.ModalID = "teaching-assignment-modal"
+		}
+		if loadErr := load(); loadErr != nil {
+			a.academicFailure(w, loadErr)
+			return
+		}
+		code, _ := academicError(err)
+		a.render(w, r, "page", code, v)
+		return
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		v.Message = "Penugasan guru pengampu tersimpan dan tercatat."
+	} else if r.URL.Query().Get("corrected") == "1" {
+		v.Message = "Koreksi pengampu tersimpan; nilai sebelumnya tercatat dalam histori."
+	}
+	a.render(w, r, "page", http.StatusOK, v)
+}
+
+// lessonDayRows displays the twelve standard slots plus any legacy slots.
+func lessonDayRows(periods []academic.LessonPeriod, weekday int) []academic.LessonPeriod {
+	byNumber := make(map[int]academic.LessonPeriod)
+	for _, p := range periods {
+		if p.Weekday == weekday {
+			p.StartsAt = shortClock(p.StartsAt)
+			p.EndsAt = shortClock(p.EndsAt)
+			byNumber[p.Number] = p
+		}
+	}
+	var rows []academic.LessonPeriod
+	for n := 1; n <= 30; n++ {
+		p, ok := byNumber[n]
+		if n <= 12 || ok {
+			p.Weekday = weekday
+			p.Number = n
+			rows = append(rows, p)
+		}
+	}
+	return rows
+}
+func shortClock(v string) string {
+	if len(v) >= 5 {
+		return v[:5]
+	}
+	return v
+}
+
+func (a *application) lessonPeriods(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	semesters, err := a.options.Academics.Semesters(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	semesterID := selectedSemester(r, semesters)
+	day, _ := strconv.Atoi(r.URL.Query().Get("weekday"))
+	if day < 1 || day > 7 {
+		day = 1
+	}
+	v := view{Page: "lesson-periods", Title: "Jam Pelajaran", Academic: &academicView{Semesters: semesters, SelectedSemesterID: semesterID, SelectedWeekday: day, LessonWeekdays: []int{1, 2, 3, 4, 5, 6}}}
+	if semesterID > 0 {
+		v.Academic.LessonPeriods, err = a.options.Academics.LessonPeriods(r.Context(), actor, semesterID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+	}
+	for _, p := range v.Academic.LessonPeriods {
+		if p.Weekday == 7 {
+			v.Academic.LessonWeekdays = append(v.Academic.LessonWeekdays, 7)
+			break
+		}
+	}
+	v.Academic.LessonDayRows = lessonDayRows(v.Academic.LessonPeriods, day)
+	if r.Method == http.MethodPost {
+		if !parseForm(w, r) {
+			return
+		}
+		if r.PostForm.Get("action") != "day" {
+			a.academicFailure(w, academic.ValidationError("Gunakan formulir jam per hari."))
+			return
+		}
+		day, _ = strconv.Atoi(r.PostForm.Get("weekday"))
+		v.Academic.SelectedWeekday = day
+		v.Academic.LessonDayRows = lessonDayRows(v.Academic.LessonPeriods, day)
+		for i, p := range v.Academic.LessonDayRows {
+			v.Academic.LessonDayRows[i].StartsAt = r.PostForm.Get(fmt.Sprintf("starts_%d", p.Number))
+			v.Academic.LessonDayRows[i].EndsAt = r.PostForm.Get(fmt.Sprintf("ends_%d", p.Number))
+		}
+		err = a.options.Academics.SaveLessonDay(r.Context(), actor, semesterID, day, v.Academic.LessonDayRows)
+		if err == nil {
+			http.Redirect(w, r, fmt.Sprintf("/akademik/jam-pelajaran?semester_id=%d&weekday=%d&saved=1", semesterID, day), http.StatusSeeOther)
+			return
+		}
+		code, message := academicError(err)
+		v.Error = message
+		v.ModalOpen = true
+		v.ModalID = "lesson-period-modal"
+		a.render(w, r, "page", code, v)
+		return
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		v.Message = "Jam hari ini tersimpan; baris kosong dan jadwal terbit tetap dipertahankan."
+	}
+	a.render(w, r, "page", http.StatusOK, v)
+}
+
+func (a *application) weeklyTimetable(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	semesters, err := a.options.Academics.Semesters(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	semesterID := selectedSemester(r, semesters)
+	v := view{Page: "weekly-timetable", Title: "Jadwal Mingguan", Academic: &academicView{Semesters: semesters, SelectedSemesterID: semesterID}}
+	load := func() error {
+		if semesterID == 0 {
+			return nil
+		}
+		classes, teachers, subjects, e := a.options.Academics.TeachingOptions(r.Context(), actor, semesterID)
+		if e != nil {
+			return e
+		}
+		v.Academic.TeachingClasses, v.Academic.TeachingTeachers, v.Academic.TeachingSubjects = classes, teachers, subjects
+		historyID, _ := strconv.ParseInt(r.URL.Query().Get("revision_id"), 10, 64)
+		rev, periods, entries, e := a.options.Academics.TimetableAtRevision(r.Context(), actor, semesterID, historyID)
+		if e != nil {
+			return e
+		}
+		if rev.ID == 0 {
+			periods, e = a.options.Academics.LessonPeriods(r.Context(), actor, semesterID)
+			if e != nil {
+				return e
+			}
+		}
+		teachingPeriods := make([]academic.LessonPeriod, 0, len(periods))
+		for _, p := range periods {
+			blocked := false
+			for _, entry := range entries {
+				if entry.Kind != "" && entry.Weekday == p.Weekday && p.StartsAt < entry.EndsAt && p.EndsAt > entry.StartsAt {
+					blocked = true
+					break
+				}
+			}
+			if !blocked {
+				teachingPeriods = append(teachingPeriods, p)
+			}
+		}
+		v.Academic.Timetable, v.Academic.LessonPeriods, v.Academic.TimetableEntries = rev, teachingPeriods, entries
+		v.Academic.GenerateDate = time.Now().Format("2006-01-02")
+		if rev.ID > 0 {
+			if rev.Status == "draft" {
+				v.Academic.GenerateDate = rev.EffectiveFrom.Format("2006-01-02")
+			} else if rev.EffectiveFrom.Format("2006-01-02") >= v.Academic.GenerateDate {
+				v.Academic.GenerateDate = rev.EffectiveFrom.AddDate(0, 0, 1).Format("2006-01-02")
+			}
+			var summaryErr error
+			v.Academic.PreferenceViolations, summaryErr = a.options.Academics.RevisionPreferenceReport(r.Context(), actor, rev.ID)
+			if summaryErr != nil {
+				return summaryErr
+			}
+			v.Academic.TeacherPreferenceSummaries = academic.SummarizeTeacherPreferences(v.Academic.PreferenceViolations)
+			v.Academic.EffectiveRules, v.Academic.ScheduleWarning, summaryErr = a.options.Academics.DraftPlanSummary(r.Context(), actor, rev.ID)
+			if summaryErr != nil {
+				return summaryErr
+			}
+		}
+
+		planDate, _ := time.Parse("2006-01-02", v.Academic.GenerateDate)
+		currentPlan, planErr := a.options.Academics.SchedulePlan(r.Context(), actor, semesterID, planDate)
+		if planErr != nil {
+			return planErr
+		}
+		v.Academic.ScheduleConstraints = currentPlan.Constraints
+		v.Academic.TeacherCapacities = academic.TeacherCapacities(currentPlan)
+
+		if rev.ID > 0 {
+			v.Academic.TeachingAssignments, e = a.options.Academics.ScheduleAssignments(r.Context(), actor, semesterID, rev.EffectiveFrom)
+			if e != nil {
+				return e
+			}
+		}
+		v.Academic.PublishedTimetables, e = a.options.Academics.PublishedTimetables(r.Context(), actor, semesterID)
+		return e
+	}
+	if err = load(); err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	if r.Method == http.MethodPost {
+		if !parseForm(w, r) {
+			return
+		}
+		switch r.PostForm.Get("action") {
+		case "generate":
+			date, e := time.Parse("2006-01-02", r.PostForm.Get("effective_from"))
+			if e != nil {
+				err = academic.ValidationError("Tanggal berlaku tidak valid.")
+			} else {
+				_, err = a.options.Academics.GenerateTimetable(r.Context(), actor, semesterID, date, formInt64(r, "draft_id"), r.PostForm.Get("replace_draft") == "yes")
+			}
+		case "draft":
+			date, e := time.Parse("2006-01-02", r.PostForm.Get("effective_from"))
+			if e != nil {
+				err = academic.ValidationError("Tanggal berlaku tidak valid.")
+			} else {
+				_, err = a.options.Academics.CreateTimetableDraft(r.Context(), actor, semesterID, date)
+			}
+		case "entry", "correct-entry":
+			weekday, _ := strconv.Atoi(r.PostForm.Get("weekday"))
+			classID, _ := strconv.ParseInt(r.PostForm.Get("class_id"), 10, 64)
+			subjectID, _ := strconv.ParseInt(r.PostForm.Get("subject_id"), 10, 64)
+			// Resolve the teacher from server-side assignments; ignore submitted teacher IDs.
+			var teacherID int64
+			for _, assignment := range v.Academic.TeachingAssignments {
+				if assignment.ClassID == classID && assignment.SubjectID == subjectID {
+					teacherID = assignment.TeacherID
+					break
+				}
+			}
+			start, _ := strconv.Atoi(r.PostForm.Get("period_start"))
+			end, _ := strconv.Atoi(r.PostForm.Get("period_end"))
+			v.Academic.EntryClassID, v.Academic.EntrySubjectID = classID, subjectID
+			v.Academic.EntryWeekday, v.Academic.EntryStart, v.Academic.EntryEnd = weekday, start, end
+			if r.PostForm.Get("action") == "correct-entry" {
+				v.Academic.EditingTimetableEntryID = formInt64(r, "entry_id")
+				err = a.options.Academics.CorrectTimetableEntry(r.Context(), actor, v.Academic.Timetable.ID, v.Academic.EditingTimetableEntryID, weekday, classID, subjectID, teacherID, start, end)
+			} else {
+				err = a.options.Academics.AddTimetableEntry(r.Context(), actor, v.Academic.Timetable.ID, weekday, classID, subjectID, teacherID, start, end)
+			}
+		case "remove":
+			entryID, _ := strconv.ParseInt(r.PostForm.Get("entry_id"), 10, 64)
+			err = a.options.Academics.RemoveTimetableEntry(r.Context(), actor, v.Academic.Timetable.ID, entryID)
+		case "publish":
+			err = a.options.Academics.PublishTimetable(r.Context(), actor, v.Academic.Timetable.ID)
+		default:
+			err = academic.ValidationError("Aksi jadwal tidak dikenal.")
+		}
+		if err == nil {
+			http.Redirect(w, r, fmt.Sprintf("/akademik/jadwal?semester_id=%d&saved=1", semesterID), http.StatusSeeOther)
+			return
+		}
+		_, v.Error = academicError(err)
+		if action := r.PostForm.Get("action"); action == "draft" || action == "entry" || action == "correct-entry" || action == "generate" {
+			v.ModalOpen = true
+			if action == "generate" {
+				v.ModalID = "generate-timetable-modal"
+			} else if action == "draft" {
+				v.ModalID = "new-timetable-modal"
+			} else {
+				v.ModalID = "timetable-entry-modal"
+			}
+		}
+		if loadErr := load(); loadErr != nil {
+			a.academicFailure(w, loadErr)
+			return
+		}
+		code, _ := academicError(err)
+		a.render(w, r, "page", code, v)
+		return
+	}
+	if editID, _ := strconv.ParseInt(r.URL.Query().Get("edit_entry"), 10, 64); editID > 0 {
+		found := false
+		if v.Academic.Timetable.Status == "draft" {
+			for _, entry := range v.Academic.TimetableEntries {
+				if entry.ID == editID && entry.Kind == "" {
+					v.Academic.EditingTimetableEntryID = editID
+					v.Academic.EntryClassID = entry.ClassID
+					v.Academic.EntrySubjectID = entry.SubjectID
+					v.Academic.EntryWeekday = entry.Weekday
+					v.Academic.EntryStart = entry.PeriodStart
+					v.Academic.EntryEnd = entry.PeriodEnd
+					v.ModalOpen = true
+					v.ModalID = "timetable-entry-modal"
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		v.Message = "Perubahan jadwal tersimpan dan tercatat."
+	}
+	a.render(w, r, "page", http.StatusOK, v)
+}
+
+func (a *application) myTimetable(w http.ResponseWriter, r *http.Request) {
+	rev, entries, err := a.options.Academics.PublishedTimetableForTeacher(r.Context(), principal(r).ID)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	classes, subjects := timetableFilterOptions(entries)
+	a.render(w, r, "page", http.StatusOK, view{Page: "my-schedule", Title: "Jadwal Saya", Academic: &academicView{Timetable: rev, TimetableEntries: entries, TimetableClasses: classes, TimetableSubjects: subjects, TeacherSchedule: true}})
+}
+
+func timetableFilterOptions(entries []academic.TimetableEntry) ([]academic.TeachingOption, []academic.TeachingOption) {
+	classesByID := make(map[int64]string)
+	subjectsByID := make(map[int64]string)
+	for _, entry := range entries {
+		if entry.Kind != "" {
+			continue
+		}
+		classesByID[entry.ClassID] = entry.ClassName
+		subjectsByID[entry.SubjectID] = entry.SubjectName
+	}
+	options := func(values map[int64]string) []academic.TeachingOption {
+		result := make([]academic.TeachingOption, 0, len(values))
+		for id, name := range values {
+			result = append(result, academic.TeachingOption{ID: id, Name: name})
+		}
+		sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+		return result
+	}
+	return options(classesByID), options(subjectsByID)
 }
 
 func (a *application) academicHome(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +674,141 @@ func (a *application) academicClasses(w http.ResponseWriter, r *http.Request) {
 		a.academicFailure(w, err)
 		return
 	}
-	v := view{Page: "academic-classes", Title: "Kelas", Academic: &academicView{Classes: classes, Years: years, PlacementCounts: counts}}
+	var homerooms []academic.HomeroomAssignment
+	if principal(r).HasRole("kurikulum") {
+		homerooms, err = a.options.Academics.HomeroomAssignments(r.Context(), principal(r).ID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+	}
+	byClass := make(map[int64]academic.HomeroomAssignment, len(homerooms))
+	for _, assignment := range homerooms {
+		byClass[assignment.ClassID] = assignment
+	}
+	v := view{Page: "academic-classes", Title: "Kelas", Academic: &academicView{Classes: classes, Years: years, PlacementCounts: counts, Homerooms: homerooms, HomeroomByClass: byClass}}
 	if r.URL.Query().Get("saved") == "1" {
 		v.Message = "Data kelas tersimpan dan tercatat dalam histori."
 	}
 	a.render(w, r, "page", http.StatusOK, v)
+}
+
+func (a *application) classHomeroom(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	id, err := parseAcademicID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	c, err := a.options.Academics.Class(r.Context(), actor, id)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	teachers, err := a.options.Academics.HomeroomTeachers(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	assignments, err := a.options.Academics.HomeroomAssignments(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	av := &academicView{Class: c, HomeroomTeachers: teachers}
+	for _, assignment := range assignments {
+		if assignment.ClassID == id {
+			av.Homeroom = assignment
+			break
+		}
+	}
+	v := view{Page: "homeroom-form", Title: "Penugasan Wali Kelas", Academic: av}
+	if r.Method == http.MethodPost {
+		if !parseForm(w, r) {
+			return
+		}
+		teacherID, parseErr := strconv.ParseInt(r.PostForm.Get("teacher_id"), 10, 64)
+		if parseErr != nil {
+			err = academic.ValidationError("Pilih guru wali kelas yang valid.")
+		} else {
+			err = a.options.Academics.AssignHomeroom(r.Context(), actor, id, teacherID)
+		}
+		if err == nil {
+			http.Redirect(w, r, "/akademik/kelas?saved=1", http.StatusSeeOther)
+			return
+		}
+		code, message := academicError(err)
+		v.Error = message
+		v.ModalOpen = true
+		av.Homeroom.TeacherID = teacherID
+		a.render(w, r, "page", code, v)
+		return
+	}
+	if len(teachers) == 0 {
+		v.Message = "Belum ada guru aktif yang terhubung ke akun aktif dengan role Wali Kelas."
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		v.Message = "Penugasan wali kelas tersimpan dan tercatat dalam histori."
+	}
+	a.render(w, r, "page", http.StatusOK, v)
+}
+
+func (a *application) classHomeroomHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := parseAcademicID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	actor := principal(r).ID
+	c, err := a.options.Academics.Class(r.Context(), actor, id)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	history, err := a.options.Academics.HomeroomAssignmentHistory(r.Context(), actor, id)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	for i := range history {
+		history[i].At = history[i].At.In(time.FixedZone("WIB", 7*3600))
+	}
+	a.render(w, r, "page", http.StatusOK, view{Page: "homeroom-history", Title: "Histori Wali Kelas", Academic: &academicView{Class: c, HomeroomHistory: history}})
+}
+
+func (a *application) myHomerooms(w http.ResponseWriter, r *http.Request) {
+	classes, err := a.options.Academics.MyHomerooms(r.Context(), principal(r).ID)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	a.render(w, r, "page", http.StatusOK, view{Page: "my-homerooms", Title: "Kelas Saya", Academic: &academicView{Homerooms: classes}})
+}
+
+func (a *application) myHomeroomRoster(w http.ResponseWriter, r *http.Request) {
+	id, err := parseAcademicID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	roster, err := a.options.Academics.HomeroomRoster(r.Context(), principal(r).ID, id)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	classes, err := a.options.Academics.MyHomerooms(r.Context(), principal(r).ID)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	var selected academic.HomeroomAssignment
+	for _, item := range classes {
+		if item.ClassID == id {
+			selected = item
+			break
+		}
+	}
+	a.render(w, r, "page", http.StatusOK, view{Page: "my-homeroom-roster", Title: "Daftar Siswa", Academic: &academicView{Homeroom: selected, HomeroomRoster: roster}})
 }
 
 func placementPage(a *application, r *http.Request, yearID, classID int64, search string, page int) (*placementView, int, error) {

@@ -56,6 +56,20 @@ function showNotification(notification) {
 initializeNotifications();
 document.body.addEventListener('htmx:afterSwap', (event) => initializeNotifications(event.target));
 
+// Keep action menus in tables mutually exclusive and dismiss them on outside
+// clicks so navigating through a long table never leaves stale menus open.
+document.addEventListener('click', (event) => {
+  const currentMenu = event.target.closest('.table-actions');
+  document.querySelectorAll('details.table-actions[open]').forEach((menu) => {
+    if (menu !== currentMenu) menu.open = false;
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  document.querySelectorAll('details.table-actions[open]').forEach((menu) => { menu.open = false; });
+});
+
 for (const event of ['htmx:responseError', 'htmx:sendError', 'htmx:timeout']) {
   document.body.addEventListener(event, () => {
     showNotification(document.getElementById('request-error'));
@@ -179,9 +193,10 @@ function setupLocalTable(table) {
   nav.className = 'table-pagination table-pagination--attached';
   nav.setAttribute('aria-label', 'Pagination tabel');
   if (surface) surface.insertAdjacentElement('afterend', nav);
-  const state = { rows, placeholder, nav, query: '', page: 1, size: 10 };
+  const state = { rows, placeholder, nav, query: '', filters: {}, page: 1, size: 10 };
   const render = () => {
-    const matching = rows.filter((row) => row.textContent.toLocaleLowerCase().includes(state.query));
+    const matching = rows.filter((row) => row.textContent.toLocaleLowerCase().includes(state.query)
+      && Object.entries(state.filters).every(([column, value]) => !value || (row.dataset.filterGlobal === 'true' && column !== 'day') || row.dataset[`filter${column[0].toUpperCase()}${column.slice(1)}`] === value));
     const totalPages = Math.max(1, Math.ceil(matching.length / state.size));
     state.page = Math.min(state.page, totalPages);
     const start = (state.page - 1) * state.size;
@@ -193,7 +208,7 @@ function setupLocalTable(table) {
     rows.forEach((row) => { row.hidden = !visible.has(row); });
     if (placeholder) placeholder.hidden = rows.length > 0 || state.query !== '';
     let noResults = body.querySelector('[data-no-search-results]');
-    if (state.query && matching.length === 0) {
+    if ((state.query || Object.values(state.filters).some(Boolean)) && matching.length === 0) {
       if (!noResults) {
         noResults = document.createElement('tr');
         noResults.dataset.noSearchResults = '';
@@ -230,6 +245,7 @@ function setupLocalTable(table) {
     nav.append(previous, links, next);
   };
   state.setSearch = (value) => { state.query = value.trim().toLocaleLowerCase(); state.page = 1; render(); };
+  state.setFilter = (column, value) => { state.filters[column] = value; state.page = 1; render(); };
   localTables.set(table, state);
   render();
   return state;
@@ -250,4 +266,227 @@ document.querySelectorAll('[data-table-search]').forEach((input) => {
   }
   const state = setupLocalTable(table);
   input.addEventListener('input', () => state?.setSearch(input.value));
+});
+const savedTableFilters = new Map();
+document.querySelectorAll('[data-table-column-filter]').forEach((select) => {
+  const table = document.querySelector(select.dataset.table);
+  if (!table) return;
+  const state = setupLocalTable(table);
+  const storageKey = `sim-guru:table-filters:${location.pathname}:${table.id || 'table'}`;
+  let saved = savedTableFilters.get(storageKey);
+  if (!saved) {
+    try {
+      saved = JSON.parse(sessionStorage.getItem(storageKey) || '{}');
+    } catch {
+      saved = {};
+    }
+    savedTableFilters.set(storageKey, saved);
+  }
+  const column = select.dataset.tableColumnFilter;
+  const savedValueExists = typeof saved[column] === 'string' && [...select.options].some((option) => option.value === saved[column]);
+  if (savedValueExists) {
+    select.value = saved[column];
+  } else {
+    const hadSavedValue = Object.prototype.hasOwnProperty.call(saved, column);
+    delete saved[column];
+    if (hadSavedValue) {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(saved));
+      } catch {
+        // Filtering still works when browser storage is unavailable.
+      }
+    }
+  }
+  state?.setFilter(column, select.value);
+  const panel = select.closest('.table-filter-panel');
+  const toggle = panel && document.querySelector(`[aria-controls="${panel.id}"]`);
+  if (toggle && Object.values(saved).some(Boolean)) {
+    panel.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+  select.addEventListener('change', () => {
+    state?.setFilter(column, select.value);
+    saved[column] = select.value;
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(saved));
+    } catch {
+      // Filtering still works when browser storage is unavailable.
+    }
+    if (toggle && select.value) {
+      panel.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+  });
+});
+
+// The teacher is determined by the assignment, and rechecked by the server.
+document.querySelectorAll('[data-schedule-form]').forEach((form) => {
+  const assignments = [...form.querySelector('[data-schedule-assignments]').content.querySelectorAll('option')];
+  const periods = [...form.querySelector('[data-schedule-periods]').content.querySelectorAll('option')];
+  const classes = form.querySelector('[data-schedule-class]');
+  const subjects = form.querySelector('[data-schedule-subject]');
+  const teacher = form.querySelector('[data-schedule-teacher]');
+  const days = form.querySelector('[data-schedule-day]');
+  const start = form.querySelector('[data-schedule-start]');
+  const end = form.querySelector('[data-schedule-end]');
+  const submit = form.querySelector('[data-schedule-submit]');
+  const names = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+  const choose = (select, options, selected, empty) => {
+    select.replaceChildren(...options);
+    if (!options.length) select.append(new Option(empty, ''));
+    if (options.some((o) => o.value === selected)) select.value = selected;
+    select.disabled = !options.length;
+  };
+  const updateTeacher = () => {
+    teacher.value = subjects.selectedOptions[0]?.dataset.teacherName || '';
+    submit.disabled = !teacher.value || !start.value || !end.value;
+  };
+  const updateSubjects = (selected = '') => {
+    choose(subjects, assignments.filter((a) => a.dataset.classId === classes.value).map((a) => a.cloneNode(true)), selected, 'Belum ada penugasan');
+    updateTeacher();
+  };
+  const updateEnd = (selected = '') => {
+    const available = periods.filter((p) => p.dataset.weekday === days.value);
+    let next = Number(start.value);
+    const contiguous = [];
+    for (const p of available) {
+      if (Number(p.value) < next) continue;
+      if (Number(p.value) !== next) break;
+      const option = p.cloneNode(true);
+      option.textContent = `Jam ${p.value} · ${p.dataset.end.slice(0, 5)}`;
+      contiguous.push(option); next++;
+    }
+    choose(end, contiguous, selected, 'Jam belum tersedia');
+    updateTeacher();
+  };
+  const updatePeriods = (selectedStart = '', selectedEnd = '') => {
+    choose(start, periods.filter((p) => p.dataset.weekday === days.value).map((p) => {
+      const option = p.cloneNode(true);
+      option.textContent = `Jam ${p.value} · ${p.dataset.start.slice(0, 5)}`;
+      return option;
+    }), selectedStart, 'Isi jam pelajaran dahulu');
+    updateEnd(selectedEnd);
+  };
+  const classMap = new Map(assignments.map((a) => [a.dataset.classId, a.dataset.className]));
+  choose(classes, [...classMap].map(([id, name]) => new Option(name, id)), form.dataset.selectedClass, 'Belum ada kelas dengan pengampu');
+  const dayValues = [1, 2, 3, 4, 5, 6];
+  if (periods.some((p) => p.dataset.weekday === '7')) dayValues.push(7);
+  choose(days, dayValues.map((d) => new Option(names[d], String(d))), form.dataset.selectedDay, 'Hari belum tersedia');
+  updateSubjects(form.dataset.selectedSubject);
+  updatePeriods(form.dataset.selectedStart, form.dataset.selectedEnd);
+  if (!assignments.length) form.querySelector('[data-schedule-help]').textContent = 'Belum ada pengampu yang memenuhi syarat pada tanggal berlaku draf. Atur Guru Pengampu terlebih dahulu.';
+  classes.addEventListener('change', () => updateSubjects());
+  subjects.addEventListener('change', updateTeacher);
+  days.addEventListener('change', () => updatePeriods());
+  start.addEventListener('change', () => updateEnd());
+  end.addEventListener('change', updateTeacher);
+});
+
+// Show generation progress without weakening CSP or repeating submissions.
+document.querySelectorAll('[data-generate-form]').forEach((form) => {
+  form.addEventListener('submit', () => {
+    form.querySelector('[data-generate-progress]').hidden = false;
+    form.querySelector('button[type="submit"]').disabled = true;
+  });
+});
+
+// Target selection and a three-state day/period grid, using ordinary clicks
+// and native keyboard controls. Disabled school activities are never painted.
+document.querySelectorAll('[data-grid-target-form]').forEach((form) => {
+  const kind = form.elements.target_kind;
+  const target = form.elements.target_id;
+  const update = () => {
+    Array.from(target.options).forEach((option) => {
+      const disabled = Boolean(option.dataset.targetKind && option.dataset.targetKind !== kind.value);
+      option.hidden = disabled;
+      option.disabled = disabled;
+      if (disabled && option.selected) target.value = '';
+    });
+  };
+  kind.addEventListener('change', () => { target.value = ''; update(); });
+  update();
+});
+document.querySelectorAll('[data-constraint-grid]').forEach((form) => {
+  const cells = [...form.querySelectorAll('[data-grid-cell]')];
+  const labels = { available: 'Tersedia', soft: 'Kondisional', hard: 'Tidak tersedia' };
+  const symbols = { available: '✓', soft: '?', hard: '×' };
+  const currentPaint = () => form.querySelector('input[name="paint_state"]:checked').value;
+  const refreshSummary = () => {
+    const counts = { available: 0, soft: 0, hard: 0 };
+    cells.forEach((cell) => { counts[form.elements[cell.dataset.gridCell].value]++; });
+    form.querySelector('[data-grid-summary]').textContent = `${counts.available} Tersedia · ${counts.soft} Kondisional · ${counts.hard} Tidak tersedia`;
+  };
+  const paint = (cell, state) => {
+    form.elements[cell.dataset.gridCell].value = state;
+    cell.classList.remove('grid-cell--available', 'grid-cell--soft', 'grid-cell--hard');
+    cell.classList.add(`grid-cell--${state}`);
+    cell.querySelector('[data-grid-symbol]').textContent = symbols[state];
+    cell.querySelector('[data-grid-state-label]').textContent = labels[state];
+    const label = `${cell.dataset.cellLabel} · ${labels[state]}`;
+    cell.setAttribute('aria-label', label);
+    cell.title = label;
+  };
+  cells.forEach((cell) => cell.addEventListener('click', () => { paint(cell, currentPaint()); refreshSummary(); }));
+  form.querySelectorAll('[data-grid-day]').forEach((day) => day.addEventListener('click', () => {
+    cells.filter((cell) => cell.dataset.gridWeekday === day.dataset.gridDay).forEach((cell) => paint(cell, currentPaint()));
+    refreshSummary();
+  }));
+  form.querySelector('[data-grid-reset]').addEventListener('click', () => {
+    cells.forEach((cell) => paint(cell, 'available'));
+    refreshSummary();
+  });
+  refreshSummary();
+});
+
+// Preview always uses the last server-validated mapping. Editing a choice must
+// disable confirmation until another preview has been submitted.
+document.querySelectorAll('[data-asc-mapping]').forEach((form) => {
+  const dirty = () => {
+    form.querySelector('[data-asc-dirty]').hidden = false;
+    const confirm = document.querySelector('[data-asc-confirm-open]');
+    if (confirm) confirm.disabled = true;
+  };
+  form.addEventListener('change', (event) => { if (event.target.matches('select[name^="map_"]')) dirty(); });
+  form.querySelectorAll('[data-asc-period]').forEach((period) => {
+    const day = form.elements[period.dataset.dayField];
+    const update = (changed) => {
+      let selected = changed ? period.dataset.sourceNumber : period.value;
+      period.value = '';
+      Array.from(period.options).forEach((option) => {
+        if (!option.dataset.day) return;
+        const allowed = option.dataset.day === day.value;
+        option.hidden = !allowed;
+        option.disabled = !allowed;
+        if (allowed && option.value === selected) option.selected = true;
+      });
+    };
+    day.addEventListener('change', () => { update(true); dirty(); });
+    update(false);
+  });
+});
+
+// A destination exists only for promotion or repeating the current grade.
+document.querySelectorAll('[data-transition-row]').forEach((row) => {
+  const outcome = row.querySelector('[data-transition-outcome]');
+  const destination = row.querySelector('[data-transition-class]');
+  if (!outcome || !destination) return;
+  const update = () => {
+    const grade = Number(row.dataset.grade);
+    const targetGrade = outcome.value === 'repeat' ? grade :
+      (outcome.value === 'promote' && grade < 9 ? grade + 1 : 0);
+    Array.from(destination.options).forEach((option) => {
+      if (!option.dataset.grade) return;
+      const allowed = Number(option.dataset.grade) === targetGrade;
+      option.hidden = !allowed;
+      option.disabled = !allowed;
+      if (!allowed && option.selected) destination.value = '';
+    });
+    if (!targetGrade) destination.value = '';
+    destination.disabled = !targetGrade;
+    destination.required = Boolean(targetGrade);
+    row.querySelector('[data-transition-destination]').hidden = !targetGrade;
+    row.querySelector('[data-transition-no-class]').hidden = Boolean(targetGrade);
+  };
+  outcome.addEventListener('change', update);
+  update();
 });

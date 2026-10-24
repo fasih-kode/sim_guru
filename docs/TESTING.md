@@ -27,7 +27,7 @@ Unit: konfigurasi/CSRF key, validasi akun/role/password, bcrypt, limiter, atribu
 Pemeriksaan browser manual/otomatis melalui Playwright dilakukan untuk desktop/mobile, reload htmx, console/network, pesan gagal, dan workflow tambah/koreksi siswa, histori, guru, mapel serta tampilan Kurikulum baca-saja. Belum menjadi suite end-to-end yang tersimpan dalam repository.
 
 ## Strategi domain yang belum diimplementasikan
-Ikuti acceptance criteria [PRD/roadmap](PRD.md): akses positif/negatif setiap role dan penugasan, histori/transaksi, konflik jadwal, pemisahan absensi/jurnal, koreksi Final, cakupan laporan, tanpa guru pengganti, UAT, keamanan dan backup/restore. Kalender/kelas serta akun/role dan master siswa/guru/mapel sudah memiliki tes; penempatan dan operasi akademik lanjut belum tersedia.
+Ikuti acceptance criteria [PRD/roadmap](PRD.md): akses positif/negatif setiap role dan penugasan, histori/transaksi, konflik jadwal, pemisahan absensi/jurnal, koreksi Final, cakupan laporan, tanpa guru pengganti, UAT, keamanan dan backup/restore. Kalender/kelas, penempatan awal, penugasan wali, akun/role dan master siswa/guru/mapel memiliki tes. Transisi akhir tahun memiliki tes unit, service integrasi dan HTTP; operasi akademik lain masih bertahap.
 
 Catat hasil aktual, kegagalan awal, keterbatasan, dan pekerjaan tersisa di HANDOVER setiap sesi.
 
@@ -39,7 +39,7 @@ make integration kini mencakup internal/master dan internal/web/master_integrati
 
 Unit menguji tanggal kalender/masa depan, atribut wajib/opsional, email, batas panjang, normalisasi kode, alasan koreksi dan penolakan kind tidak valid. Integrasi layanan menguji ID tetap, NIS/NISN duplikat, kontak baca-saja disamarkan, pemisahan status guru/akun, satu akun-satu guru, kode mapel historis, rollback saat konflik, histori dan dua edit concurrent. Integrasi HTTP menguji CSRF/403 lintas-role, data form tetap saat validasi gagal, XSS, pencarian/filter, detail/histori, kode mapel dan PATCH tidak didukung.
 
-Versi migrasi target saat ini 6. Run integrasi sebelum modul kalender membutuhkan sekitar 85 detik untuk paket web dengan race detector; tes kalender baru ada di `internal/academic` dan `internal/web/academic_integration_test.go`.
+Versi migrasi target saat ini 16. Tes akademik yang sudah ada mencakup batas peran kalender/kelas, penempatan awal, penugasan wali, kelayakan akun/guru aktif dengan role Wali Kelas, histori pergantian, dan penolakan akses roster kelas lain pada service/HTTP. Fase 7 memiliki tes terfokus untuk template slot, pelestarian jam lama, batch/rollback/histori, aturan pengampu/jadwal, batas role/CSRF, generator, batasan, dan impor XML; detail cakupan aktual tercatat pada HANDOVER. Transisi akhir tahun menguji keputusan/tingkat kelas, batch campuran naik/mengulang/lulus/keluar, histori dan penempatan tujuan, penolakan pengulangan batch, rollback atomik saat terjadi kegagalan di tengah batch, serta dua eksekusi bersamaan yang menghasilkan tepat satu batch. Fixture integrasi hanya memakai database `_test`.
 
 ## Pengujian impor Excel
 Unit parser mencakup template asli, nol awal/NIP panjang, tanggal Excel dan epoch 1904, tanggal palsu, identifier numerik, formula, status tidak sah, header/kolom salah, workbook kosong, baris kosong dengan nomor baris asli, row/file limit, archive rusak dan macro. Template siswa/guru dibuat dengan Artifact Tool, dirender setiap sheet dan diperiksa visual; tidak berisi data contoh yang dapat terimpor tidak sengaja.
@@ -50,3 +50,42 @@ Setelah perubahan kecil pada cleanup multipart/deduplikasi pesan, tes fokus dija
 
 ## Pengujian kalender akademik dan kelas
 Unit menguji validasi nama tahun ajaran, tingkat SMP 7–9, batas panjang dan alasan koreksi. Integrasi layanan memeriksa dua semester otomatis, batas satu tahun/semester aktif, dependensi semester pada tahun aktif, kalender khusus Kurikulum, tulis kelas khusus Admin, baca kelas/histori bersama, duplikasi lintas kapitalisasi, ID/version, konflik dan histori. Regresi kelas lama yang dibuat Kurikulum membuktikan Admin dapat melanjutkan koreksi tanpa mengganti ID atau actor histori lama. Tes juga memeriksa multi-role, pencabutan Admin, akun nonaktif dan role lain ditolak. Tes HTTP memeriksa login, menu/form baca-saja Kurikulum, Admin tambah/edit kelas dan histori dengan tautan kembali yang dapat dibuka, CSRF, GET/POST langsung terlarang, kalender tetap menolak Admin, multi-role tanpa menu kelas duplikat serta pencabutan role pada sesi aktif. Request terlarang diperiksa tidak mengubah versi/nama/histori kelas. Cakupan placement belum memiliki tes otomatis service/HTTP pada suite ini. Acceptance minimum yang wajib ditambahkan adalah unik siswa/tahun, kelas pada tahun yang sesuai, histori/actor atomik, role Admin/Kurikulum, duplikat concurrent dan input CSRF. Hasil build terbaru tercatat di [HANDOVER](HANDOVER.md).
+
+## Verifikasi template jam dan dropdown jadwal (D-021)
+Jalankan `go test -race -tags=integration -run TestScheduleTemplate -count=1 ./internal/academic ./internal/web` untuk service/HTTP terfokus. `TestLessonDayTemplatePreservesLegacySlots` memeriksa 12 slot kosong, pemisahan hari dan slot lama di atas 12. Test HTTP dapat menulis fixture SSR tanpa token CSRF asli bila `SIM_GURU_VISUAL_DIR` menunjuk direktori sementara untuk pemeriksaan browser; ini memakai data `_test`, bukan akun development. Fixture bukan server aplikasi langsung dan tidak boleh dipakai menguji POST.
+
+Pemeriksaan browser pada fixture SSR desktop 1440×1000 dan ponsel 390×844 mengukur modal terpusat/backdrop blur, 24 input waktu, tanpa overflow horizontal, guru otomatis, pilihan jam per hari, akhir rentang sesuai awal, dan simpan dinonaktifkan untuk hari tanpa waktu. Hasil perintah akhir tersedia pada HANDOVER.
+
+Regresi pergantian hari: `TestTemplatesAvoidInlineEventHandlers` melarang event inline yang diblokir CSP di seluruh template. `TestScheduleTemplateHTTPIntegration` memeriksa atribut filter eksternal, GET Selasa memperbarui opsi terpilih/tombol/judul modal/hidden weekday, serta tautan Jadwal Mingguan pada Kurikulum. Browser fixture dengan header CSP yang diambil dari aplikasi memverifikasi perubahan dropdown benar-benar memicu GET dan tombol/modal Selasa pada desktop/ponsel; tautan jadwal dibuka pada desktop.
+
+
+## Fase 7A — pengaturan fleksibel dan generator
+- `go test ./internal/academic -run 'TestFlexibleScheduleSolver|TestScheduleSolverCancellationAndPattern'`: JP/pola fleksibel, 7A 2 JP/7B 5 JP, interval istirahat dan Upacara, bentrok, kelebihan kapasitas, pembatalan, pola salah, dan konfigurasi 8 JP.
+- `go test -race -tags=integration ./internal/academic -run '^TestCurriculumGeneratorLifecycleIntegration$' -count=1`: generate/penggantian draf atomik, role, publikasi tidak lengkap/stale ditolak, edit ID tetap, kegagalan tidak mengubah draf, salin semester, reset override, 8 JP semester berikutnya dan fingerprint versi terbit tetap. Wajib database `_test` terpisah.
+- `TestScheduleTemplateHTTPIntegration` juga memeriksa GET/POST halaman baru, CSRF/role generator dan render hasil draf/Upacara/ringkasan JP. `SIM_GURU_VISUAL_DIR` opsional menyimpan fixture SSR bersanitasi untuk browser; bukan sesi login development.
+Hasil pelaksanaan aktual dan pengujian visual dicatat pada HANDOVER. Pengujian ini tidak menyimpulkan solver selalu menemukan solusi untuk semua skala; budget pencarian dibedakan dari bukti tidak ada solusi.
+
+
+## Batasan wajib dan preferensi — fase 7B
+- `schedule_constraints_test.go`: preferensi tidak mengurangi JP, minimisasi hari guru pada contoh kecil, overlap tidak menggandakan JP, kapasitas wajib, cakupan guru/mapel/hari/waktu aktual, sepanjang hari, pertemuan melintasi istirahat dan validasi input.
+- `TestScheduleConstraintsLifecycleIntegration`: otorisasi layanan, optimistic version, histori, generate lengkap dengan preferensi, stale draft ditolak, kegagalan batasan wajib menjaga draf, edit wajib ditolak, publikasi dengan preferensi serta laporan snapshot setelah pengaturan dihapus.
+- `TestScheduleTemplateHTTPIntegration`: route Batasan Jadwal Kurikulum, Admin ditolak, CSRF, tambah/edit/validasi modal, invalidasi snapshot dan laporan preferensi pada POST generator. Fixtures SSR `_test` bersanitasi opsional melalui `SIM_GURU_VISUAL_DIR` untuk pemeriksaan desktop/ponsel.
+- Jalankan `make test`, `make check`, `make integration`, `npm run build`, `make build`. Bukti eksekusi aktual, migration development dan batas visual/performa dicatat di HANDOVER, bukan disimpulkan dari daftar tes ini.
+
+
+## Kisi ketersediaan — fase 7C
+- Unit `constraint_grid_test.go`: pemetaan wajib/preferensi, slot terkunci, status ilegal/hilang, masking hanya sasaran sendiri, gabungan guru/mapel dan perubahan token/review jam.
+- `TestConstraintGridLifecycleIntegration`: otorisasi, pemetaan dengan persetujuan, blok Upacara, token usang, data waktu lama tetap, penolakan bypass format lama, generate/edit/publikasi dan laporan Kondisional, Tersedia tidak mengalahkan larangan mapel, reset tidak menghidupkan aturan lama, tinjau ulang perubahan jam dan snapshot versi terbit tetap.
+- `TestScheduleTemplateHTTPIntegration`: modal kisi/CSRF, daftar sasaran, POST slot terkunci ditolak, Admin ditolak, simpan, konflik token dan pelestarian baris lama. Fixture SSR bersanitasi melalui `SIM_GURU_VISUAL_DIR` untuk desktop/ponsel.
+- Jalankan make test/check/integration, build assets/binary; catat hasil aktual dan pemeriksaan browser pada HANDOVER.
+
+
+## Impor XML aSc — fase 7D
+- `asc_xml_test.go` dan fixture sintetis `internal/academic/testdata/asc-basic.xml`: Windows-1252, pengelompokan kartu per JP tanpa menggandakan durasi, bitmask hari, truncation, ID/reference/format unsupported, DTD/size, pemetaan/pengampu/Upacara dan larangan wajib.
+- `TestASCImportLifecycleIntegration`: staging owner/role/expiry, preview/version, validasi, idempotensi, konfirmasi penggantian, konfigurasi dan draf berubah, draf sebagian dengan persetujuan serta publikasi ditolak, source terpotong ditahan, perbedaan waktu perlu persetujuan, jam sekolah/versi terbit tetap dan pembersihan payload selesai.
+- `TestASCImportHTTPIntegration`: upload multipart, CSRF, role, ekstensi, pemetaan/preview/konfirmasi dan penggantian draf, repeat submit serta tampilan source terpotong. Fixture SSR bersanitasi melalui SIM_GURU_VISUAL_DIR untuk desktop/ponsel; tidak menyalin isi berkas pengguna ke repository.
+- Jalankan make test/check/integration, node --check, build assets/binary; catat kegagalan awal, hasil aktual, backup/migration dan batas browser pada HANDOVER.
+
+D-031: `TestStudentMovementsIntegration` menguji role, kelas tahun/tingkat, sumber stale, pelestarian penempatan, status keluar/pending, roster/hitungan, calon transisi dan histori. `TestStudentMovementHTTPIntegration` menguji menu modal/ringkasan, otorisasi/CSRF, konfirmasi, tidak ada penulisan saat preview, simpan/riwayat/status. Seluruh fixture memakai database `_test`; tidak memakai data development.
+
+D-032: TestStudentReadmissionIntegration memeriksa role, kelas/tahun/tingkat, tanggal kembali, siklus berulang, kelas historis dan jeda NULL, pelestarian placement, penempatan baru tahun berikutnya, aktivasi terjadwal, roster/transisi dan edit identitas selama menunggu kembali. Tes HTTP perpindahan diperluas untuk modal/ringkasan penerimaan, CSRF, otorisasi, preview tanpa penulisan, konfirmasi, badge terjadwal dan duplikat. Semua fixture hanya database `_test`.

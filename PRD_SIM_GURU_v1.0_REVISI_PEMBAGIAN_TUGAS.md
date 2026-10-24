@@ -33,7 +33,7 @@
 
 ## 2. Tujuan dan batas aplikasi — FINAL
 
-SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kelas/penempatan, penugasan dan jadwal, absensi guru QR, absensi siswa harian dan per pelajaran, jurnal mengajar, penilaian, serta laporan akademik dan kehadiran. Data historis dipertahankan; laporan bukan rapor resmi. Satu sekolah, bukan multi-tenant.
+SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kelas/penempatan, penugasan dan jadwal, absensi guru QR, absensi siswa harian dan per pelajaran, catatan pembinaan Kesiswaan dan bimbingan BK sederhana, jurnal mengajar, penilaian, serta laporan akademik dan kehadiran. Data historis dipertahankan; laporan bukan rapor resmi. Satu sekolah, bukan multi-tenant.
 
 ## 3. Model kewenangan sederhana — FINAL (menggantikan rumusan mandat/delegasi sebelumnya)
 
@@ -44,10 +44,10 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 | Admin | Pengelola identitas siswa/guru, akun, role, status akses, konfigurasi teknis, pembuatan/koreksi kelas dan penempatan awal siswa | Tidak otomatis mengelola kalender, mapel, wali kelas, pengampu, jadwal, transisi atau nilai |
 | Kurikulum | Menyiapkan tahun ajaran beserta dua semester dan mengaktifkannya; kelola mapel, wali kelas, pengampu, jadwal, transisi kenaikan/kelulusan dan pemeriksaan koreksi nilai Final | Kelas dan penempatan awal siswa baca-saja; tidak mengubah identitas siswa/guru; tidak membutuhkan persetujuan digital rutin |
 | Guru Mapel | Absensi per pelajaran, jurnal, TP/komponen/nilai/remedial pada kelas-mapel yang ditugaskan | Tidak boleh mengubah kelas/mapel di luar penugasan |
-| Wali Kelas | Pantau siswa dan absensi kelas yang ditugaskan, tindak lanjut kelas | Tidak otomatis mengubah nilai seluruh mapel |
-| Kepala Sekolah | Lihat ringkasan/laporan sekolah; menangani keputusan akademik khusus | Tidak menjadi antrean persetujuan pekerjaan harian |
-| BK | Pantau dan tindak lanjut data bimbingan yang relevan dengan tugas | Tidak otomatis mengubah nilai |
-| Kesiswaan | Pantau dan tindak lanjut urusan kesiswaan sesuai role | Tidak otomatis mengubah jadwal atau nilai |
+| Wali Kelas | Pantau siswa dan absensi kelas yang ditugaskan, tindak lanjut kelas; baca catatan Kesiswaan/BK siswa di kelasnya | Hak baca catatan tidak memberi hak edit; tidak otomatis mengubah nilai seluruh mapel |
+| Kepala Sekolah | Lihat ringkasan/laporan sekolah dan baca catatan Kesiswaan/BK seluruh sekolah; menangani keputusan akademik khusus | Hak baca catatan tidak memberi hak edit; tidak menjadi antrean persetujuan pekerjaan harian |
+| BK | Lihat siswa yang ditangani; catat bimbingan/konseling dan tindak lanjutnya | Terbatas pada siswa/kasus yang ditangani; tidak otomatis mengubah identitas, penempatan, jadwal, atau nilai |
+| Kesiswaan | Lihat seluruh siswa dan rekap kehadiran sekolah; catat pelanggaran serta pembinaan yang dilakukan | Tidak otomatis membuka catatan BK atau mengubah identitas, sumber absensi, penempatan, jadwal, atau nilai |
 | Petugas Absensi | Catat/koreksi kehadiran sesuai cakupan tugas | Tidak otomatis mengubah jurnal atau nilai |
 
 **Role Kurikulum langsung memberi akses ke menu dan fungsi Kurikulum.** Role dapat rangkap; penugasan Guru Mapel dan Wali Kelas tetap membatasi kelas/mapel. Admin boleh mengubah role berdasarkan keputusan sekolah, dengan audit sederhana. Pengelolaan penugasan oleh Kurikulum dalam modul akademik dapat berupa data operasional, tetapi **Admin tetap pengelola akun dan role; Kurikulum mengelola penugasan akademik**; tidak perlu approval silang. Bila Kurikulum menyusun pengampu/jadwal, sistem harus menyelaraskan dengan penugasan yang telah ditetapkan tanpa memberikan hak baru diam-diam.
@@ -60,17 +60,17 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 | Membuat kelas, penempatan awal, jadwal, perubahan jadwal | **Tidak perlu approval Kepala Sekolah di aplikasi**; dilakukan petugas berwenang |
 | Absensi, jurnal, input/finalisasi nilai rutin | **Tidak perlu approval Kepala Sekolah** |
 | Kenaikan kelas, kelulusan, transisi tahun ajaran | Berdasarkan keputusan sekolah; Kurikulum mengeksekusi setelah pratinjau/validasi, **tanpa approval digital ulang** |
-| Perpindahan siswa antarkelas di tengah tahun | **Persetujuan Kepala Sekolah tetap diperlukan menurut baseline sebelumnya**; dapat dicatat sebagai keputusan offline dengan tanggal, alasan, dan rujukan, lalu Kurikulum menjalankan. Tidak wajib inbox approval digital |
+| Perpindahan siswa antarkelas di tengah tahun | Kurikulum menjalankan langsung dengan alasan dan histori; tanpa persetujuan Kepala Sekolah |
 | Koreksi nilai yang sudah Final | Perlu alasan, histori, dan pemeriksaan oleh Kurikulum; **tidak otomatis memerlukan Kepala Sekolah**. Sengketa luar biasa dapat dieskalasi secara offline |
 | Koreksi jurnal Final atau absensi | Pelaksana berwenang mengoreksi dengan alasan dan histori; **tanpa approval Kepala Sekolah** |
 
-**Catatan perubahan:** ketentuan lama yang menyebut “mandat”, “delegasi”, “persetujuan berlapis”, atau “larangan self-approval” untuk penugasan rutin **digantikan** oleh bab ini. Jangan hidupkan kembali mekanisme tersebut dari ringkasan kontrak lama. Untuk perpindahan tengah tahun, keputusan Kepala Sekolah tetap diperlukan sebagai kebijakan khusus; cara mencatatnya dibuat sederhana. Jika pemilik proyek ingin menghapus kewajiban itu, diperlukan keputusan eksplisit.
+**Catatan perubahan:** ketentuan lama yang menyebut “mandat”, “delegasi”, “persetujuan berlapis”, atau “larangan self-approval” untuk penugasan rutin **digantikan** oleh bab ini. Jangan hidupkan kembali mekanisme tersebut dari ringkasan kontrak lama. Berdasarkan keputusan D-030, perpindahan tengah tahun ditangani langsung oleh Kurikulum dengan alasan dan histori, tanpa persetujuan Kepala Sekolah.
 
 ## 3A. Kepemilikan data induk dan batas tugas — FINAL (revisi 21 Oktober 2026)
 
 - **Admin adalah satu-satunya pihak yang membuat, mengubah, menonaktifkan, mengoreksi, dan melengkapi identitas induk siswa dan guru.** Ini meliputi identitas, NIS/NISN jika ada, data kontak yang diperlukan, status siswa/guru, dan identitas akun terkait. Hak baca bagi role lain diberikan sesuai kebutuhan tugas, bukan hak mengubah identitas.
 - **Admin mengelola akun dan role, membuat/mengoreksi kelas, serta melakukan penempatan awal siswa.** Admin membaca pilihan tahun ajaran untuk kelas; hak ini tidak memberikan kewenangan menyiapkan/mengaktifkan kalender, mengelola mapel, wali kelas, pengampu, jadwal, transisi atau nilai.
-- **Kurikulum menerima data induk dan kelas secara baca-saja**, menyiapkan tahun ajaran beserta dua semester, mengaktifkan tahun/semester, mengelola mata pelajaran, penugasan guru pengampu, wali kelas, jadwal, transisi kenaikan/kelulusan, serta pemeriksaan koreksi nilai Final. Kurikulum tidak membuat/mengoreksi kelas, melakukan penempatan awal, atau mengubah identitas induk siswa/guru. Perpindahan tengah tahun tetap mengikuti ketentuan khusus bab 3.1/5; perubahan penempatan hasil transisi mengikuti eksekusi transisi oleh Kurikulum, bukan hak mengedit penempatan awal secara bebas.
+- **Kurikulum menerima data induk dan kelas secara baca-saja**, menyiapkan tahun ajaran beserta dua semester, mengaktifkan tahun/semester, mengelola mata pelajaran, penugasan guru pengampu, wali kelas, jadwal, transisi kenaikan/kelulusan, serta pemeriksaan koreksi nilai Final. Kurikulum tidak membuat/mengoreksi kelas, melakukan penempatan awal, atau mengubah identitas induk siswa/guru. Kurikulum menangani perpindahan tengah tahun secara langsung dengan alasan dan histori; persetujuan Kepala Sekolah tidak diperlukan. Perubahan penempatan hasil transisi mengikuti eksekusi transisi oleh Kurikulum, bukan hak mengedit penempatan awal secara bebas.
 - **Guru Mapel, Wali Kelas, BK, Kesiswaan, dan Kepala Sekolah** membaca data siswa/guru sesuai cakupan role; hanya mengubah data operasional milik modul mereka. Permintaan pembetulan identitas diteruskan ke Admin melalui komunikasi sekolah biasa, tanpa membangun workflow approval digital.
 - **Satu sumber data:** siswa/guru dibuat sekali oleh Admin dan dipakai melalui referensi ID internal pada seluruh modul; tidak boleh ada salinan identitas yang diedit bebas oleh modul lain.
 - **Hak akses gabungan:** role diberikan Admin; cakupan kelas/mapel/wali berasal dari penugasan Kurikulum. Akses server harus memeriksa keduanya bila diperlukan.
@@ -79,6 +79,21 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 **Acceptance criteria:** Kurikulum tidak bisa mengubah nama/NISN siswa atau identitas guru; Admin dapat membuat/mengoreksi kelas dan melakukan penempatan awal; Kurikulum tanpa role Admin tidak dapat melakukannya; Admin tanpa Kurikulum tidak bisa menetapkan pengampu atau mengubah kalender; Admin dapat memperbaiki identitas dan perubahannya tercermin pada seluruh modul; penugasan oleh Kurikulum langsung mengaktifkan cakupan akses Guru Mapel/Wali Kelas tanpa persetujuan digital.
 
 **Revisi disetujui pemilik proyek 21 Oktober 2026:** pembuatan/koreksi kelas dan penempatan awal beralih ke Admin; kalender dan seluruh tugas Kurikulum yang disebut di atas tetap Kurikulum. ID kelas dan histori sebelum perubahan kebijakan dipertahankan. Rujukan keputusan: [D-015](docs/DECISIONS.md#d-015--pemisahan-kelasadmin-dan-kalenderkurikulum-disetujui-21-oktober-2026).
+
+## 3B. Kesiswaan dan BK — FINAL (22 Oktober 2026)
+
+**Status:** masuk rencana v1 berdasarkan persetujuan pemilik proyek; belum diimplementasikan. Rujukan keputusan: [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026).
+
+- **Kesiswaan:** melihat seluruh siswa dan rekap kehadiran sekolah, serta mencatat pelanggaran dan pembinaan yang dilakukan.
+- **BK:** melihat siswa yang menjadi tanggung jawabnya, serta mencatat bimbingan/konseling dan tindak lanjut pada siswa/kasus yang ditangani.
+- **Wali Kelas:** membaca catatan Kesiswaan dan BK siswa di kelas penugasannya; tidak memperoleh hak mengubah catatan dari role Wali Kelas.
+- **Kepala Sekolah:** membaca catatan dan ringkasan Kesiswaan/BK seluruh sekolah; tidak menjadi pemberi persetujuan rutin atau pengubah catatan dari role Kepala Sekolah.
+- Setiap catatan cukup memuat **siswa, tanggal, kejadian/keperluan, tindakan, petugas, dan status**. Status hanya **Perlu tindak lanjut** atau **Selesai**. Petugas pencatat tetap tercatat sesuai akun yang melakukan tindakan.
+- Siswa mengacu pada ID master yang dikelola Admin. Identitas, kelas/penempatan, jadwal, nilai, dan pencatatan/koreksi sumber absensi tetap mengikuti kewenangan modul masing-masing.
+- **Tidak ada poin pelanggaran, sanksi otomatis, atau alur persetujuan pada v1 ini.** Pengembangan lebih lanjut dilakukan bila ada kebutuhan dan persetujuan baru; usulan audit yang lebih luas tidak otomatis masuk cakupan.
+- Akses baca catatan mengikuti ketentuan di atas; role Admin atau Kesiswaan tidak otomatis memberi akses ke catatan BK. Role gabungan hanya memperoleh hak tambahan dari role/cakupan yang memang dimiliki.
+
+**Acceptance criteria rencana:** Kesiswaan dapat mencatat pembinaan siswa seluruh sekolah; BK dibatasi pada siswa/kasus yang ditangani; Wali Kelas hanya membaca catatan siswa di kelasnya; Kepala Sekolah membaca seluruh sekolah. Catatan menggunakan field dan dua status di atas, pemeriksaan akses dilakukan di server, serta tidak ada poin/sanksi otomatis/approval rutin. Perubahan catatan penting mengikuti audit sederhana bab 11. Cara mencatat penanggung jawab siswa/kasus BK perlu ditetapkan saat fase implementasi agar cakupan dapat diperiksa, tanpa menambahkan workflow persetujuan.
 
 ## 4. Master Data — FINAL inti
 
@@ -96,22 +111,145 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 - Kelas memiliki ID stabil, tingkat, nama, tahun ajaran; nama unik pada tingkat+tahun yang sama. Nama boleh dipakai lagi di tahun berikutnya dengan ID baru.
 - Kelas dapat dibuat sebelum wali kelas ditetapkan; sebelum dipakai secara operasional tampilkan pemeriksaan kesiapan.
 - Satu penempatan normal siswa per tahun ajaran. Perpindahan tengah tahun memakai catatan perpindahan khusus dan riwayat, bukan mengedit penempatan lama.
-- **Transisi:** Kurikulum menyiapkan pratinjau kenaikan/tidak naik/lulus/keluar, memeriksa data dan konsekuensi, kemudian mengeksekusi hasil keputusan sekolah. **Tidak ada tombol persetujuan Kepala Sekolah wajib untuk setiap batch.** Proses atomik dan riwayat tetap dijaga.
-- Perpindahan tengah tahun membutuhkan keputusan Kepala Sekolah yang dicatat sederhana (misalnya nomor/tanggal keputusan atau catatan hasil rapat), bukan workflow digital berlapis.
+- **Transisi akhir tahun:** Kurikulum membuat tahun ajaran tujuan beserta dua semester (tetap belum aktif); Admin kemudian membuat kelas tujuan. Saat tahun sumber masih aktif dan tujuan belum aktif, Kurikulum meninjau pratinjau per siswa dari kelas asal ke hasil/kelas tujuan: naik (tingkat berikutnya), tidak naik (tingkat sama), lulus (kelas 9), atau keluar. Setelah batch transisi berhasil, Kurikulum mengaktifkan tahun dan semester baru. Tidak ada approval digital Kepala Sekolah; seluruh batch atomik dan historis. Urutan ini diperlukan karena sumber transisi wajib tahun aktif.
+- **Perpindahan tengah tahun:** Kurikulum dapat memindahkan siswa langsung ke kelas lain dalam tahun ajaran yang sama, dengan alasan dan histori; tidak memerlukan persetujuan Kepala Sekolah. Perpindahan tidak mengubah identitas atau menghapus riwayat penempatan.
+- Perpindahan tengah tahun tidak memerlukan persetujuan Kepala Sekolah. Fitur perpindahan tengah tahun tersedia sesuai D-031; Kurikulum mencatat tanggal berlaku, alasan dan histori.
 
 **AC:** tahun/semester aktif ganda ditolak; penempatan normal ganda ditolak; pratinjau transisi menampilkan perubahan; kegagalan batch tidak meninggalkan hasil parsial; perpindahan menjaga riwayat.
+
+### Perpindahan siswa — D-031, disetujui 23 Oktober 2026
+- **Pindah kelas:** Kurikulum memilih siswa/penempatan pada tahun aktif → kelas tujuan berbeda dalam tahun/tingkat sama → tanggal berlaku dan alasan → ringkasan → konfirmasi Simpan. Tidak memerlukan approval Kepala Sekolah. Penempatan awal tidak ditulis ulang; catatan perpindahan bertanggal menentukan kelas aktif. Wali kelas membaca roster yang sudah memperhitungkan perpindahan berlaku.
+- **Pindah sekolah keluar:** Admin memilih siswa → tanggal keluar, alasan wajib, sekolah tujuan opsional → ringkasan → konfirmasi Simpan. Efektif pada tanggal tersebut (WIB), status menjadi Pindah sekolah dan siswa tidak masuk roster/daftar penempatan aktif maupun calon kenaikan. Catatan terjadwal terlihat terpisah dari nonaktif umum. Identitas dan seluruh histori tetap tersimpan.
+- Catatan menyimpan kelas asal/tujuan bila ada, alasan, tanggal berlaku, petugas dan waktu pencatatan. Tidak ada penghapusan atau penyuntingan penempatan awal. Penyimpanan atomik, otorisasi di server, perubahan bersamaan atau konfirmasi ganda ditolak.
+- Perpindahan kelas dibatasi berurutan; tanggal harus setelah catatan perpindahan terakhir dan hanya satu perpindahan kelas mendatang yang belum berlaku. Kelas sumber yang berubah sejak form dibuka ditolak. Pindah kelas selama catatan keluar belum ditutup oleh penerimaan kembali yang sudah berlaku (termasuk keluar/kembali terjadwal) ditolak agar kelas asal pada histori keluar tetap konsisten. Susun perpindahan kelas terlebih dahulu sebelum mencatat keluar. Keluar bertanggal sebelum/sama dengan perpindahan kelas tercatat ditolak untuk menjaga urutan; periksa histori sebelum mencatat.
+- Catatan pindah sekolah yang belum ditutup penerimaan kembali efektif (termasuk keluar/kembali terjadwal) menahan penempatan baru dan tidak ditawarkan pada transisi akhir tahun. Transisi ditahan jika ada perpindahan kelas mendatang yang belum berlaku. Perpindahan/keluar yang bertentangan dengan transisi tahun sumber yang sudah dijalankan ditolak. Penerimaan kembali siswa lama kini tersedia sesuai D-032. Koreksi/pembatalan kejadian dan penerimaan siswa pindahan baru dari sekolah lain tetap belum termasuk alur ini.
+- Daftar aktif/jumlah siswa/roster mengikuti tanggal WIB melalui pembacaan database, tanpa scheduler atau penggantian status massal. Riwayat awal dan perpindahan tetap dapat dibaca oleh Admin/Kurikulum. Tanggal kalender tahun ajaran belum dimodelkan; petugas memastikan tanggal berlaku sesuai tahun sumber. Nilai/absensi historis nantinya harus memakai penempatan pada tanggal kejadian, bukan roster hari ini.
+
+### Siswa diterima kembali — D-032, disetujui 23 Oktober 2026
+- **Admin** mencari identitas siswa lama → Aksi Terima kembali → tanggal kembali, kelas tujuan pada tahun aktif, alasan wajib, sekolah asal terakhir opsional → ringkasan → konfirmasi Simpan. Tidak membuat identitas siswa baru dan tidak menghapus/mengubah kejadian keluar. Kurikulum membantu memastikan tingkat akademik bila belum jelas, tanpa approval digital tambahan.
+- Pada tahun yang sama dengan kelas asal keluar, tujuan wajib tingkat yang sama (misalnya 7A → keluar → kembali di 7D). Tahun berikutnya, Admin memilih tingkat berdasarkan riwayat akademik, bukan kenaikan otomatis. Jika siswa keluar tanpa riwayat kelas asal, petugas harus memastikan tingkatnya dari bukti akademik.
+- Penempatan yang sudah ada pada tahun aktif dipakai kembali, tanpa digandakan atau ditulis ulang. Penerimaan mencatat kelas efektif baru; penempatan baru hanya dibuat jika tahun aktif belum mempunyai penempatan siswa itu. Penempatan yang sudah ada dengan tingkat berbeda ditolak untuk ditinjau, bukan ditimpa.
+- Kejadian keluar dan kembali mendukung siklus berulang. Satu kejadian kembali terkait tepat satu kejadian keluar, dan tanggal kembali harus sesudah tanggal keluar (minimal hari berikutnya). Keluar berikutnya harus sesudah tanggal kembali terakhir. Siswa harus sudah keluar saat pencatatan penerimaan, bukan baru memiliki rencana keluar mendatang. Pengiriman ulang, versi siswa/kejadian yang berubah, dan penerimaan ganda ditolak atomik.
+- Mulai tanggal kembali (WIB), siswa aktif dan masuk kelas tujuan. Kembali terjadwal ditampilkan dengan tanggal, tetapi belum masuk roster/hitungan aktif sebelum tanggalnya. Masa di luar sekolah tetap menjadi jeda: penempatan pada tanggal dalam jeda tidak menghasilkan kelas. Identitas, penempatan asli, seluruh kejadian dan petugas/waktu pencatatan tetap dapat ditelusuri.
+- Catatan keluar yang penerimaannya sudah berlaku tidak lagi mengunci penempatan, pindah kelas atau transisi. Selama masih keluar/menunggu kembali, batasan tetap berlaku. Transisi akhir tahun menunggu penerimaan terjadwal pada tahun sumber; penerimaan pada tahun yang sudah dijalankan batch transisinya ditahan sampai Kurikulum mengaktifkan tahun tujuan agar siswa tidak terlewat. Edit identitas saat masa keluar tidak boleh membatalkan aktivasi kembali terjadwal.
+- Ini alur penerimaan kembali siswa lama. Pembatalan keluar yang belum terjadi, koreksi tanggal/kejadian dan penerimaan siswa pindahan yang belum pernah terdaftar tetap merupakan alur terpisah yang belum tersedia.
 
 ## 6. Penugasan dan Jadwal — FINAL inti
 
 - Kurikulum menetapkan Guru Mapel pada kelas-mapel dan Wali Kelas pada kelas sesuai keputusan sekolah; hak langsung berlaku.
+- **Keputusan 22 Oktober 2026 — cakupan pengampu v1:** penugasan Guru Mapel berlaku per semester, dengan satu pengampu resmi pada satu kombinasi semester–kelas–mata pelajaran untuk periode berlaku yang sama. Satu guru boleh mengajar banyak kelas dan mata pelajaran; mata pelajaran yang sama boleh diajar guru berbeda di kelas berbeda. Contoh: Pak Imam mengajar Bahasa Inggris di 7A/7B/7C, sedangkan Pak Budi mengajar Bahasa Inggris di 7D/7E serta kelas 8/9 yang ditugaskan kepadanya. Penggantian resmi di tengah semester tetap boleh dengan tanggal efektif dan histori. Semester berikutnya dapat menyalin penugasan sebagai bahan awal lalu menyesuaikannya.
 - Kurikulum menyusun jam pelajaran, jadwal draf/publikasi, dan perubahan jadwal. Benturan guru/kelas/jam dicegah.
+- **Pola jadwal v1:** Kurikulum mengatur jam pelajaran untuk setiap hari (Senin, Selasa, dan seterusnya), termasuk nomor jam serta waktu mulai dan selesai; jadwal memilih rentang nomor jam pada hari itu, misalnya Senin jam 1–2, PAI, Pak Imam, 7A. Jadwal mingguan berulang berlaku untuk semester terkait, memiliki tanggal mulai berlaku serta status Draf/Publikasi. Guru melihat jadwal yang sudah dipublikasikan sesuai penugasannya.
+- **Template jam disetujui 22 Oktober 2026:** aplikasi menyediakan Senin–Sabtu dengan nomor jam 1–12 per hari. Kurikulum mengisi pasangan waktu mulai/selesai pada baris yang digunakan dan menyimpan satu hari sekaligus. Jam kosong tidak wajib diisi, tidak dibuat di database, dan tidak menghapus definisi lama. Waktu antarhari boleh berbeda. Definisi lama untuk Minggu atau nomor di atas 12 tetap dapat dibaca/diedit; template bukan pembatas baru skema.
+- **Durasi dan mulok disetujui 22 Oktober 2026:** JP pembelajaran diseragamkan menjadi 40 menit; Bahasa Indramayu dan Ke-NU-an masing-masing mendapat 2 JP per minggu per rombel. Slot upacara Senin bukan JP pembelajaran; pembelajaran Senin dimulai jam ke-2 pukul 07.00. Konfigurasi waktu semester aktif dicatat pada [HANDOVER](docs/HANDOVER.md#penyeragaman-jp-dan-pengisian-jam--22-oktober-2026), dengan alasan/status penerapan pada [D-022](docs/DECISIONS.md#d-022--durasi-jp-dan-alokasi-mulok-disetujui-22-oktober-2026). Ini acuan operasional sekolah pada saat D-022; target JP dan pengecualian upacara kini diperiksa pada draf berkonfigurasi D-025 sesuai bab 6.1.
+- **Pembagian JP untuk draf 2026/2027 Semester 1:** Bahasa Indonesia 6 JP (3+3); Matematika dan IPA masing-masing 5 JP (3+2); IPS dan Bahasa Inggris masing-masing 4 JP (2+2). PAI, Pendidikan Pancasila, PJOK, Informatika, dan Seni Rupa masing-masing 3 JP dalam satu pertemuan; Bahasa Indramayu dan Ke-NU-an masing-masing 2 JP dalam satu pertemuan. Dua pertemuan mapel yang sama ditempatkan pada hari berbeda. Total per rombel 43 JP/17 pertemuan, dengan kapasitas Senin 9 JP (jam 2–10), Selasa 10 JP, Rabu/Kamis masing-masing 9 JP, Jumat 6 JP; tanpa pembelajaran pada upacara Senin. Draf awal enam rombel sudah diisi menurut pembagian ini; lihat [D-023](docs/DECISIONS.md#d-023--pengisian-draf-jadwal-enam-rombel-22-oktober-2026). Ini konfigurasi draf sekolah, bukan fitur generator atau validasi otomatis target JP.
+- **Pengisian jadwal sederhana:** pilih kelas → mapel yang sudah ditugaskan pada tanggal berlaku draf → guru otomatis mengikuti penugasan → hari → rentang jam yang sudah memiliki waktu pada hari itu. Server menentukan guru dari penugasan dan tetap menolak kombinasi tidak sah/bentrokan. Template ini bukan generator jadwal otomatis dan tidak memakai impor aSc.
+- **Alur yang sudah tersedia:** tetapkan pengampu → susun jadwal secara manual → validasi → publikasikan. Sistem menolak guru mengajar dua kelas pada waktu bersamaan, satu kelas menerima dua pelajaran pada waktu bersamaan, serta jadwal yang tidak sesuai penugasan guru–kelas–mapel. Validasi benturan memakai waktu aktual, bukan hanya kesamaan nomor jam. Generator dan pengaturan fleksibel tersedia sebagai pengembangan bab 6.1; alur manual tetap didukung.
 - Jadwal = rencana, jurnal = kegiatan aktual. Perubahan jadwal tidak mengubah jurnal masa lalu.
 - **FINAL: Tidak ada Guru Pengganti atau Guru Cadangan.** Ketidakhadiran guru tidak menghasilkan penugasan pengganti, pemberian akses sementara, atau jurnal atas nama guru lain.
 - **Perubahan guru pengampu resmi tetap didukung:** Kurikulum memperbarui penugasan sesuai keputusan sekolah, dengan tanggal efektif dan riwayat pengampu lama; Kurikulum menyesuaikan jadwal untuk periode mendatang. Ini bukan penugasan sementara.
 - Pertemuan yang tidak terlaksana tetap dapat terlihat sebagai jadwal tanpa jurnal Final; jangan otomatis menganggap telah diajar atau mencatat guru lain. Detail status kegiatan tidak terlaksana **OPEN P1** dan tidak boleh mengubah status absensi siswa secara otomatis.
-- Pengampu bersama boleh ada, tetapi pembagian hak nilai akhir **OPEN P0**; jangan berikan hak mengubah nilai Final kepada semua guru tanpa aturan.
+- **Pengampu bersama ditunda dari cakupan v1** sesuai keputusan 22 Oktober 2026, menggantikan ketentuan sebelumnya yang mengizinkannya. Jika kelak dibutuhkan, tetapkan pembagian tanggung jawab dan hak nilai akhir sebelum mengaktifkannya; keputusan itu tidak menghalangi pengampu tunggal v1.
 
-**AC:** benturan jadwal ditolak; Guru Mapel tanpa penugasan ditolak; tidak ada pengganti/cadangan atau hak akses sementara; perubahan pengampu resmi menyimpan histori; histori jadwal utuh.
+**AC:** satu pengampu per semester–kelas–mapel pada periode berlaku yang sama; guru dapat ditugaskan pada banyak kelas/mapel; benturan waktu guru/kelas dan jadwal di luar penugasan ditolak; Guru Mapel tanpa penugasan ditolak; draf tidak tampil sebagai jadwal terpublikasi kepada guru; tidak ada pengganti/cadangan atau hak akses sementara; perubahan pengampu/jadwal bertanggal efektif menyimpan histori dan tidak menimpa catatan masa lalu.
+
+### 6.1 Rancangan pengembangan jadwal fleksibel dan generator
+
+**Status 22 Oktober 2026: inti pengaturan dan generator telah diimplementasikan sesuai persetujuan lanjutan; lihat D-025 pada DECISIONS dan bukti di HANDOVER.** Lihat [D-024](docs/DECISIONS.md#d-024--rancangan-jadwal-fleksibel-per-rombel-dan-generator-22-oktober-2026). Pengaturan berikut menjadi sumber aturan, sehingga angka JP/pola pertemuan tidak dikunci di source code. Alokasi bab 6 untuk draf 2026/2027 adalah konfigurasi sekolah saat itu, bukan batas permanen bagi semester atau rombel lain.
+
+**Struktur Kurikulum — kewenangan Kurikulum:**
+
+- Pilih tahun ajaran/semester, lalu atur mapel, JP pembelajaran per minggu, dan pembagian JP tiap pertemuan sebagai bawaan tingkat VII/VIII/IX. Jumlah pembagian pertemuan harus sama dengan target JP; kebijakan hari berbeda untuk pertemuan mapel yang sama dicatat sebagai pengaturan, bukan disimpulkan dari jumlah JP.
+- Rombel mewarisi bawaan tingkat dan boleh memiliki pengecualian per mapel. Aturan khusus rombel mengalahkan bawaan tingkat; tanpa pengecualian, bawaan tingkat berlaku. Tampilkan sumber nilai dengan jelas dan sediakan kembali ke bawaan. Pengaturan yang belum lengkap harus ditandai, bukan ditebak oleh generator.
+- Contoh semester yang sama: bawaan Matematika VII 5 JP (3+2), 7A pondok dikecualikan menjadi 2 JP (satu pertemuan), sedangkan 7B reguler tetap 5 JP. Semester berikutnya boleh menjadi 8 JP (4+4) berdasarkan keputusan Kurikulum. Label pondok/reguler pada contoh tidak mengharuskan penambahan jenis kelas atau perubahan identitas rombel Admin.
+- Pengaturan semester sebelumnya dapat disalin sebagai bahan awal, ditinjau dan disesuaikan; tidak diberlakukan otomatis. Perubahan menyimpan actor, waktu, nilai sebelum/sesudah dan versi/tanggal berlaku. Pemeriksaan memakai aturan efektif masing-masing rombel–mapel.
+
+**Jam sekolah, istirahat, dan upacara:**
+
+- Kurikulum menyiapkan hari, nomor jam, waktu mulai/selesai, serta jenis slot: pembelajaran, istirahat, atau kegiatan non-mapel seperti upacara. Waktu bisa berbeda antarhari. Definisi jam dan aturan yang dipakai versi jadwal harus tetap dapat ditelusuri.
+- Istirahat dicatat eksplisit dengan hari dan waktu mulai/selesai, terlihat sebagai **Istirahat**, serta memblokir pembelajaran bagi rombel yang tercakup. Istirahat tidak menambah JP mapel; jangan menampilkan rentang belajar seolah berlangsung selama istirahat. Implementasi menampilkan istirahat sebagai interval tersendiri tanpa nomor jam pembelajaran; kegiatan seperti upacara tetap memiliki nomor jam.
+- **Upacara Senin tetap menempati jam ke-1**, ditampilkan berlabel **Upacara**, bukan sel kosong. Jam ke-1 ini terisi kegiatan sekolah dan tidak dapat dipakai mapel; pembelajaran mulai jam ke-2. Upacara bukan JP mapel dan tidak memerlukan guru pengampu/mapel fiktif untuk dapat ditampilkan.
+- Generator, edit manual, dan publikasi harus memeriksa benturan waktu aktual dengan istirahat/upacara, selain bentrok guru/kelas. Pengguna telah menyetujui satu pertemuan dilanjutkan sesudah istirahat. Tampilkan segmen belajar terpisah tanpa menghitung atau mengisi jeda istirahat; pola pertemuan tetap dihitung sebagai satu pertemuan sesuai JP-nya.
+
+**Alur Kurikulum:**
+
+1. Pilih semester dan tanggal mulai berlaku jadwal.
+2. Siapkan Struktur Kurikulum bawaan tingkat dan pengecualian rombel; periksa ringkasan JP/pertemuan efektif setiap kelas–mapel.
+3. Periksa penugasan guru–kelas–mapel yang telah tersedia. Generator memakai pengampu resmi sesuai tanggal berlaku, tanpa memilih guru baru atau mengubah penugasan secara diam-diam.
+4. Atur jam sekolah, istirahat dan kegiatan Upacara pada jam ke-1. Batas khusus guru/mapel dan preferensi diatur melalui Batasan Jadwal sesuai bab 6.2.
+5. Klik **Generate jadwal**. Sistem memeriksa kelengkapan pengaturan, kapasitas JP rombel dan beban waktu guru, lalu mencari susunan yang memenuhi semua aturan efektif. Pengecekan kapasitas awal saja tidak membuktikan solusi pasti ada.
+6. Hasil lengkap yang valid disimpan sebagai **Draf** beserta acuan versi pengaturan dan ringkasan JP/pertemuan. Jika masih ada draf, minta pilihan yang jelas sebelum mengganti isinya. Jadwal terpublikasi tetap utuh. Penyimpanan draf hasil generate harus atomik, sehingga kegagalan tidak meninggalkan sebagian hasil.
+7. Kurikulum meninjau per hari/kelas/mapel/guru dan boleh mengedit draf dengan validasi yang sama. Tampilkan target versus JP terjadwal serta masalah yang harus diperbaiki. Perubahan pengaturan setelah generate menandai draf perlu diperiksa ulang.
+8. Klik **Publikasikan** setelah pemeriksaan ulang server: target JP dan pembagian pertemuan tepat, penugasan sesuai, tidak bentrok guru/kelas, serta tidak mengisi istirahat/upacara dengan mapel. Simpan snapshot aturan/jam/kegiatan yang dipakai agar perubahan berikutnya tidak menulis ulang versi terbit atau jurnal masa lalu. Guru melihat versi yang sudah dipublikasikan sesuai aksesnya.
+
+**Bila generate belum berhasil:** tampilkan pengaturan yang kurang atau kendala yang dapat dibuktikan, misalnya beban guru melebihi waktu tersedia. Bedakan hasil terbukti tidak memungkinkan dengan pencarian yang berhenti karena batas waktu. Jangan mengurangi JP, mengganti guru, mengisi istirahat/upacara, atau memublikasikan hasil tidak lengkap untuk memaksakan hasil. Pengguna menyesuaikan pengaturan lalu mencoba kembali.
+
+**Implementasi dan batas saat ini:** migration aditif 00010 menyimpan aturan, pengecualian, istirahat/kegiatan, histori konfigurasi dan snapshot rencana pada revisi. Solver Go memakai pencarian dengan budget 8 detik/batas simpul, maksimal 1.200 pertemuan, tanpa dependency baru; susunan versi terbit diprioritaskan hanya bila masih sesuai aturan baru. Batasan individu guru/mapel dan preferensi kini tersedia melalui migration 00011 sesuai bab 6.2; tanpa batasan tambahan guru tetap tersedia pada jam sekolah. Generate mengganti draf berisi pelajaran hanya setelah konfirmasi eksplisit dan menyimpan histori; versi terbit tidak diturunkan menjadi draf. Data lama tetap utuh. Generator bukan integrasi aSc dan tidak mengaktifkan pengampu bersama.
+
+**Kriteria penerimaan pengembangan:** 7A dapat 2 JP sementara 7B 5 JP untuk mapel/semester sama; semester baru dapat 8 JP tanpa perubahan kode; pewarisan/pengecualian terlihat; pembagian pertemuan konsisten; istirahat terblokir; Upacara terlihat pada Senin jam ke-1; generator menghasilkan draf lengkap atau menjelaskan kegagalan secara jujur; edit/publikasi menerapkan aturan efektif yang sama; data dan histori jadwal lama tetap utuh.
+
+### 6.2 Rancangan batasan jadwal dan preferensi
+
+**Status 22 Oktober 2026: diterapkan setelah persetujuan pengguna, fase 7B/migration 00011.** Keputusan pada [D-026](docs/DECISIONS.md#d-026--batasan-wajib-dan-preferensi-jadwal-22-oktober-2026). Ini melengkapi generator bab 6.1 dengan pengaturan, validator wajib, kapasitas guru, pencarian preferensi dan laporan revisi. Pilihan implementasi pada D-027.
+
+**Format rentang waktu fase 7B (editor utama kini kisi pada bab 6.3), per semester:** sediakan menu Batasan Jadwal dengan sasaran Guru atau Mata Pelajaran, hari yang dipilih, waktu mulai/selesai atau sepanjang hari, serta jenis ketentuan berikut. Hari dipilih secara eksplisit; permintaan menghindari pagi tidak otomatis berlaku setiap hari. Angka jam/hari/nama mapel dan guru tidak dikunci di source code.
+
+| Jenis | Arti | Contoh | Jika jadwal tidak dapat disusun |
+|---|---|---|---|
+| **Tidak tersedia** | Larangan wajib; tidak boleh ditempati oleh sasaran tersebut | PJOK tidak boleh pada waktu siang yang ditetapkan tiap hari; guru benar-benar tidak dapat hadir pada Jumat | Jelaskan kendala; jangan melanggar larangan atau mengurangi JP untuk memaksakan hasil |
+| **Usahakan dihindari** | Preferensi; boleh ditempati untuk memperoleh jadwal lengkap | Guru mengusahakan tidak masuk pagi, tetapi bersedia datang pagi pada sebagian hari jika diperlukan | Cari hasil dengan sesedikit mungkin hari pagi; tampilkan preferensi yang belum terpenuhi pada hasil draf |
+
+Kurikulum menetapkan jenisnya berdasarkan kondisi sebenarnya. Permintaan “ingin tidak mengajar Jumat” dapat menjadi preferensi; “benar-benar tidak bisa hadir Jumat” menjadi Tidak tersedia. Preferensi tidak boleh membatalkan larangan wajib, bentrok, target JP/pola pertemuan, penugasan resmi, istirahat, atau Upacara. Tanpa pengaturan khusus, waktu sekolah yang tersedia tetap berlaku.
+
+**Waktu aktual per hari:** gunakan rentang waktu nyata untuk menghindari pembelajaran siang, bukan menganggap jam ke-7 selalu siang. Audit 22 Oktober menunjukkan Senin jam 7 masih 10.50–11.30, sedangkan Selasa jam 7 sudah 12.25–13.05 dan masih ada jam 10. Contoh konfigurasi PJOK: tidak tersedia mulai 12.25 sampai akhir pembelajaran pada hari yang dipilih, mengikuti waktu sekolah yang berlaku. Pukul 12.25 adalah contoh berdasarkan konfigurasi sekarang, bukan konstanta atau asumsi permanen waktu Dzuhur. Jika jam sekolah/istirahat berubah, batasan perlu ditinjau. Setiap JP dalam satu pertemuan harus berada pada waktu yang diizinkan; izin menyambung sesudah istirahat tidak boleh dipakai untuk menyisipkan pembelajaran pada waktu terlarang.
+
+**Perilaku pencarian yang direncanakan:**
+
+1. Tetap penuhi seluruh ketentuan wajib: target JP dan pola efektif rombel, pengampu, hari pertemuan, jam sekolah, istirahat/Upacara, bentrok guru/kelas, serta semua batas Tidak tersedia.
+2. Usahakan seluruh preferensi terpenuhi. Untuk preferensi menghindari pagi, tujuan yang disepakati adalah meminimalkan **jumlah hari guru tetap masuk pagi**, bukan hanya jumlah JP pagi. Beberapa JP pagi pada satu hari dihitung satu hari untuk tujuan tersebut; laporkan pula JP-nya.
+3. Jika preferensi tidak seluruhnya dapat terpenuhi, hasil lengkap yang memenuhi ketentuan wajib boleh menjadi draf dengan laporan preferensi yang belum terpenuhi. Semua JP tetap harus terjadwal. Preferensi yang belum terpenuhi bukan pelanggaran larangan wajib.
+4. Pilihan teknis yang masih berupa rekomendasi: setelah meminimalkan hari preferensi guru yang tidak terpenuhi, kurangi jumlah JP yang mengenai preferensi, lalu gunakan posisi versi terbit sebagai preferensi terakhir untuk stabilitas. Rincian penilaian antarpreferensi lain, pemerataan antar-guru dan strategi pencarian perlu dirinci sebelum implementasi; belum ada bobot khusus yang disetujui.
+5. Pencarian yang dibatasi waktu boleh menyajikan jadwal lengkap valid dengan label **hasil terbaik yang ditemukan**, tanpa menjamin minimum/optimal. Jangan menyebut masuk pagi sebagai “pasti terpaksa” jika belum terbukti semua alternatif lebih baik tidak mungkin. Bedakan hasil valid dengan preferensi belum terpenuhi, kendala wajib yang terbukti, serta timeout tanpa hasil lengkap. Tidak memublikasikan otomatis atau menulis sebagian hasil.
+
+**Pemeriksaan kapasitas:** hitung waktu tersedia setiap guru setelah larangan wajib, bukan hanya total slot sekolah. Waktu yang hanya diminta dihindari tetap boleh dihitung sebagai kapasitas, tetapi diberi konsekuensi preferensi. Contoh audit: sekolah 43 JP; larangan wajib jam 1–2 setiap hari menutup 9 JP belajar (Senin jam 1 adalah Upacara), menyisakan 34 JP. Guru berbeban 36 JP tidak mungkin memenuhinya dengan larangan wajib itu. Bila pagi hanya preferensi, sedikitnya 2 JP perlu ditempatkan pada waktu yang dihindari dalam contoh tersebut; hari dan penempatannya masih bergantung pada pola pertemuan/bentrok. Jika hanya beberapa hari dipilih, hitung ulang sesuai hari itu. Pemeriksaan kapasitas cukup untuk menemukan sebagian kendala, bukan bukti bahwa seluruh kombinasi pasti mempunyai solusi.
+
+**Alur Kurikulum setelah pengembangan:**
+
+1. Pilih semester/tanggal berlaku; periksa struktur JP per rombel dan guru pengampu.
+2. Periksa jam sekolah, istirahat, dan Upacara pada jam ke-1.
+3. Isi Batasan Jadwal: pilih guru/mapel → hari → waktu aktual atau sepanjang hari → Tidak tersedia/Usahakan dihindari. Tidak perlu membuat baris bagi guru/mapel yang tidak memiliki batasan.
+4. Generate: cek kesiapan dan kapasitas berdasarkan larangan wajib, kemudian cari jadwal lengkap sambil mengusahakan preferensi.
+5. Tinjau draf beserta ringkasan target JP, hasil pemeriksaan wajib dan laporan preferensi. Contoh laporan berdasarkan hasil nyata: “Pak A terjadwal pagi Selasa, 2 JP; preferensi menghindari pagi belum seluruhnya terpenuhi.” Jangan memberi alasan sebab-akibat yang tidak dibuktikan oleh pencarian.
+6. Kurikulum boleh mengedit draf atau mengubah pengaturan lalu generate ulang. Edit manual menolak larangan wajib dan memperbarui laporan preferensi; penempatan pada preferensi cukup ditandai, tidak dilarang.
+7. Publikasikan setelah pemeriksaan ulang server dan tinjauan laporan preferensi. Larangan wajib harus bebas pelanggaran; preferensi yang belum terpenuhi tidak menghalangi publikasi dan tetap terlihat. Versi terbit lama dipertahankan.
+
+**Keberlanjutan data dan batas implementasi:** simpan versi/histori perubahan batasan serta snapshot larangan/preferensi dan hasil pemeriksaannya bersama revisi jadwal. Perubahan batasan membuat draf perlu diperiksa ulang; jangan mengubah versi terbit secara diam-diam. Batas khusus guru/mapel tidak boleh dibuat sebagai blok istirahat global karena akan menutup sekolah bagi semua sasaran. Diperlukan penyimpanan tambahan, pembaruan input/fingerprint solver, kapasitas per guru, validator bersama untuk generate/edit/publikasi, pencarian preferensi, serta tampilan laporan. Migration aditif 00011 menyimpan batasan serta histori; snapshot rencana dan fingerprint mencakup batasan. Sasaran mapel berlaku bagi seluruh rombel pada semester terkait; pengecualian batasan mapel per rombel belum tersedia. Satu aturan boleh memilih beberapa hari dengan waktu sama; waktu berbeda memakai aturan terpisah. Pencarian branch-and-bound terbatas mengutamakan jumlah pasangan guru–hari yang mengenai preferensi guru, kemudian jumlah JP yang mengenai preferensi apa pun (JP tumpang tindih dihitung sekali); posisi versi terbit menjadi urutan pilihan berikutnya. Tidak ada bobot/pemerataan tambahan. Jika budget habis setelah ada hasil lengkap, gunakan hasil terbaik yang sudah divalidasi; tanpa hasil lengkap draf tetap utuh. Laporan dihitung ulang dari snapshot dan entri revisi, sehingga edit memperbarui laporan dan konfigurasi baru tidak mengubah laporan versi terbit. Tidak menanam larangan PJOK/guru/Jumat dari contoh percakapan.
+
+**Kriteria penerimaan pengembangan:** batas PJOK mengikuti waktu aktual per hari; guru dapat memiliki batas hanya pada hari terpilih atau sepanjang Jumat; larangan wajib tidak pernah dilanggar; preferensi pagi boleh tidak terpenuhi untuk mencapai JP lengkap dan hari/JP-nya dilaporkan; slot preferensi tidak dianggap hilang dalam pemeriksaan kapasitas; edit/publikasi memeriksa aturan yang sama; timeout tidak diklaim sebagai bukti tidak mungkin/optimal; histori, snapshot, serta versi terbit tetap utuh.
+
+### 6.3 Kisi ketersediaan guru dan mapel — diterapkan 22 Oktober 2026
+Pengguna menyetujui editor hari × nomor jam sebagai alur utama Batasan Jadwal (D-028), menggantikan pengisian rentang waktu satu per satu pada antarmuka bab 6.2. Aturan wajib/preferensi, JP lengkap, larangan bentrok, istirahat/kegiatan, snapshot dan publikasi tetap berlaku.
+
+Alur: pilih semester → Guru atau Mata Pelajaran → nama → **Atur kisi** → pilih status lalu klik sel jam atau tombol satu hari → **Simpan kisi** → generate ulang draf → tinjau → publikasikan. Status **Tersedia** boleh digunakan bila aturan lain mengizinkan; **Kondisional** berarti preferensi Usahakan dihindari dan boleh digunakan agar JP lengkap; **Tidak tersedia** larangan wajib. Tersedia pada guru tidak mengalahkan Tidak tersedia pada mapel, maupun sebaliknya. Mapel berlaku seluruh rombel semester terkait.
+
+Kisi menampilkan Senin–Sabtu dan jam 1–12, dengan tambahan Minggu/nomor lebih tinggi jika data lama memerlukannya. Tiap sel menampilkan waktu aktual hari tersebut, simbol dan label aksesibel. Klik biasa/keyboard dan sentuhan ponsel didukung. Tombol hari menerapkan status terpilih ke seluruh slot pembelajaran hari itu; Semua Tersedia mereset pilihan sasaran dalam editor, baru berlaku setelah Simpan. Slot tanpa waktu dan kegiatan seperti Upacara terkunci. Istirahat bukan slot pembelajaran dan tidak dapat dibuka melalui kisi. Matriks formulir tidak dipaginasi; daftar kisi tetap bernomor dan 10 baris/halaman.
+
+**Integritas data dan perubahan waktu:** migration aditif 00012 menyimpan satu kisi per semester–sasaran, versi optimistic, snapshot jam/blok dan histori sebelum/sesudah. Rentang batasan lama tetap disimpan dan berlaku selama sasaran belum mempunyai kisi. Editor memetakan batasan waktu lama ke JP yang beririsan, dengan larangan wajib mengalahkan preferensi; pengguna meninjau dan mencentang persetujuan sebelum menyimpan. Setelah disimpan, kisi menjadi aturan aktif sasaran tersebut dan catatan waktu lama dipertahankan. Reset Tersedia tidak menghidupkan kembali batasan waktu lama. Tidak memigrasikan/mengonversi pilihan pengguna otomatis pada deployment.
+
+Pilihan kisi mengikuti nomor jam pada hari yang dipilih. Jika definisi waktu/jeda/kegiatan sekolah berubah, generate/edit/publikasi meminta tinjauan dan penyimpanan ulang kisi terkait sebelum memakai perubahan itu. Sel baru ditampilkan Tersedia untuk ditinjau; tidak otomatis mengizinkan perubahan tanpa konfirmasi. Ini menjaga kesadaran bahwa nomor jam yang sama dapat bergeser dari pagi ke siang. Token formulir mencakup konfigurasi jam/blok dan aturan sasaran, diperiksa di bawah mutation lock; perubahan serentak ditolak tanpa menimpa. Simpan semua sel/histori atomik dan server menolak status ilegal, sel duplikat/hilang, serta slot terkunci. Tidak mengubah snapshot, hasil laporan atau status versi terbit lama.
+
+### 6.4 Impor jadwal XML aSc — 23 Oktober 2026
+Pengguna mengonfirmasi sampel ekspor terpotong karena batas lisensi dan meminta fitur impor diterapkan (D-029). Kurikulum dapat memilih **Jadwal Mingguan → Impor XML**, mengunggah aSc Timetables 2012 XML, mencocokkan referensi, memeriksa pratinjau, kemudian menyimpan sebagai draf. Publikasi tetap manual melalui validator jadwal yang sudah ada. Impor tidak membuat atau menimpa akun, role, identitas, kelas, mapel, penugasan guru, definisi jam, struktur JP, kisi ketersediaan atau versi jadwal terbit.
+
+**Pemetaan eksplisit:** pilih semester/tanggal berlaku; cocokkan kelas, guru, mapel, hari, serta nomor jam sumber per hari ke jam tujuan SIM-GURU. Nama yang sama persis setelah normalisasi kapital/spasi menjadi saran hanya bila unik; ID acak aSc tidak dianggap ID aplikasi. Hari memakai definisi/nama hari di XML, bukan menganggap kode biner sebagai angka hari; yang tidak dikenali harus dipilih pengguna. Jam tujuan hanya slot pembelajaran hari itu, tanpa kegiatan/istirahat. Seluruh JP satu pertemuan harus dipetakan ke rentang nomor berurutan. Perbedaan waktu XML–sekolah ditampilkan dan memerlukan persetujuan memakai waktu sekolah; aplikasi tidak mengubah jam sekolah dari XML.
+
+**Kelengkapan:** format yang diuji mencatat setiap JP pada `cards`, sedangkan `periodspercard` menentukan panjang pertemuan; JP berurutan dikelompokkan sesuai panjangnya, tanpa menggandakan durasi. Kekurangan/kelebihan penempatan dibanding `periodsperweek`, blok terpotong, slot duplikat dan referensi tidak dikenal merupakan masalah sumber yang menahan penyimpanan. Sampel 10 slot untuk 11 JP tidak boleh dianggap lengkap atau dilengkapi diam-diam. XML yang berisi pertemuan utuh tetapi baru mencakup sebagian target sekolah boleh disimpan sebagai **draf belum lengkap** setelah persetujuan; publikasi tetap ditolak sampai seluruh target JP/pola sekolah terpenuhi. Ini berbeda dari memaksakan blok yang terpotong.
+
+**Validasi dan integritas:** pratinjau dan konfirmasi memeriksa pengampu aktif sesuai tanggal, JP/pola/hari pertemuan, bentrok guru/kelas, istirahat/Upacara dan larangan wajib, memakai validator bersama. Preferensi boleh belum terpenuhi dan tetap terlihat pada laporan revisi. Draf yang sudah berisi hanya diganti setelah persetujuan eksplisit dengan jumlah pertemuan yang akan diganti ditampilkan; histori sebelum/sesudah disimpan atomik. Jika pengaturan, penugasan, atau isi draf berubah setelah pratinjau, konfirmasi ditolak dan pratinjau harus diperiksa ulang. Perubahan pemetaan dari tab lain ditolak melalui versi; konfirmasi ulang tidak menggandakan hasil.
+
+**Cakupan awal dan batas:** maksimal 5 MiB, 1.200 pertemuan, 10.000 catatan kartu/slot dan 2.000 definisi pelajaran; satu guru, satu rombel utuh, satu pola minggu/term. Pengampu bersama, kelas gabungan, kelompok/sebagian siswa, JP mingguan pecahan atau rotasi minggu/term ditandai belum didukung. Format default dengan representasi kartu berbeda harus diaudit, bukan ditebak. Data ruang, siswa dan kontak dari XML bukan sumber master atau pemeriksaan konflik ruang SIM-GURU. Parser menerima encoding yang didukung (termasuk Windows-1252 pada sampel), menolak DTD/entity directive dan tidak mengambil resource jaringan.
+
+Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka pengunggah ber-role Kurikulum, dengan token acak yang disimpan hash-nya, masa berlaku 30 menit, maksimal lima unggahan aktif, versi pratinjau dan provenance file. Kontak siswa/guru dan XML mentah tidak disimpan. Payload unggahan selesai dibersihkan; histori entri menyimpan hash file, referensi pelajaran/slot XML dan hasil tujuan. Unggahan kedaluwarsa tidak dapat dipakai dan payload dibersihkan saat pengguna mengunggah lagi. Tidak menjalankan impor contoh otomatis pada database pengguna.
 
 ## 7. Absensi — FINAL inti
 
@@ -165,8 +303,10 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 2. **Kurikulum:** siapkan tahun beserta dua semester → aktifkan kalender → baca kelas/penempatan dari Admin → susun penugasan/jadwal → publikasi → kelola transisi dengan pratinjau dan validasi.
 3. **Guru Mapel:** buka jadwal saya → catat absensi pelajaran → isi/finalkan jurnal → input/remedial/finalkan nilai.
 4. **Wali Kelas:** buka kelas saya → pantau kehadiran/kelengkapan → tindak lanjut.
-5. **Kepala Sekolah:** lihat dashboard dan laporan → keputusan khusus di luar alur rutin; untuk perpindahan tengah tahun, keputusan dicatat.
-6. **BK/Kesiswaan/Petugas Absensi:** buka data yang relevan → tindak lanjut/catat sesuai role.
+5. **Kepala Sekolah:** lihat dashboard dan laporan → keputusan khusus di luar alur rutin.
+6. **Kesiswaan:** lihat siswa/rekap kehadiran sekolah → catat pelanggaran dan pembinaan → tandai Perlu tindak lanjut atau Selesai.
+7. **BK:** buka siswa/kasus yang ditangani → catat bimbingan dan tindak lanjut → tandai Perlu tindak lanjut atau Selesai. Wali Kelas/Kepala Sekolah membaca sesuai cakupan bab 3B.
+8. **Petugas Absensi:** buka data yang relevan → catat/koreksi kehadiran sesuai cakupan tugas.
 
 ## 13. Acceptance criteria lintas modul
 
@@ -183,14 +323,16 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 | XM-09 | Siswa Hadir harian, pelajaran Belum Dicatat | Kedua catatan tetap berbeda |
 | XM-10 | Guru mengoreksi jurnal Final | Alasan dan versi sebelumnya tersimpan, tanpa approval Kepala Sekolah |
 | XM-11 | Nilai Final dikoreksi | Pemeriksaan Kurikulum, alasan, histori; tanpa approval Kepala Sekolah rutin |
-| XM-12 | Perpindahan tengah tahun | Keputusan Kepala Sekolah tercatat, histori penempatan tidak hilang |
+| XM-12 | Perpindahan tengah tahun | Kurikulum memindahkan dengan alasan, histori terjaga, tanpa approval Kepala Sekolah |
 | XM-13 | Transisi tahun ajaran | Pratinjau, validasi, eksekusi atomik, tanpa inbox approval digital |
 | XM-14 | Laporan berisi data kosong | Ditandai Belum Lengkap |
 | XM-15 | Admin mengubah role lalu membuka nilai tanpa role Guru | Akses nilai tetap ditolak |
 
 ## 14. OPEN yang benar-benar berdampak
 
-**P0:** rincian penutupan semester; kesiapan kelas/penempatan khusus; pembagian nilai guru pengampu bersama; fallback QR; definisi status anomali; komponen/TP/bobot/rumus/pembulatan/remedial; detail koreksi nilai Final oleh Kurikulum; katalog dan cakupan laporan. Putuskan **ketika fase terkait tiba**, bukan menunda fondasi.
+**P0:** rincian penutupan semester; kesiapan kelas/penempatan khusus; fallback QR; definisi status anomali; komponen/TP/bobot/rumus/pembulatan/remedial; detail koreksi nilai Final oleh Kurikulum; katalog dan cakupan laporan. Putuskan **ketika fase terkait tiba**, bukan menunda fondasi.
+
+**Ditunda di luar cakupan v1:** pengampu bersama dan pembagian hak nilai akhirnya. Generator yang dahulu ditunda telah diterapkan sesuai bab 6.1 dan D-025; batas ketersediaan individu guru belum tersedia. Pengembangan berikutnya mengikuti kebutuhan nyata dan keputusan pengguna.
 
 **P1:** pencatatan jadwal yang tidak terlaksana tanpa guru pengganti, format atribut opsional, pemberitahuan perubahan jadwal, tenggat jurnal/koreksi, format ekspor, penanganan aktivitas luar sekolah.
 
@@ -199,3 +341,7 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 ## 15. Definisi selesai
 
 Setiap fitur harus memenuhi workflow, hak server-side, validasi, histori/audit yang relevan, antarmuka yang bisa digunakan, tes positif/negatif, dan tes regresi. Bedakan dirancang, dibuat, diuji, dan siap dipakai.
+
+
+### Pilihan hasil dan kelas tujuan transisi — disetujui 23 Oktober 2026
+Setiap siswa dimulai dengan **Pilih hasil**, tanpa keputusan otomatis. Kelas 7/8 memiliki hasil Naik kelas (tujuan tingkat berikutnya), Tidak naik (tujuan tingkat sama), atau Keluar (tanpa tujuan). Kelas 9 hanya memiliki Lulus (tanpa tujuan), Tidak lulus — mengulang kelas 9 (wajib kelas 9 tahun tujuan), atau Keluar (tanpa tujuan). Dropdown tujuan muncul hanya untuk naik/mengulang dan hanya menawarkan tingkat yang sesuai. Perubahan ke Lulus/Keluar mengosongkan pilihan kelas lama; pratinjau menggunakan label bahasa Indonesia dan tanda — untuk tujuan yang tidak berlaku. Server memeriksa ulang aturan yang sama. Semua keputusan siswa harus ditetapkan sebelum menjalankan batch; keputusan yang belum ditetapkan tidak dianggap naik/lulus. Tidak membuat kelas 10, tidak menghapus riwayat, dan tidak mengubah status master siswa otomatis.
