@@ -1,6 +1,123 @@
 {{define "daily-quick"}}
 {{$d:=.Daily}}
-<section class="panel mb-5"><div class="table-heading"><form method="get" action="/absensi/harian/cepat" class="daily-filters" data-quick-navigation><div><label for="quick-date">Tanggal</label><input type="date" id="quick-date" name="date" value="{{$d.Date}}" data-instant-filter required></div><div><label for="quick-class">Tahun / kelas</label><select id="quick-class" name="class_id" data-instant-filter>{{range $d.Classes}}<option value="{{.ID}}" {{if eq $d.ClassID .ID}}selected{{end}}>{{.YearName}} · {{.Grade}}{{.Name}}</option>{{end}}</select></div></form><a class="button-secondary" href="/absensi/harian?class_id={{$d.ClassID}}&amp;date={{$d.Date}}">{{template "icon-back" .}}Daftar absensi</a></div><p class="text-sm text-gray-500">Pilih status dan jam datang sebenarnya, lalu simpan satu kelas. Baris yang sudah tersimpan dikunci.</p></section>
-{{if $d.Sheet.BlockReason}}<p class="mb-4 text-error-600">{{$d.Sheet.BlockReason}}</p>{{end}}
-{{if $d.Sheet.Class.ID}}<section class="panel"><form method="post" action="/absensi/harian/cepat?class_id={{$d.ClassID}}&amp;date={{$d.Date}}" data-daily-quick>{{.CSRF}}<input type="hidden" name="fingerprint" value="{{$d.Sheet.QuickFingerprint}}"><div class="table-heading"><h2>{{$d.Sheet.Class.Grade}}{{$d.Sheet.Class.Name}} · {{$d.Date}}</h2><div class="table-search"><label class="sr-only" for="quick-search">Cari siswa</label><input id="quick-search" type="search" placeholder="Cari siswa / NIS" data-quick-search></div></div><p class="mb-4 text-sm text-gray-500">{{if $d.Sheet.Policy}}Batas pencatatan baru: {{$d.Sheet.Policy.Deadline}} WIB · toleransi {{$d.Sheet.Policy.Tolerance}} menit.{{else}}Batas kedatangan belum diatur Kesiswaan; jam Hadir tetap wajib, keterlambatan belum dapat dinilai.{{end}}</p><div class="daily-quick-toolbar mb-4"><button class="button-secondary" type="button" data-quick-present>{{template "icon-check" .}}Tandai sisanya Hadir</button><div><label for="quick-time">Jam bersama (WIB, sudah diketahui)</label><input type="text" id="quick-time" name="common_time" value="{{$d.CommonTime}}" inputmode="numeric" placeholder="06:50" data-time-24 pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="8" data-quick-common-time></div><button class="button-secondary" type="button" data-quick-apply-time>Isi jam Hadir yang kosong</button></div><p class="mb-4 text-sm text-gray-500">Pilihan dan tombol massal berlaku untuk seluruh kelas, termasuk baris tersembunyi saat pencarian. Gunakan jam datang, bukan jam rekap.</p><div class="table-surface"><table class="app-table daily-quick-table"><thead><tr><th>No.</th><th>Siswa</th><th>Status</th><th>Datang (WIB, 24 jam)</th></tr></thead><tbody>{{range $i,$r:=$d.Sheet.Students}}{{$input:=index $d.QuickRows $r.StudentID}}<tr data-quick-row {{if $r.ID}}data-quick-locked{{end}}><td>{{rowNumber 1 $i}}</td><td><span class="font-medium">{{$r.Name}}</span><p class="text-xs text-gray-500">{{$r.NIS}}</p></td>{{if $r.ID}}<td><span class="status-badge status-badge--inactive">{{$r.StatusLabel}} · tersimpan</span><p class="mt-2 text-xs text-gray-500">{{$r.SourceLabel}} · {{$r.PunctualityLabel}}</p></td><td>{{if $r.Arrival}}{{$r.Arrival}}{{else}}—{{end}}</td>{{else}}<td><input type="hidden" name="student_ids" value="{{$r.StudentID}}"><fieldset class="quick-status-options" aria-label="Status {{$r.Name}}"><label><input type="radio" name="status_{{$r.StudentID}}" value="hadir" data-quick-status {{if eq $input.Status "hadir"}}checked{{end}}>Hadir</label><label><input type="radio" name="status_{{$r.StudentID}}" value="sakit" data-quick-status {{if eq $input.Status "sakit"}}checked{{end}}>Sakit</label><label><input type="radio" name="status_{{$r.StudentID}}" value="izin" data-quick-status {{if eq $input.Status "izin"}}checked{{end}}>Izin</label><label><input type="radio" name="status_{{$r.StudentID}}" value="alpa" data-quick-status {{if eq $input.Status "alpa"}}checked{{end}}>Alpa</label></fieldset><button type="button" class="quick-clear" data-quick-clear>Kosongkan pilihan</button></td><td><label class="sr-only" for="quick-arrival-{{$r.StudentID}}">Jam datang {{$r.Name}}</label><input type="text" id="quick-arrival-{{$r.StudentID}}" name="arrival_{{$r.StudentID}}" value="{{$input.Arrival}}" inputmode="numeric" placeholder="06:50" data-time-24 data-quick-arrival pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="8"></td>{{end}}</tr>{{else}}<tr><td colspan="4">Tidak ada siswa pada tanggal ini.</td></tr>{{end}}</tbody></table></div><div class="mt-5 grid gap-4 sm:grid-cols-2"><div><label for="quick-reason">Alasan pencatatan kelompok</label><select name="reason_kind" id="quick-reason" required><option value="">Pilih alasan</option><option value="manual" {{if eq $d.ReasonKind "manual"}}selected{{end}}>Pencatatan manual kelas</option><option value="scanner" {{if eq $d.ReasonKind "scanner"}}selected{{end}}>Pemindai bermasalah</option><option value="card" {{if eq $d.ReasonKind "card"}}selected{{end}}>Kartu QR hilang</option><option value="other" {{if eq $d.ReasonKind "other"}}selected{{end}}>Lainnya</option></select></div><div><label for="quick-note">Catatan tambahan (wajib untuk Lainnya)</label><textarea id="quick-note" name="reason_note" maxlength="400">{{$d.Reason}}</textarea></div></div><div class="daily-quick-footer mt-5"><p class="text-sm" data-quick-summary aria-live="polite"></p><button class="button-primary" type="submit" {{if or (not $d.Sheet.SchoolDay) $d.Sheet.BlockReason}}disabled{{end}}>{{template "icon-save" .}}Simpan absensi kelas</button></div></form></section>{{end}}
+<section class="panel mb-5">
+  <div class="table-heading">
+    <form method="get" action="/absensi/harian/cepat" class="daily-filters" data-quick-navigation>
+      <div>
+        <label for="quick-date">Tanggal</label>
+        <input type="date" id="quick-date" name="date" value="{{$d.Date}}" data-instant-filter required>
+      </div>
+      <div>
+        <label for="quick-class">Tahun / kelas</label>
+        <select id="quick-class" name="class_id" data-instant-filter>
+          {{range $d.Classes}}
+          <option value="{{.ID}}" {{if eq $d.ClassID .ID}}selected{{end}}>{{.YearName}} · {{.Grade}}{{.Name}}</option>
+          {{end}}
+        </select>
+      </div>
+    </form>
+    <a class="button-secondary" href="/absensi/harian?class_id={{$d.ClassID}}&amp;date={{$d.Date}}">{{template "icon-back" .}}Daftar absensi</a>
+  </div>
+  <p class="text-sm text-gray-500">Pilih status dan jam datang sebenarnya, lalu simpan satu kelas. Baris yang sudah tersimpan dikunci.</p>
+</section>
+
+{{if $d.Sheet.BlockReason}}
+<p class="mb-4 text-error-600">{{$d.Sheet.BlockReason}}</p>
+{{end}}
+
+{{if $d.Sheet.Class.ID}}
+<section class="panel">
+  <form method="post" action="/absensi/harian/cepat?class_id={{$d.ClassID}}&amp;date={{$d.Date}}" data-daily-quick>
+    {{.CSRF}}
+    <input type="hidden" name="fingerprint" value="{{$d.Sheet.QuickFingerprint}}">
+    <div class="table-heading">
+      <h2>{{$d.Sheet.Class.Grade}}{{$d.Sheet.Class.Name}} · {{$d.Date}}</h2>
+      <div class="table-search">
+        <label class="sr-only" for="quick-search">Cari siswa</label>
+        <input id="quick-search" type="search" placeholder="Cari siswa / NIS" data-quick-search>
+      </div>
+    </div>
+    <p class="mb-4 text-sm text-gray-500">{{if $d.Sheet.Policy}}Batas pencatatan baru: {{$d.Sheet.Policy.Deadline}} WIB · toleransi {{$d.Sheet.Policy.Tolerance}} menit.{{else}}Batas kedatangan belum diatur Kesiswaan; jam Hadir tetap wajib, keterlambatan belum dapat dinilai.{{end}}</p>
+    <div class="daily-quick-toolbar mb-4">
+      <button class="button-secondary" type="button" data-quick-present>{{template "icon-check" .}}Tandai sisanya Hadir</button>
+      <div>
+        <label for="quick-time">Jam bersama (WIB, sudah diketahui)</label>
+        <input type="text" id="quick-time" name="common_time" value="{{$d.CommonTime}}" inputmode="numeric" placeholder="06:50" data-time-24 pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="8" data-quick-common-time>
+      </div>
+      <button class="button-secondary" type="button" data-quick-apply-time>Isi jam Hadir yang kosong</button>
+    </div>
+    <p class="mb-4 text-sm text-gray-500">Pilihan dan tombol massal berlaku untuk seluruh kelas, termasuk baris tersembunyi saat pencarian. Gunakan jam datang, bukan jam rekap.</p>
+    <div class="table-surface">
+      <table class="app-table daily-quick-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Siswa</th>
+            <th>Status</th>
+            <th>Datang (WIB, 24 jam)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $i,$r:=$d.Sheet.Students}}
+          {{$input:=index $d.QuickRows $r.StudentID}}
+          <tr data-quick-row {{if $r.ID}}data-quick-locked{{end}}>
+            <td>{{rowNumber 1 $i}}</td>
+            <td>
+              <span class="font-medium">{{$r.Name}}</span>
+              <p class="text-xs text-gray-500">{{$r.NIS}}</p>
+            </td>
+            {{if $r.ID}}
+            <td>
+              <span class="status-badge status-badge--inactive">{{$r.StatusLabel}} · tersimpan</span>
+              <p class="mt-2 text-xs text-gray-500">{{$r.SourceLabel}} · {{$r.PunctualityLabel}}</p>
+            </td>
+            <td>{{if $r.Arrival}}{{$r.Arrival}}{{else}}—{{end}}</td>
+            {{else}}
+            <td>
+              <input type="hidden" name="student_ids" value="{{$r.StudentID}}">
+              <fieldset class="quick-status-options" aria-label="Status {{$r.Name}}">
+                <label><input type="radio" name="status_{{$r.StudentID}}" value="hadir" data-quick-status {{if eq $input.Status "hadir"}}checked{{end}}>Hadir</label>
+                <label><input type="radio" name="status_{{$r.StudentID}}" value="sakit" data-quick-status {{if eq $input.Status "sakit"}}checked{{end}}>Sakit</label>
+                <label><input type="radio" name="status_{{$r.StudentID}}" value="izin" data-quick-status {{if eq $input.Status "izin"}}checked{{end}}>Izin</label>
+                <label><input type="radio" name="status_{{$r.StudentID}}" value="alpa" data-quick-status {{if eq $input.Status "alpa"}}checked{{end}}>Alpa</label>
+              </fieldset>
+              <button type="button" class="quick-clear" data-quick-clear>Kosongkan pilihan</button>
+            </td>
+            <td>
+              <label class="sr-only" for="quick-arrival-{{$r.StudentID}}">Jam datang {{$r.Name}}</label>
+              <input type="text" id="quick-arrival-{{$r.StudentID}}" name="arrival_{{$r.StudentID}}" value="{{$input.Arrival}}" inputmode="numeric" placeholder="06:50" data-time-24 data-quick-arrival pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="8">
+            </td>
+            {{end}}
+          </tr>
+          {{else}}
+          <tr>
+            <td colspan="4">Tidak ada siswa pada tanggal ini.</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+      <div>
+        <label for="quick-reason">Alasan pencatatan kelompok</label>
+        <select name="reason_kind" id="quick-reason" required>
+          <option value="">Pilih alasan</option>
+          <option value="manual" {{if eq $d.ReasonKind "manual"}}selected{{end}}>Pencatatan manual kelas</option>
+          <option value="scanner" {{if eq $d.ReasonKind "scanner"}}selected{{end}}>Pemindai bermasalah</option>
+          <option value="card" {{if eq $d.ReasonKind "card"}}selected{{end}}>Kartu QR hilang</option>
+          <option value="other" {{if eq $d.ReasonKind "other"}}selected{{end}}>Lainnya</option>
+        </select>
+      </div>
+      <div>
+        <label for="quick-note">Catatan tambahan (wajib untuk Lainnya)</label>
+        <textarea id="quick-note" name="reason_note" maxlength="400">{{$d.Reason}}</textarea>
+      </div>
+    </div>
+    <div class="daily-quick-footer mt-5">
+      <p class="text-sm" data-quick-summary aria-live="polite"></p>
+      <button class="button-primary" type="submit" {{if or (not $d.Sheet.SchoolDay) $d.Sheet.BlockReason}}disabled{{end}}>{{template "icon-save" .}}Simpan absensi kelas</button>
+    </div>
+  </form>
+</section>
+{{end}}
 {{end}}
