@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -208,6 +209,70 @@ func TestImportBodyLimit(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatal("upload limit not enforced before parsing")
+	}
+}
+
+func TestQuickAttendanceMiddlewareBodyLimitByContentLength(t *testing.T) {
+	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: &auth.Store{}, Masters: &master.Store{}, Academics: &academic.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const limit = 32 << 10
+	for _, tc := range []struct {
+		name       string
+		length     int
+		wantStatus int
+	}{
+		{name: "above limit rejected by middleware", length: limit + 1, wantStatus: http.StatusRequestEntityTooLarge},
+		{name: "at limit passes content length check", length: limit, wantStatus: http.StatusForbidden},
+		{name: "below limit passes content length check", length: limit - 1, wantStatus: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.NewReader(strings.Repeat("x", tc.length))
+			r := httptest.NewRequest(http.MethodPost, "/absensi/harian/cepat", body)
+			r.ContentLength = int64(tc.length)
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, tc.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+type countedReader struct {
+	reader io.Reader
+	read   int
+}
+
+func (r *countedReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.read += n
+	return n, err
+}
+
+func TestQuickAttendanceMiddlewareBodyLimitUnknownLength(t *testing.T) {
+	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: &auth.Store{}, Masters: &master.Store{}, Academics: &academic.Store{}, CSRFKey: []byte(strings.Repeat("a", 32))})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const limit = 32 << 10
+	body := &countedReader{reader: strings.NewReader(strings.Repeat("x", limit*2))}
+	r := httptest.NewRequest(http.MethodPost, "/absensi/harian/cepat", nil)
+	r.ContentLength = -1
+	r.Body = io.NopCloser(body)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d want=%d (CSRF rejects before authentication/handler)", w.Code, http.StatusForbidden)
+	}
+	if body.read != limit+1 {
+		t.Fatalf("body bytes read=%d want exactly %d", body.read, limit+1)
 	}
 }
 
