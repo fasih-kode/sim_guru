@@ -208,7 +208,7 @@ func (a *application) require(role string, next http.HandlerFunc) http.HandlerFu
 	}
 }
 func (a *application) failure(w http.ResponseWriter, err error) {
-	// Never log raw SQL errors: driver errors can include submitted credentials or personal data.
+	// Jangan catat error SQL mentah karena dapat memuat kredensial atau data pribadi.
 	var pgError *pgconn.PgError
 	category := "storage_or_internal"
 	if errors.As(err, &pgError) {
@@ -216,7 +216,7 @@ func (a *application) failure(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		category = "timeout"
 	}
-	slog.Error("operasi akun gagal", "category", category)
+	slog.Error("operasi aplikasi gagal", "category", category)
 	http.Error(w, "Layanan belum dapat memproses permintaan. Coba kembali.", http.StatusInternalServerError)
 }
 func publicError(err error) (int, string) {
