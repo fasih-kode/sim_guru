@@ -5,7 +5,12 @@ Sumber otoritatif tetap berada di root:
 - [PRD frontend](../PRD_FE_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md) — antarmuka; mengikuti kebijakan PRD utama.
 - [Roadmap](../ROADMAP_IMPLEMENTASI_SIM_GURU_REVISI_PEMBAGIAN_TUGAS.md) — urutan implementasi; bukan bukti fitur selesai.
 
-Keputusan bertanda FINAL adalah keputusan terdokumentasi; OPEN belum diputuskan; RANCANGAN adalah rancangan teknis. Status implementasi aktual: fondasi, login/sesi, administrasi akses, master siswa/guru/mapel, impor Excel siswa/guru, dan pengelolaan tahun ajaran/semester/kelas tersedia. Penempatan normal satu siswa per tahun oleh Admin kini tersedia; transfer, penempatan khusus dan operasional akademik lanjut belum diimplementasikan.
+Keputusan bertanda FINAL adalah keputusan terdokumentasi; OPEN belum diputuskan; RANCANGAN adalah rancangan teknis. Status di bawah merangkum jalur implementasi utama dalam repository, bukan bukti bahwa seluruh tes atau UAT telah lulus.
+
+- **IMPLEMENTED:** fondasi aplikasi, login/sesi dan administrasi akses; master siswa/guru/mapel dan impor Excel; pengelolaan tahun ajaran, semester, kelas, penempatan awal, transisi akhir tahun, perpindahan/keluar/kembali siswa; penugasan wali/pengampu dan jadwal; Fase 8 urutan 1 (kalender absensi bertanggal serta tanggal mulai penempatan) dan urutan 2 (absensi harian siswa, kartu/pemindaian QR, input/koreksi manual dan histori), termasuk batas kedatangan serta pengisian cepat.
+- **PARTIAL:** Fase 8 secara keseluruhan. Absensi harian tersedia, tetapi absensi siswa per pelajaran dan kehadiran guru GPS/selfie belum tersedia. Pengujian otomatis tersedia untuk sejumlah alur; cakupan penuh dan UAT sekolah tidak dapat disimpulkan dari keberadaan implementasi.
+- **PLANNED:** absensi siswa per pelajaran, kehadiran guru GPS/selfie, jurnal mengajar, penilaian dan rekap akademik yang belum dibangun; lihat kebutuhan otoritatif dan roadmap.
+- **UNKNOWN:** kondisi deployment di luar repository serta hasil UAT/penerimaan operasional sekolah; dokumentasi kode tidak membuktikan hal tersebut.
 
 Penyelarasan kewenangan dan Ubuntu 26.04 disetujui pengguna pada 21 Oktober 2026; lihat [keputusan](DECISIONS.md). Kelas/penempatan awal milik Admin; persiapan kalender, mapel, wali/pengampu, jadwal, transisi dan pemeriksaan koreksi Final tetap Kurikulum. Penempatan normal Admin dan transisi akhir tahun Kurikulum kini tersedia. Perpindahan kelas tengah tahun Kurikulum dan pindah sekolah keluar Admin tersedia sesuai D-031. Lihat D-015 dan D-030; jangan menyamakan kewenangan yang disetujui dengan fitur yang sudah tersedia.
 
