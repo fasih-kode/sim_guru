@@ -21,13 +21,34 @@ type lessonAttendanceStudentView struct {
 }
 
 type lessonAttendanceView struct {
-	Date            string
-	Lessons         []academic.TimetableEntry
-	Lesson          *academic.TimetableEntry
-	Students        []lessonAttendanceStudentView
-	Fingerprint     string
-	Stale           bool
-	RevisionChanged bool
+	Date                               string
+	Lessons                            []academic.TimetableEntry
+	Lesson                             *academic.TimetableEntry
+	Students                           []lessonAttendanceStudentView
+	Records                            []lessonAttendanceRecordRow
+	Record                             *lessonAttendanceRecordView
+	CorrectionStatus, CorrectionReason string
+	Fingerprint                        string
+	Stale                              bool
+	RevisionChanged                    bool
+}
+
+type lessonAttendanceRecordRow struct {
+	ID                                                                              int64
+	Date, StudentName, NIS, ClassName, SubjectName, TeacherName, Status, RecordedAt string
+}
+
+type lessonAttendanceRecordView struct {
+	ID, StudentID, Version                                                                                                     int64
+	Date, StudentName, NIS, ClassName, SubjectName, TeacherName, Status, StartsAt, EndsAt, TimeSegments, RecordedAt, UpdatedAt string
+	PeriodStart, PeriodEnd                                                                                                     int
+	CanCorrect, Administrative                                                                                                 bool
+	History                                                                                                                    []lessonAttendanceHistoryView
+}
+
+type lessonAttendanceHistoryView struct {
+	Action, Kind, Actor, Before, After, Reason, At string
+	BeforeVersion, AfterVersion                    int64
 }
 
 func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
@@ -39,12 +60,25 @@ func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
 	if date == "" {
 		date = dailyToday()
 	}
-	meetings, err := a.options.Academics.TeacherLessonsOnDate(r.Context(), principal(r).ID, date)
+	actor := principal(r).ID
+	records, err := a.options.Academics.LessonAttendanceRecordsOnDate(r.Context(), actor, date)
 	if err != nil {
 		a.academicFailure(w, err)
 		return
 	}
-	v := &lessonAttendanceView{Date: date, Lessons: meetings.Lessons}
+	v := &lessonAttendanceView{Date: date}
+	for _, record := range records {
+		v.Records = append(v.Records, lessonAttendanceRecordRow{ID: record.ID, Date: record.Date, StudentName: record.StudentName, NIS: record.NIS, ClassName: record.ClassName, SubjectName: record.SubjectName, TeacherName: record.TeacherName, Status: lessonAttendanceStatusLabel(record.Status), RecordedAt: record.RecordedAt.In(time.FixedZone("WIB", 7*60*60)).Format("15:04 WIB")})
+	}
+	if principal(r).HasRole("guru_mapel") {
+		meetings, meetingErr := a.options.Academics.TeacherLessonsOnDate(r.Context(), actor, date)
+		if meetingErr == nil {
+			v.Lessons = meetings.Lessons
+		} else if !principal(r).HasRole("kurikulum") || !errors.Is(meetingErr, academic.ErrForbidden) {
+			a.academicFailure(w, meetingErr)
+			return
+		}
+	}
 	if raw := r.URL.Query().Get("entry_id"); raw != "" {
 		entryID, parseErr := strconv.ParseInt(raw, 10, 64)
 		if parseErr != nil || entryID < 1 {
@@ -56,7 +90,6 @@ func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
 			a.academicFailure(w, contextErr)
 			return
 		}
-		v.Lessons = meetings.Lessons
 		applyLessonAttendanceContext(v, context, nil)
 	}
 	page := view{Page: "lesson-attendance", Title: "Absensi per Pelajaran", LessonAttendance: v}
@@ -64,6 +97,92 @@ func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
 		page.Message = "Absensi per pelajaran berhasil disimpan."
 	}
 	a.render(w, r, "page", http.StatusOK, page)
+}
+
+func (a *application) lessonAttendanceRecord(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	record, err := a.options.Academics.LessonAttendanceRecord(r.Context(), principal(r).ID, id)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	v := &lessonAttendanceView{Date: record.Date, Record: toLessonAttendanceRecordView(record)}
+	page := view{Page: "lesson-attendance", Title: "Absensi per Pelajaran", LessonAttendance: v}
+	if r.URL.Query().Get("edit") == "1" && record.CanCorrect {
+		page.ModalOpen = true
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		page.Message = "Koreksi absensi per pelajaran tersimpan dan histori diperbarui."
+	} else if r.URL.Query().Get("unchanged") == "1" {
+		page.Message = "Status sudah sama; tidak ada perubahan atau histori koreksi baru."
+	}
+	a.render(w, r, "page", http.StatusOK, page)
+}
+
+func (a *application) correctLessonAttendance(w http.ResponseWriter, r *http.Request) {
+	if !parseForm(w, r) {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	postedID, parseErr := strconv.ParseInt(r.PostForm.Get("attendance_id"), 10, 64)
+	version, versionErr := strconv.ParseInt(r.PostForm.Get("expected_version"), 10, 64)
+	if parseErr != nil || versionErr != nil || postedID != id {
+		http.NotFound(w, r)
+		return
+	}
+	input := academic.LessonAttendanceCorrectionInput{AttendanceID: postedID, ExpectedVersion: version, NewStatus: r.PostForm.Get("new_status"), Reason: r.PostForm.Get("reason")}
+	result, err := a.options.Academics.CorrectLessonAttendance(r.Context(), principal(r).ID, input)
+	if err == nil {
+		if result.Noop {
+			http.Redirect(w, r, fmt.Sprintf("/jadwal-saya/absensi/catatan/%d?unchanged=1", id), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/jadwal-saya/absensi/catatan/%d?saved=1", id), http.StatusSeeOther)
+		return
+	}
+	code, message := academicError(err)
+	if code >= http.StatusInternalServerError {
+		a.failure(w, err)
+		return
+	}
+	latest, readErr := a.options.Academics.LessonAttendanceRecord(r.Context(), principal(r).ID, id)
+	if readErr != nil {
+		a.academicFailure(w, readErr)
+		return
+	}
+	v := &lessonAttendanceView{Date: latest.Date, Record: toLessonAttendanceRecordView(latest), CorrectionStatus: input.NewStatus, CorrectionReason: input.Reason}
+	page := view{Page: "lesson-attendance", Title: "Absensi per Pelajaran", LessonAttendance: v, Error: message}
+	if errors.Is(err, academic.ErrConflict) {
+		page.Error = "Catatan telah berubah sejak dibuka. Status terkini ditampilkan; periksa ulang sebelum mengirim koreksi baru."
+		code = http.StatusConflict
+	} else {
+		page.ModalOpen = true
+	}
+	a.render(w, r, "page", code, page)
+}
+
+func toLessonAttendanceRecordView(record academic.LessonAttendanceHistoricalRecord) *lessonAttendanceRecordView {
+	v := &lessonAttendanceRecordView{ID: record.ID, StudentID: record.StudentID, Version: record.Version, Date: record.Date, StudentName: record.StudentName, NIS: record.NIS, ClassName: record.ClassName, SubjectName: record.SubjectName, TeacherName: record.TeacherName, Status: lessonAttendanceStatusLabel(record.Status), StartsAt: record.StartsAt, EndsAt: record.EndsAt, TimeSegments: record.TimeSegments, PeriodStart: record.PeriodStart, PeriodEnd: record.PeriodEnd, RecordedAt: record.RecordedAt.In(time.FixedZone("WIB", 7*60*60)).Format("02 Jan 2006 15:04 WIB"), UpdatedAt: record.UpdatedAt.In(time.FixedZone("WIB", 7*60*60)).Format("02 Jan 2006 15:04 WIB"), CanCorrect: record.CanCorrect, Administrative: record.Administrative}
+	for _, entry := range record.History {
+		kind := "Guru Mapel"
+		if entry.Kind == "kurikulum" {
+			kind = "Kurikulum · koreksi administratif"
+		}
+		before, after := lessonAttendanceStatusLabel(entry.Before), lessonAttendanceStatusLabel(entry.After)
+		if entry.Action == "recorded" {
+			before = "Belum Dicatat"
+		}
+		v.History = append(v.History, lessonAttendanceHistoryView{Action: entry.Action, Kind: kind, Actor: entry.Actor, Before: before, After: after, Reason: entry.Reason, BeforeVersion: entry.BeforeVersion, AfterVersion: entry.AfterVersion, At: entry.At.In(time.FixedZone("WIB", 7*60*60)).Format("02 Jan 2006 15:04 WIB")})
+	}
+	return v
 }
 
 func (a *application) saveLessonAttendance(w http.ResponseWriter, r *http.Request) {

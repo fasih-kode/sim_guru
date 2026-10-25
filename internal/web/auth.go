@@ -103,6 +103,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "daily-scanner", "attendance"
 	case path == "/absensi/harian":
 		return "daily-attendance", "attendance"
+	case strings.HasPrefix(path, "/jadwal-saya/absensi"):
+		if user != nil && user.HasRole("kurikulum") && !user.HasRole("guru_mapel") {
+			return "lesson-attendance", "curriculum-schedule"
+		}
+		return "lesson-attendance", "schedule"
 	case strings.HasPrefix(path, "/jadwal-saya/"):
 		return "my-schedule", "schedule"
 	case path == "/":

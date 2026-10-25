@@ -145,7 +145,10 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 		t.Fatal("GET selected an attendance status without user action")
 	}
 	get(adminClient, dateURL, http.StatusForbidden)
-	get(curriculumClient, dateURL, http.StatusForbidden)
+	curriculumAttendance := get(curriculumClient, dateURL, http.StatusOK)
+	if strings.Contains(curriculumAttendance, "Buka roster") {
+		t.Fatal("Kurikulum received an authorized teacher's meeting roster")
+	}
 	get(combinedClient, dateURL, http.StatusForbidden)
 	get(unassignedClient, dateURL, http.StatusForbidden)
 	get(teacherClient, dateURL+"&entry_id=999999999", http.StatusNotFound)
@@ -439,6 +442,104 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 	must(db.QueryRow(`SELECT count(*) FROM app.student_daily_attendance WHERE student_id=$1`, studentID).Scan(&after))
 	if after != before {
 		t.Fatal("read-only GET/route altered daily attendance")
+	}
+
+	var attendanceID int64
+	if err := db.QueryRow(`SELECT id FROM app.student_lesson_attendance WHERE timetable_entry_id=$1 AND meeting_date='2020-07-07' AND student_id=$2`, entryID, studentID).Scan(&attendanceID); err != nil {
+		t.Fatal(err)
+	}
+	historyURL := fmt.Sprintf("/jadwal-saya/absensi/catatan/%d", attendanceID)
+	historyPage := get(teacherClient, historyURL, http.StatusOK)
+	if !strings.Contains(historyPage, "Detail / histori") && !strings.Contains(historyPage, "Histori perubahan") {
+		t.Fatal("historical teacher did not receive the permanent record page")
+	}
+	get(curriculumClient, historyURL, http.StatusNotFound)
+	get(replacementClient, historyURL, http.StatusNotFound)
+	get(adminClient, historyURL, http.StatusForbidden)
+	if !strings.Contains(historyPage, "Koreksi") || !strings.Contains(historyPage, "Lihat histori") {
+		t.Fatal("authorized teacher correction controls are missing")
+	}
+	correctionFormPage := get(teacherClient, historyURL+"?edit=1", http.StatusOK)
+	if !strings.Contains(correctionFormPage, `id="lesson-attendance-correction-modal"`) || !strings.Contains(correctionFormPage, `name="expected_version" value="1"`) {
+		t.Fatal("correction modal or expected version is missing")
+	}
+	correctionToken := csrfRE.FindStringSubmatch(correctionFormPage)
+	if len(correctionToken) != 2 {
+		t.Fatal("correction form CSRF token missing")
+	}
+	correctionURL := fmt.Sprintf("/jadwal-saya/absensi/catatan/%d/koreksi", attendanceID)
+	withoutCSRF, postErr := teacherClient.PostForm(server.URL+correctionURL, url.Values{"attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"1"}, "new_status": {"sakit"}, "reason": {"Koreksi melalui HTTP"}})
+	must(postErr)
+	withoutCSRF.Body.Close()
+	if withoutCSRF.StatusCode != http.StatusForbidden {
+		t.Fatalf("correction without CSRF got HTTP %d, want 403", withoutCSRF.StatusCode)
+	}
+	invalidCorrection := url.Values{"gorilla.csrf.Token": {correctionToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"1"}, "new_status": {"izin"}, "reason": {" "}}
+	invalidResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, invalidCorrection)
+	must(postErr)
+	invalidBody, _ := io.ReadAll(invalidResponse.Body)
+	invalidResponse.Body.Close()
+	if invalidResponse.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(invalidBody), "lesson-attendance-correction-modal") || !strings.Contains(string(invalidBody), `option value="izin" selected`) {
+		t.Fatal("invalid correction did not retain the selected status and reopen the modal")
+	}
+	correctionForm := url.Values{"gorilla.csrf.Token": {correctionToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"1"}, "new_status": {"sakit"}, "reason": {"Koreksi melalui HTTP"}}
+	correctionResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, correctionForm)
+	must(postErr)
+	correctionResponse.Body.Close()
+	if correctionResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("authorized correction got HTTP %d, want 303", correctionResponse.StatusCode)
+	}
+	correctedPage := get(teacherClient, historyURL+"?saved=1", http.StatusOK)
+	for _, expected := range []string{"Koreksi absensi per pelajaran tersimpan", "Sakit", "Koreksi melalui HTTP", "versi 1 → 2"} {
+		if !strings.Contains(correctedPage, expected) {
+			t.Fatalf("corrected history page missing %q", expected)
+		}
+	}
+	staleCorrectionForm := cloneValues(correctionForm)
+	staleCorrectionForm.Set("new_status", "alpa")
+	staleResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, staleCorrectionForm)
+	must(postErr)
+	staleCorrectionBody, _ := io.ReadAll(staleResponse.Body)
+	staleResponse.Body.Close()
+	if staleResponse.StatusCode != http.StatusConflict || !strings.Contains(string(staleCorrectionBody), "Catatan telah berubah") || !strings.Contains(string(staleCorrectionBody), "Sakit") || strings.Contains(string(staleCorrectionBody), `name="expected_version"`) {
+		t.Fatal("stale correction did not return 409 with the current authorized status")
+	}
+	if !strings.Contains(get(teacherClient, dateURL, http.StatusOK), fmt.Sprintf("/catatan/%d", attendanceID)) {
+		t.Fatal("historical attendance is not discoverable from the dated list")
+	}
+
+	// Kurikulum memperoleh akses administratif setelah role Guru Mapel historis dicabut.
+	_, err = db.Exec(`DELETE FROM app.user_roles WHERE user_id=$1 AND role_code='guru_mapel'`, teacher.ID)
+	must(err)
+	curriculumDateList := get(curriculumClient, dateURL, http.StatusOK)
+	if !strings.Contains(curriculumDateList, fmt.Sprintf("/catatan/%d", attendanceID)) {
+		t.Fatal("Kurikulum fallback cannot discover eligible historical attendance")
+	}
+	curriculumDetail := get(curriculumClient, historyURL, http.StatusOK)
+	if !strings.Contains(curriculumDetail, "Koreksi administratif") {
+		t.Fatal("Kurikulum fallback is not labeled as administrative correction")
+	}
+	curToken := csrfRE.FindStringSubmatch(curriculumDetail)
+	if len(curToken) != 2 {
+		t.Fatal("administrative correction form CSRF token missing")
+	}
+	adminCorrection := url.Values{"gorilla.csrf.Token": {curToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"2"}, "new_status": {"izin"}, "reason": {"Koreksi administratif melalui HTTP"}}
+	adminCorrectionResponse, postErr := curriculumClient.PostForm(server.URL+correctionURL, adminCorrection)
+	must(postErr)
+	adminCorrectionResponse.Body.Close()
+	if adminCorrectionResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Kurikulum fallback got HTTP %d, want 303", adminCorrectionResponse.StatusCode)
+	}
+	adminCorrected := get(curriculumClient, historyURL, http.StatusOK)
+	if !strings.Contains(adminCorrected, "Kurikulum · koreksi administratif") || !strings.Contains(adminCorrected, "Koreksi administratif melalui HTTP") {
+		t.Fatal("administrative actor or reason is absent from the visible history")
+	}
+	if afterDaily, queryErr := func() (int, error) {
+		var count int
+		e := db.QueryRow(`SELECT count(*) FROM app.student_daily_attendance WHERE student_id=$1`, studentID).Scan(&count)
+		return count, e
+	}(); queryErr != nil || afterDaily != before {
+		t.Fatalf("lesson correction altered daily attendance: before=%d after=%d err=%v", before, afterDaily, queryErr)
 	}
 }
 
