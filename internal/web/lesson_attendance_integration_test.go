@@ -475,12 +475,32 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 		t.Fatalf("correction without CSRF got HTTP %d, want 403", withoutCSRF.StatusCode)
 	}
 	invalidCorrection := url.Values{"gorilla.csrf.Token": {correctionToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"1"}, "new_status": {"izin"}, "reason": {" "}}
+	var invalidBeforeStatus string
+	var invalidBeforeVersion, invalidBeforeHistory int
+	must(db.QueryRow(`SELECT status,version,(SELECT count(*) FROM app.student_lesson_attendance_history WHERE attendance_id=$1) FROM app.student_lesson_attendance WHERE id=$1`, attendanceID).Scan(&invalidBeforeStatus, &invalidBeforeVersion, &invalidBeforeHistory))
 	invalidResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, invalidCorrection)
 	must(postErr)
 	invalidBody, _ := io.ReadAll(invalidResponse.Body)
 	invalidResponse.Body.Close()
-	if invalidResponse.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(invalidBody), "lesson-attendance-correction-modal") || !strings.Contains(string(invalidBody), `option value="izin" selected`) {
+	invalidHTML := string(invalidBody)
+	dialogStart := strings.Index(invalidHTML, `<dialog id="lesson-attendance-correction-modal"`)
+	if dialogStart < 0 {
+		t.Fatal("invalid correction did not reopen the correction modal")
+	}
+	dialogEnd := strings.Index(invalidHTML[dialogStart:], "</dialog>")
+	if dialogEnd < 0 {
+		t.Fatal("invalid correction response has an incomplete modal")
+	}
+	modalHTML := invalidHTML[dialogStart : dialogStart+dialogEnd]
+	validationMessage := "Alasan koreksi wajib diisi, maksimal 500 karakter."
+	if invalidResponse.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(modalHTML, validationMessage) || !strings.Contains(modalHTML, `role="alert"`) || !strings.Contains(modalHTML, `option value="izin" selected`) || !strings.Contains(modalHTML, `<textarea id="lesson-correction-reason" name="reason" maxlength="500" required> </textarea>`) || strings.Count(invalidHTML, validationMessage) != 1 {
 		t.Fatal("invalid correction did not retain the selected status and reopen the modal")
+	}
+	var invalidAfterStatus string
+	var invalidAfterVersion, invalidAfterHistory int
+	must(db.QueryRow(`SELECT status,version,(SELECT count(*) FROM app.student_lesson_attendance_history WHERE attendance_id=$1) FROM app.student_lesson_attendance WHERE id=$1`, attendanceID).Scan(&invalidAfterStatus, &invalidAfterVersion, &invalidAfterHistory))
+	if invalidAfterStatus != invalidBeforeStatus || invalidAfterVersion != invalidBeforeVersion || invalidAfterHistory != invalidBeforeHistory {
+		t.Fatal("invalid correction changed stored status, version, or history")
 	}
 	correctionForm := url.Values{"gorilla.csrf.Token": {correctionToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {"1"}, "new_status": {"sakit"}, "reason": {"Koreksi melalui HTTP"}}
 	correctionResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, correctionForm)
