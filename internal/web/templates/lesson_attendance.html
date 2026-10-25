@@ -1,0 +1,62 @@
+{{define "lesson-attendance"}}
+<section class="panel space-y-5">
+  <div class="table-heading">
+    <div>
+      <h1 class="text-xl font-semibold">Absensi per Pelajaran</h1>
+      <p class="mt-2 text-sm text-gray-500">Pilih tanggal dan pertemuan pada jadwal terbit. Daftar siswa mengikuti penempatan yang berlaku pada tanggal tersebut.</p>
+    </div>
+    <a class="button-secondary" href="/jadwal-saya">{{template "icon-back" .}}Kembali ke Jadwal Saya</a>
+  </div>
+
+  <form method="get" action="/jadwal-saya/absensi" class="flex flex-wrap items-end gap-4">
+    <div>
+      <label for="lesson-attendance-date">Tanggal pembelajaran</label>
+      <input id="lesson-attendance-date" name="date" type="date" value="{{.LessonAttendance.Date}}" required>
+    </div>
+    <button class="button-primary" type="submit">Tampilkan pertemuan</button>
+  </form>
+
+  {{if .LessonAttendance.Lesson}}
+  <section class="rounded-xl border border-gray-200 p-4" aria-labelledby="lesson-context-title">
+    <h2 id="lesson-context-title" class="text-lg font-semibold">{{.LessonAttendance.Lesson.ClassName}} · {{.LessonAttendance.Lesson.SubjectName}}</h2>
+    <dl class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div><dt class="text-sm text-gray-500">Guru pengampu</dt><dd class="mt-1 font-medium">{{.LessonAttendance.Lesson.TeacherName}}</dd></div>
+      <div><dt class="text-sm text-gray-500">Tanggal</dt><dd class="mt-1 font-medium">{{.LessonAttendance.Date}}</dd></div>
+      <div><dt class="text-sm text-gray-500">Jam pelajaran</dt><dd class="mt-1 font-medium">{{.LessonAttendance.Lesson.PeriodStart}}{{if ne .LessonAttendance.Lesson.PeriodStart .LessonAttendance.Lesson.PeriodEnd}}–{{.LessonAttendance.Lesson.PeriodEnd}}{{end}}</dd></div>
+      <div><dt class="text-sm text-gray-500">Waktu</dt><dd class="mt-1 font-medium">{{.LessonAttendance.Lesson.TimeSegments}}</dd></div>
+    </dl>
+  </section>
+  <div class="table-heading"><h2>Daftar siswa · {{len .LessonAttendance.Students}} siswa</h2><span class="status-badge status-badge--inactive">Tampilan baca-saja</span></div>
+  <div class="table-surface">
+    <table class="app-table">
+      <thead><tr><th>No.</th><th>Nama siswa</th><th>NIS</th><th>Status awal</th></tr></thead>
+      <tbody>
+        {{range $i,$student := .LessonAttendance.Students}}
+        <tr><td>{{rowNumber 1 $i}}</td><td>{{$student.Name}}</td><td>{{$student.NIS}}</td><td><span class="status-badge status-badge--inactive">Belum Dicatat</span></td></tr>
+        {{else}}
+        <tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada siswa pada roster kelas untuk tanggal ini.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <section class="space-y-3" aria-labelledby="lesson-list-title">
+    <h2 id="lesson-list-title" class="text-lg font-semibold">Pertemuan pada {{.LessonAttendance.Date}}</h2>
+    {{if .LessonAttendance.Lessons}}
+    <div class="table-surface">
+      <table class="app-table">
+        <thead><tr><th>No.</th><th>Kelas</th><th>Mata pelajaran</th><th>Jam</th><th>Waktu</th><th>Tindakan</th></tr></thead>
+        <tbody>
+          {{range $i,$lesson := .LessonAttendance.Lessons}}
+          <tr><td>{{rowNumber 1 $i}}</td><td>{{$lesson.ClassName}}</td><td>{{$lesson.SubjectName}}</td><td>{{$lesson.PeriodStart}}{{if ne $lesson.PeriodStart $lesson.PeriodEnd}}–{{$lesson.PeriodEnd}}{{end}}</td><td>{{$lesson.TimeSegments}}</td><td><a class="button-secondary" href="/jadwal-saya/absensi?date={{$.LessonAttendance.Date}}&amp;entry_id={{$lesson.ID}}">Buka roster</a></td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="rounded-xl border border-gray-200 p-5 text-sm text-gray-500">Tidak ada pertemuan terbit yang dapat dibuka pada tanggal ini. Tanggal libur, di luar hari sekolah, atau tanpa penugasan/jadwal akan menampilkan daftar kosong.</p>
+    {{end}}
+  </section>
+  {{end}}
+</section>
+{{end}}

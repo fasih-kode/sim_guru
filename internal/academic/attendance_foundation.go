@@ -344,8 +344,25 @@ func (s *Store) AttendanceContextOnDate(ctx context.Context, actor, class int64,
 	if e = s.authorize(ctx, tx, actor, "petugas_absensi", "guru_mapel", "wali_kelas", "kesiswaan", "kepala_sekolah"); e != nil {
 		return result, e
 	}
+	return s.attendanceContextOnDateTx(ctx, tx, actor, class, date, 0)
+}
+
+func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor, class int64, date string, teacherOnly int64) (AttendanceContext, error) {
+	result := AttendanceContext{Date: date}
+	if _, e := civilDate(date); e != nil {
+		return result, e
+	}
+	if teacherOnly == 0 {
+		if e := s.authorize(ctx, tx, actor, "petugas_absensi", "guru_mapel", "wali_kelas", "kesiswaan", "kepala_sekolah"); e != nil {
+			return result, e
+		}
+	} else {
+		if e := s.authorize(ctx, tx, actor, "guru_mapel"); e != nil {
+			return result, e
+		}
+	}
 	var year int64
-	e = tx.QueryRowContext(ctx, `SELECT school_year_id FROM app.classes WHERE id=$1`, class).Scan(&year)
+	e := tx.QueryRowContext(ctx, `SELECT school_year_id FROM app.classes WHERE id=$1`, class).Scan(&year)
 	if errors.Is(e, sql.ErrNoRows) {
 		return result, ErrNotFound
 	}
@@ -353,7 +370,11 @@ func (s *Store) AttendanceContextOnDate(ctx context.Context, actor, class int64,
 		return result, e
 	}
 	var allowed bool
-	e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles r WHERE r.user_id=$1 AND (r.role_code IN('petugas_absensi','kesiswaan','kepala_sekolah') OR (r.role_code='wali_kelas' AND EXISTS(SELECT 1 FROM app.homeroom_assignments h JOIN app.teachers t ON t.id=h.teacher_id WHERE h.class_id=$2 AND t.user_id=$1 AND t.active)) OR (r.role_code='guru_mapel' AND EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.class_id=$2 AND t.user_id=$1 AND t.active AND a.semester_id IN(SELECT sc.semester_id FROM app.semester_calendars sc WHERE $3::date BETWEEN sc.starts_on AND sc.ends_on) AND a.effective_from<=$3::date AND (a.effective_until IS NULL OR a.effective_until>$3::date)))))`, actor, class, date).Scan(&allowed)
+	if teacherOnly > 0 {
+		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.class_id=$2 AND a.teacher_id=$4 AND t.user_id=$1 AND t.active AND a.semester_id IN(SELECT sc.semester_id FROM app.semester_calendars sc WHERE $3::date BETWEEN sc.starts_on AND sc.ends_on) AND a.effective_from<=$3::date AND (a.effective_until IS NULL OR a.effective_until>$3::date))`, actor, class, date, teacherOnly).Scan(&allowed)
+	} else {
+		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles r WHERE r.user_id=$1 AND (r.role_code IN('petugas_absensi','kesiswaan','kepala_sekolah') OR (r.role_code='wali_kelas' AND EXISTS(SELECT 1 FROM app.homeroom_assignments h JOIN app.teachers t ON t.id=h.teacher_id WHERE h.class_id=$2 AND t.user_id=$1 AND t.active)) OR (r.role_code='guru_mapel' AND EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.class_id=$2 AND t.user_id=$1 AND t.active AND a.semester_id IN(SELECT sc.semester_id FROM app.semester_calendars sc WHERE $3::date BETWEEN sc.starts_on AND sc.ends_on) AND a.effective_from<=$3::date AND (a.effective_until IS NULL OR a.effective_until>$3::date)))))`, actor, class, date).Scan(&allowed)
+	}
 	if e != nil {
 		return result, e
 	}
@@ -411,7 +432,9 @@ func (s *Store) AttendanceContextOnDate(ctx context.Context, actor, class int64,
 		return result, nil
 	}
 	var broad bool
-	e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles r WHERE r.user_id=$1 AND (r.role_code IN('petugas_absensi','kesiswaan','kepala_sekolah') OR (r.role_code='wali_kelas' AND EXISTS(SELECT 1 FROM app.homeroom_assignments h JOIN app.teachers t ON t.id=h.teacher_id WHERE h.class_id=$2 AND t.user_id=$1 AND t.active))))`, actor, class).Scan(&broad)
+	if teacherOnly == 0 {
+		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles r WHERE r.user_id=$1 AND (r.role_code IN('petugas_absensi','kesiswaan','kepala_sekolah') OR (r.role_code='wali_kelas' AND EXISTS(SELECT 1 FROM app.homeroom_assignments h JOIN app.teachers t ON t.id=h.teacher_id WHERE h.class_id=$2 AND t.user_id=$1 AND t.active))))`, actor, class).Scan(&broad)
+	}
 	if e != nil {
 		return result, e
 	}
@@ -428,7 +451,11 @@ func (s *Store) AttendanceContextOnDate(ctx context.Context, actor, class int64,
 		if v.ClassID == class && v.Weekday == day {
 			if !broad {
 				var own bool
-				e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.class_id=$2 AND a.subject_id=$3 AND a.teacher_id=$4 AND t.user_id=$1 AND t.active AND a.semester_id=$5 AND a.effective_from<=$6::date AND (a.effective_until IS NULL OR a.effective_until>$6::date))`, actor, class, v.SubjectID, v.TeacherID, result.SemesterID, date).Scan(&own)
+				if teacherOnly > 0 {
+					e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.id=$7 AND a.class_id=$2 AND a.subject_id=$3 AND a.teacher_id=$4 AND t.user_id=$1 AND t.active AND a.semester_id=$5 AND a.effective_from<=$6::date AND (a.effective_until IS NULL OR a.effective_until>$6::date))`, actor, class, v.SubjectID, v.TeacherID, result.SemesterID, date, v.AssignmentID).Scan(&own)
+				} else {
+					e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.class_id=$2 AND a.subject_id=$3 AND a.teacher_id=$4 AND t.user_id=$1 AND t.active AND a.semester_id=$5 AND a.effective_from<=$6::date AND (a.effective_until IS NULL OR a.effective_until>$6::date))`, actor, class, v.SubjectID, v.TeacherID, result.SemesterID, date).Scan(&own)
+				}
 				if e != nil {
 					return result, e
 				}

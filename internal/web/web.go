@@ -75,6 +75,7 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /absensi/kartu", a.require("petugas_absensi", a.studentCards))
 	mux.HandleFunc("POST /absensi/kartu", a.require("petugas_absensi", a.studentCards))
 	mux.HandleFunc("GET /absensi/kartu/{id}/cetak", a.require("petugas_absensi", a.printStudentCard))
+	mux.HandleFunc("GET /jadwal-saya/absensi", a.require("guru_mapel", a.lessonAttendance))
 	mux.HandleFunc("GET /akademik/kalender-sekolah", a.require("kurikulum", a.schoolCalendar))
 	mux.HandleFunc("POST /akademik/kalender-sekolah", a.require("kurikulum", a.schoolCalendar))
 	mux.HandleFunc("GET /admin/placements/dates/bulk", a.require("admin", a.placementDatesBulk))

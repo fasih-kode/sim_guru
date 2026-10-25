@@ -58,9 +58,10 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	must(s.SaveSchoolDateException(ctx, cur.ID, sem, 3, SchoolDateException{Date: "2020-07-11"}, true, "Kembali mingguan"))
+	must(s.SaveSchoolDateException(ctx, cur.ID, sem, 4, SchoolDateException{Date: "2020-07-21", SchoolDay: false, Label: "Libur khusus"}, false, "Hari libur"))
 	cal, e = s.SemesterCalendar(ctx, cur.ID, sem)
 	must(e)
-	if len(cal.Exceptions) != 1 || cal.Version != 4 {
+	if len(cal.Exceptions) != 2 || cal.Version != 5 {
 		t.Fatal(cal)
 	}
 	if e = s.SaveSchoolDateException(ctx, cur.ID, sem, 4, SchoolDateException{Date: "2021-01-01", Label: "outside"}, false, "invalid"); e == nil {
@@ -100,17 +101,17 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 		must(s.SaveCurriculumRule(ctx, cur.ID, CurriculumRule{SemesterID: sem, Grade: 7, ClassID: a.ID, SubjectID: sub, WeeklyJP: 1, Meetings: []int{1}}))
 	}
 	must(s.SaveCurriculumRule(ctx, cur.ID, CurriculumRule{SemesterID: sem, Grade: 7, ClassID: b.ID, SubjectID: subject, WeeklyJP: 0, Meetings: []int{}}))
-	must(s.SaveLessonPeriod(ctx, cur.ID, sem, 1, 1, "07:00", "07:40"))
-	must(s.SaveLessonPeriod(ctx, cur.ID, sem, 1, 2, "07:40", "08:20"))
+	must(s.SaveLessonPeriod(ctx, cur.ID, sem, 2, 1, "07:00", "07:40"))
+	must(s.SaveLessonPeriod(ctx, cur.ID, sem, 2, 2, "07:40", "08:20"))
 	makeRevision := func(date string, first int, publish bool) int64 {
 		t.Helper()
 		d, e := time.Parse("2006-01-02", date)
 		must(e)
 		rev, e := s.CreateTimetableDraft(ctx, cur.ID, sem, d)
 		must(e)
-		must(s.AddTimetableEntry(ctx, cur.ID, rev.ID, 1, a.ID, subject, teacherID, first, first))
+		must(s.AddTimetableEntry(ctx, cur.ID, rev.ID, 2, a.ID, subject, teacherID, first, first))
 		second := 3 - first
-		must(s.AddTimetableEntry(ctx, cur.ID, rev.ID, 1, a.ID, otherSubject, otherTeacher, second, second))
+		must(s.AddTimetableEntry(ctx, cur.ID, rev.ID, 2, a.ID, otherSubject, otherTeacher, second, second))
 		if publish {
 			must(s.PublishTimetable(ctx, cur.ID, rev.ID))
 		}
@@ -124,17 +125,74 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 	if first.RevisionID != r1 {
 		t.Fatal("historical revision lost")
 	}
-	later, e := s.AttendanceContextOnDate(ctx, teacher.ID, a.ID, "2020-07-27")
+	later, e := s.AttendanceContextOnDate(ctx, teacher.ID, a.ID, "2020-07-28")
 	must(e)
 	if later.RevisionID != r2 || len(later.Lessons) != 1 || later.Lessons[0].PeriodStart != 2 {
 		t.Fatal("draft/future/mapel scope leaked", later)
 	}
-	all, e := s.AttendanceContextOnDate(ctx, officer.ID, a.ID, "2020-07-27")
+	all, e := s.AttendanceContextOnDate(ctx, officer.ID, a.ID, "2020-07-28")
 	must(e)
 	if len(all.Lessons) != 2 {
 		t.Fatal("school reader lost lessons")
 	}
 
+	// Guru hanya melihat pertemuan dari penugasan sendiri; jadwal historis mengikuti tanggal.
+	historical, e := s.TeacherLessonsOnDate(ctx, teacher.ID, "2020-07-07")
+	must(e)
+	if len(historical.Lessons) != 1 || historical.Lessons[0].PeriodStart != 1 {
+		t.Fatal("historical published revision or teacher scope incorrect", historical)
+	}
+	var datedStudent int64
+	must(db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES('Siswa Bertanggal Pertemuan','2013-01-01','L') RETURNING id`).Scan(&datedStudent))
+	if _, e = s.CreatePlacement(ctx, admin.ID, datedStudent, a.ID, "2020-07-28"); e != nil {
+		t.Fatal(e)
+	}
+	meetings, e := s.TeacherLessonsOnDate(ctx, teacher.ID, "2020-07-28")
+	must(e)
+	if len(meetings.Lessons) != 1 || meetings.Lessons[0].PeriodStart != 2 {
+		t.Fatal("draft revision was used or role widened meeting scope", meetings)
+	}
+	lesson, e := s.TeacherLessonAttendanceOnDate(ctx, teacher.ID, "2020-07-28", meetings.Lessons[0].ID)
+	must(e)
+	containsDatedStudent := false
+	for _, student := range lesson.Students {
+		containsDatedStudent = containsDatedStudent || student.ID == datedStudent
+	}
+	if !containsDatedStudent || lesson.Lesson.TeacherID != teacherID {
+		t.Fatal("lesson roster did not use placement date", lesson)
+	}
+	var otherEntryID int64
+	for _, entry := range all.Lessons {
+		if entry.TeacherID == otherTeacher {
+			otherEntryID = entry.ID
+		}
+	}
+	if otherEntryID == 0 {
+		t.Fatal("other-subject fixture missing")
+	}
+	if _, e = s.TeacherLessonAttendanceOnDate(ctx, teacher.ID, "2020-07-28", otherEntryID); !errors.Is(e, ErrNotFound) {
+		t.Fatal("teacher opened another subject's meeting", e)
+	}
+	otherLessons, e := s.TeacherLessonsOnDate(ctx, other.ID, "2020-07-28")
+	must(e)
+	if len(otherLessons.Lessons) != 1 || otherLessons.Lessons[0].SubjectID != otherSubject {
+		t.Fatal("same-class different-subject assignment scope incorrect", otherLessons)
+	}
+	if _, e = s.TeacherLessonAttendanceOnDate(ctx, other.ID, "2020-07-28", meetings.Lessons[0].ID); !errors.Is(e, ErrNotFound) {
+		t.Fatal("teacher for another subject opened the meeting", e)
+	}
+	if _, e = s.TeacherLessonsOnDate(ctx, admin.ID, "2020-07-28"); !errors.Is(e, ErrForbidden) {
+		t.Fatal("Admin without Guru Mapel opened lessons", e)
+	}
+	holidayLessons, e := s.TeacherLessonsOnDate(ctx, teacher.ID, "2020-07-21")
+	must(e)
+	if len(holidayLessons.Lessons) != 0 {
+		t.Fatal("holiday produced an openable meeting", holidayLessons)
+	}
+	noTeacher, _ := testutil.User(t, db, "guru_mapel")
+	if _, e = s.TeacherLessonsOnDate(ctx, noTeacher.ID, "2020-07-28"); !errors.Is(e, ErrForbidden) {
+		t.Fatal("unmapped teacher opened lessons", e)
+	}
 	for _, u := range []int64{officer.ID, teacher.ID, wali.ID, kes.ID, head.ID} {
 		v, e := s.AttendanceContextOnDate(ctx, u, a.ID, "2020-07-07")
 		must(e)
@@ -197,12 +255,12 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 	// A combined Admin+Guru role still has only the assigned lesson scope.
 	_, e = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'admin')`, teacher.ID)
 	must(e)
-	scoped, e := s.AttendanceContextOnDate(ctx, teacher.ID, a.ID, "2020-07-27")
+	scoped, e := s.AttendanceContextOnDate(ctx, teacher.ID, a.ID, "2020-07-28")
 	must(e)
 	if len(scoped.Lessons) != 1 {
 		t.Fatal("Admin role widened teacher scope")
 	}
-	if _, e = s.AttendanceContextOnDate(ctx, teacher.ID, b.ID, "2020-07-27"); !errors.Is(e, ErrForbidden) {
+	if _, e = s.AttendanceContextOnDate(ctx, teacher.ID, b.ID, "2020-07-28"); !errors.Is(e, ErrForbidden) {
 		t.Fatal("Admin role widened class scope", e)
 	}
 	var futureStudent int64
@@ -216,10 +274,21 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 	if len(before.Students) != 0 || len(after.Students) != 1 {
 		t.Fatal("dated placement boundary ignored")
 	}
+	// Role tambahan tidak memperluas daftar pertemuan di luar penugasan Guru Mapel.
+	_, e = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'kesiswaan')`, teacher.ID)
+	must(e)
+	combined, e := s.TeacherLessonsOnDate(ctx, teacher.ID, "2020-07-28")
+	must(e)
+	if len(combined.Lessons) != 1 || combined.Lessons[0].TeacherID != teacherID {
+		t.Fatal("combined role widened lesson scope", combined)
+	}
 	_, e = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, teacher.ID)
 	must(e)
 	if _, e = s.AttendanceContextOnDate(ctx, teacher.ID, a.ID, "2020-07-27"); !errors.Is(e, ErrForbidden) {
 		t.Fatal("inactive account read context", e)
+	}
+	if _, e = s.TeacherLessonsOnDate(ctx, teacher.ID, "2020-07-28"); !errors.Is(e, ErrForbidden) {
+		t.Fatal("inactive account read lesson list", e)
 	}
 	history, e := s.FoundationHistory(ctx, admin.ID, "placement_date", p)
 	must(e)

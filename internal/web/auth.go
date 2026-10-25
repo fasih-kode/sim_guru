@@ -64,6 +64,7 @@ type view struct {
 	Placement                   *placementView
 	PlacementHistory            []academic.PlacementHistory
 	Transition                  *transitionView
+	LessonAttendance            *lessonAttendanceView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -102,6 +103,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "daily-scanner", "attendance"
 	case path == "/absensi/harian":
 		return "daily-attendance", "attendance"
+	case strings.HasPrefix(path, "/jadwal-saya/"):
+		return "my-schedule", "schedule"
 	case path == "/":
 		return "home", "menu"
 	case strings.HasPrefix(path, "/akademik/penempatan/"):
