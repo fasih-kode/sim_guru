@@ -5,8 +5,11 @@ package academic
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -366,6 +369,40 @@ func TestSaveLessonAttendanceIntegration(t *testing.T) {
 	if revisionID != f.revisionID || startsAt != "00:01:00" || segments != "00:01–01:20 · jeda · 01:30–02:10" || recordedAt.IsZero() || recordedAt.Before(meetingStart) {
 		t.Fatal("lesson snapshot incomplete", revisionID, startsAt, segments, recordedAt)
 	}
+	var savedSnapshot map[string]any
+	if err = json.Unmarshal(snapshotBefore, &savedSnapshot); err != nil {
+		t.Fatal("stored snapshot is invalid JSON", err)
+	}
+	encodedSnapshot := string(snapshotBefore)
+	if strings.Contains(encodedSnapshot, "plan_snapshot") || strings.Contains(encodedSnapshot, "exceptions") || len(snapshotBefore) > 1800 {
+		t.Fatal("stored snapshot contains excessive shared context", len(snapshotBefore), encodedSnapshot)
+	}
+	meetingContext, ok := savedSnapshot["meeting"].(map[string]any)
+	if !ok {
+		t.Fatal("stored meeting context is missing", savedSnapshot)
+	}
+	periods, ok := meetingContext["periods"].([]any)
+	if !ok || len(periods) != 3 {
+		t.Fatal("snapshot should retain only periods for this lesson", savedSnapshot)
+	}
+	var afterState struct {
+		Status      string          `json:"status"`
+		MeetingDate string          `json:"meeting_date"`
+		Snapshot    json.RawMessage `json:"snapshot"`
+	}
+	if err = f.db.QueryRow(`SELECT h.after_state FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id=$1 AND a.meeting_date=$2 AND a.student_id=$3 AND h.action='recorded'`, f.entryID, f.date, f.students[0]).Scan(&snapshotBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(snapshotBefore, &afterState); err != nil {
+		t.Fatal("initial history is invalid JSON", err)
+	}
+	var historySnapshot map[string]any
+	if err = json.Unmarshal(afterState.Snapshot, &historySnapshot); err != nil {
+		t.Fatal("initial history snapshot is invalid JSON", err)
+	}
+	if afterState.Status != "hadir" || afterState.MeetingDate != f.date || !reflect.DeepEqual(savedSnapshot, historySnapshot) {
+		t.Fatal("stored attendance and initial history do not match", afterState)
+	}
 	// Revisi yang berlaku pada/tanggal sebelum bukti harus ditolak.
 	backdated := f.buildDraftForTest(t, f.date)
 	if err = f.store.PublishTimetable(f.ctx, f.curriculum.ID, backdated.ID); err == nil {
@@ -393,6 +430,71 @@ func TestSaveLessonAttendanceIntegration(t *testing.T) {
 	}
 	if dailyCount != 0 {
 		t.Fatal("lesson attendance changed daily attendance", dailyCount)
+	}
+}
+
+func TestLessonAttendanceFingerprintTracksContextChangesIntegration(t *testing.T) {
+	f := newLessonAttendanceFixture(t)
+	teacherID := f.teacher.ID
+	initial := f.formFor(t, teacherID, f.date, f.entryID).Fingerprint
+	if initial == "" {
+		t.Fatal("initial fingerprint missing")
+	}
+
+	var assignmentID int64
+	if err := f.db.QueryRow(`SELECT assignment_id FROM app.weekly_timetable_entries WHERE id=$1`, f.entryID).Scan(&assignmentID); err != nil {
+		t.Fatal(err)
+	}
+	meetingDate, err := time.Parse("2006-01-02", f.date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignmentUntil := meetingDate.AddDate(0, 0, 10).Format("2006-01-02")
+	if _, err = f.db.Exec(`UPDATE app.teaching_assignments SET effective_until=$1::date WHERE id=$2`, assignmentUntil, assignmentID); err != nil {
+		t.Fatal(err)
+	}
+	afterAssignment := f.formFor(t, teacherID, f.date, f.entryID).Fingerprint
+	if afterAssignment == initial {
+		t.Fatal("assignment change did not invalidate fingerprint")
+	}
+
+	if _, err = f.db.Exec(`UPDATE app.classes SET version=version+1 WHERE id=$1`, f.classID); err != nil {
+		t.Fatal(err)
+	}
+	afterClass := f.formFor(t, teacherID, f.date, f.entryID).Fingerprint
+	if afterClass == afterAssignment {
+		t.Fatal("class version change did not invalidate fingerprint")
+	}
+
+	calendar, err := f.store.SemesterCalendar(f.ctx, f.curriculum.ID, f.semester)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dateAfterMeeting := meetingDate.AddDate(0, 0, 1).Format("2006-01-02")
+	if err = f.store.SaveSchoolDateException(f.ctx, f.curriculum.ID, f.semester, calendar.Version, SchoolDateException{Date: dateAfterMeeting, SchoolDay: false, Label: "Perubahan setelah pertemuan"}, false, "Uji perubahan konteks fingerprint"); err != nil {
+		t.Fatal(err)
+	}
+	afterCalendar := f.formFor(t, teacherID, f.date, f.entryID).Fingerprint
+	if afterCalendar == afterClass {
+		t.Fatal("calendar change did not invalidate fingerprint")
+	}
+
+	effective := meetingDate.AddDate(0, 0, -1).Format("2006-01-02")
+	draft := f.buildDraftForTest(t, effective)
+	if err = f.store.PublishTimetable(f.ctx, f.curriculum.ID, draft.ID); err != nil {
+		t.Fatal("changed published schedule should be selectable before attendance exists", err)
+	}
+	weekday := int(meetingDate.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	var entryID int64
+	if err = f.db.QueryRow(`SELECT id FROM app.weekly_timetable_entries WHERE revision_id=$1 AND weekday=$2`, draft.ID, weekday).Scan(&entryID); err != nil {
+		t.Fatal(err)
+	}
+	afterSchedule := f.formFor(t, teacherID, f.date, entryID).Fingerprint
+	if afterSchedule == afterCalendar {
+		t.Fatal("published schedule change did not invalidate fingerprint")
 	}
 }
 

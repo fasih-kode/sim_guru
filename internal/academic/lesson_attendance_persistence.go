@@ -30,23 +30,67 @@ type LessonAttendanceSaveResult struct {
 }
 
 type lessonAttendanceSnapshot struct {
-	ActorID, TeacherID     int64
-	SemesterID, RevisionID int64
-	Date                   string
-	SchoolDay              bool
-	Calendar               SemesterCalendar
-	Lesson                 TimetableEntry
-	Periods                []LessonPeriod
-	PlanSnapshot           json.RawMessage
-	Student                AttendanceStudent
-	Assignment             lessonAssignmentSnapshot
-	ClassVersion           int64
-	TimeSegments           string
+	Meeting lessonAttendanceMeetingSnapshot `json:"meeting"`
+	Student lessonAttendanceStudentSnapshot `json:"student"`
 }
 
-type lessonAssignmentSnapshot struct {
-	ID, SemesterID, ClassID, SubjectID, TeacherID int64
-	EffectiveFrom, EffectiveUntil                 string
+type lessonAttendanceMeetingSnapshot struct {
+	SemesterID   int64                              `json:"semester_id"`
+	RevisionID   int64                              `json:"revision_id"`
+	Date         string                             `json:"meeting_date"`
+	Weekday      int                                `json:"weekday"`
+	SchoolDay    bool                               `json:"school_day"`
+	Calendar     lessonAttendanceCalendarSnapshot   `json:"calendar"`
+	Lesson       lessonAttendanceLessonSnapshot     `json:"lesson"`
+	Assignment   lessonAttendanceAssignmentSnapshot `json:"assignment"`
+	Periods      []LessonPeriod                     `json:"periods"`
+	Segments     string                             `json:"time_segments"`
+	ClassVersion int64                              `json:"class_version"`
+}
+
+type lessonAttendanceCalendarSnapshot struct {
+	Version        int64  `json:"version"`
+	StartsOn       string `json:"starts_on"`
+	EndsOn         string `json:"ends_on"`
+	Weekday        int    `json:"weekday"`
+	SchoolDay      bool   `json:"school_day"`
+	ExceptionLabel string `json:"exception_label,omitempty"`
+}
+
+type lessonAttendanceLessonSnapshot struct {
+	EntryID      int64  `json:"entry_id"`
+	AssignmentID int64  `json:"assignment_id"`
+	ClassID      int64  `json:"class_id"`
+	ClassName    string `json:"class_name"`
+	SubjectID    int64  `json:"subject_id"`
+	SubjectName  string `json:"subject_name"`
+	TeacherID    int64  `json:"teacher_id"`
+	TeacherName  string `json:"teacher_name"`
+	PeriodStart  int    `json:"period_start"`
+	PeriodEnd    int    `json:"period_end"`
+	StartsAt     string `json:"starts_at"`
+	EndsAt       string `json:"ends_at"`
+}
+
+type lessonAttendanceAssignmentSnapshot struct {
+	ID             int64  `json:"id"`
+	SemesterID     int64  `json:"semester_id"`
+	ClassID        int64  `json:"class_id"`
+	SubjectID      int64  `json:"subject_id"`
+	TeacherID      int64  `json:"teacher_id"`
+	EffectiveFrom  string `json:"effective_from"`
+	EffectiveUntil string `json:"effective_until,omitempty"`
+}
+
+type lessonAttendanceStudentSnapshot struct {
+	ID               int64  `json:"id"`
+	PlacementID      int64  `json:"placement_id"`
+	PlacementVersion int64  `json:"placement_version"`
+	Version          int64  `json:"version"`
+	StartsOn         string `json:"starts_on"`
+	Name             string `json:"name"`
+	NIS              string `json:"nis"`
+	NISN             string `json:"nisn,omitempty"`
 }
 
 type lessonFingerprintPayload struct {
@@ -62,7 +106,7 @@ type lessonFingerprintPayload struct {
 type lessonMeetingFingerprint struct {
 	Lesson       TimetableEntry
 	ClassVersion int64
-	Assignment   lessonAssignmentSnapshot
+	Assignment   lessonAttendanceAssignmentSnapshot
 	Periods      []LessonPeriod
 	PlanSnapshot json.RawMessage
 }
@@ -166,20 +210,19 @@ func (s *Store) SaveLessonAttendance(ctx context.Context, actor int64, in Lesson
 		return result, err
 	}
 
+	meetingSnapshot, err := lessonAttendanceMeetingSnapshotForEntry(ctx, tx, contextForDate, calendar, *lesson)
+	if err != nil {
+		return result, err
+	}
 	snapshotByStudent := make(map[int64][]byte, len(selected))
-	segmentsByStudent := make(map[int64]string, len(selected))
 	for _, choice := range selected {
 		student := roster[choice.StudentID]
-		snapshot, err := lessonAttendanceSnapshotForStudent(ctx, tx, actor, teacherID, contextForDate, calendar, *lesson, student)
-		if err != nil {
-			return result, err
-		}
+		snapshot := lessonAttendanceSnapshotForStudent(meetingSnapshot, student)
 		encoded, err := json.Marshal(snapshot)
 		if err != nil {
 			return result, err
 		}
 		snapshotByStudent[choice.StudentID] = encoded
-		segmentsByStudent[choice.StudentID] = snapshot.TimeSegments
 	}
 
 	// Periksa semua baris lebih dahulu agar retry identik tidak mengubah bukti lama.
@@ -206,7 +249,6 @@ func (s *Store) SaveLessonAttendance(ctx context.Context, actor int64, in Lesson
 	}
 
 	for _, choice := range selected {
-		student := roster[choice.StudentID]
 		var exists bool
 		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_lesson_attendance WHERE timetable_entry_id=$1 AND meeting_date=$2 AND student_id=$3)`, lesson.ID, in.Date, choice.StudentID).Scan(&exists)
 		if err != nil {
@@ -215,8 +257,9 @@ func (s *Store) SaveLessonAttendance(ctx context.Context, actor int64, in Lesson
 		if exists {
 			continue
 		}
+		student := roster[choice.StudentID]
 		var id int64
-		err = tx.QueryRowContext(ctx, `INSERT INTO app.student_lesson_attendance(timetable_entry_id,revision_id,assignment_id,semester_id,meeting_date,student_id,placement_id,class_id,subject_id,teacher_id,student_name,nis,class_name,subject_name,teacher_name,period_start,period_end,starts_at,ends_at,time_segments,snapshot,status,recorded_by,recorded_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,$24) RETURNING id`, lesson.ID, contextForDate.RevisionID, lesson.AssignmentID, contextForDate.SemesterID, in.Date, student.ID, student.PlacementID, lesson.ClassID, lesson.SubjectID, lesson.TeacherID, student.Name, student.NIS, lesson.ClassName, lesson.SubjectName, lesson.TeacherName, lesson.PeriodStart, lesson.PeriodEnd, lesson.StartsAt, lesson.EndsAt, segmentsByStudent[choice.StudentID], snapshotByStudent[choice.StudentID], choice.Status, actor, dbNow).Scan(&id)
+		err = tx.QueryRowContext(ctx, `INSERT INTO app.student_lesson_attendance(timetable_entry_id,revision_id,assignment_id,semester_id,meeting_date,student_id,placement_id,class_id,subject_id,teacher_id,student_name,nis,class_name,subject_name,teacher_name,period_start,period_end,starts_at,ends_at,time_segments,snapshot,status,recorded_by,recorded_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,$24) RETURNING id`, lesson.ID, contextForDate.RevisionID, lesson.AssignmentID, contextForDate.SemesterID, in.Date, student.ID, student.PlacementID, lesson.ClassID, lesson.SubjectID, lesson.TeacherID, student.Name, student.NIS, lesson.ClassName, lesson.SubjectName, lesson.TeacherName, lesson.PeriodStart, lesson.PeriodEnd, lesson.StartsAt, lesson.EndsAt, meetingSnapshot.Segments, snapshotByStudent[choice.StudentID], choice.Status, actor, dbNow).Scan(&id)
 		if err != nil {
 			return result, dbError(err)
 		}
@@ -269,29 +312,86 @@ func validateLessonAttendanceAt(now time.Time, date, startsAt string) error {
 	return nil
 }
 
-func lessonAttendanceSnapshotForStudent(ctx context.Context, tx *sql.Tx, actor, teacherID int64, attendance AttendanceContext, calendar SemesterCalendar, lesson TimetableEntry, student AttendanceStudent) (lessonAttendanceSnapshot, error) {
-	snapshot := lessonAttendanceSnapshot{ActorID: actor, TeacherID: teacherID, SemesterID: attendance.SemesterID, RevisionID: attendance.RevisionID, Date: attendance.Date, SchoolDay: attendance.SchoolDay, Calendar: calendar, Lesson: lesson, Student: student}
-	if err := tx.QueryRowContext(ctx, `SELECT version FROM app.classes WHERE id=$1`, lesson.ClassID).Scan(&snapshot.ClassVersion); err != nil {
-		return snapshot, err
+func lessonAttendanceMeetingSnapshotForEntry(ctx context.Context, tx *sql.Tx, attendance AttendanceContext, calendar SemesterCalendar, lesson TimetableEntry) (lessonAttendanceMeetingSnapshot, error) {
+	var classVersion int64
+	if err := tx.QueryRowContext(ctx, `SELECT version FROM app.classes WHERE id=$1`, lesson.ClassID).Scan(&classVersion); err != nil {
+		return lessonAttendanceMeetingSnapshot{}, err
 	}
-	err := tx.QueryRowContext(ctx, `SELECT id,semester_id,class_id,subject_id,teacher_id,effective_from::text,coalesce(effective_until::text,'') FROM app.teaching_assignments WHERE id=$1 AND semester_id=$2 AND class_id=$3 AND subject_id=$4 AND teacher_id=$5 AND effective_from<=$6::date AND (effective_until IS NULL OR effective_until>$6::date)`, lesson.AssignmentID, attendance.SemesterID, lesson.ClassID, lesson.SubjectID, teacherID, attendance.Date).Scan(&snapshot.Assignment.ID, &snapshot.Assignment.SemesterID, &snapshot.Assignment.ClassID, &snapshot.Assignment.SubjectID, &snapshot.Assignment.TeacherID, &snapshot.Assignment.EffectiveFrom, &snapshot.Assignment.EffectiveUntil)
+	var assignment lessonAttendanceAssignmentSnapshot
+	err := tx.QueryRowContext(ctx, `SELECT id,semester_id,class_id,subject_id,teacher_id,effective_from::text,coalesce(effective_until::text,'') FROM app.teaching_assignments WHERE id=$1 AND semester_id=$2 AND class_id=$3 AND subject_id=$4 AND teacher_id=$5 AND effective_from<=$6::date AND (effective_until IS NULL OR effective_until>$6::date)`, lesson.AssignmentID, attendance.SemesterID, lesson.ClassID, lesson.SubjectID, lesson.TeacherID, attendance.Date).Scan(&assignment.ID, &assignment.SemesterID, &assignment.ClassID, &assignment.SubjectID, &assignment.TeacherID, &assignment.EffectiveFrom, &assignment.EffectiveUntil)
 	if errors.Is(err, sql.ErrNoRows) {
-		return snapshot, ErrConflict
+		return lessonAttendanceMeetingSnapshot{}, ErrConflict
 	}
 	if err != nil {
-		return snapshot, err
+		return lessonAttendanceMeetingSnapshot{}, err
 	}
-	snapshot.Periods, err = queryRevisionPeriods(ctx, tx, attendance.RevisionID)
+	periods, err := queryRevisionPeriods(ctx, tx, attendance.RevisionID)
 	if err != nil {
-		return snapshot, err
+		return lessonAttendanceMeetingSnapshot{}, err
 	}
-	snapshot.TimeSegments = entrySegments(lesson, snapshot.Periods)
-	var planSnapshot []byte
-	if err = tx.QueryRowContext(ctx, `SELECT plan_snapshot FROM app.weekly_timetable_revisions WHERE id=$1 AND status='published'`, attendance.RevisionID).Scan(&planSnapshot); err != nil {
-		return snapshot, err
+	return newLessonAttendanceMeetingSnapshot(attendance, calendar, lesson, classVersion, assignment, periods)
+}
+
+func newLessonAttendanceMeetingSnapshot(attendance AttendanceContext, calendar SemesterCalendar, lesson TimetableEntry, classVersion int64, assignment lessonAttendanceAssignmentSnapshot, periods []LessonPeriod) (lessonAttendanceMeetingSnapshot, error) {
+	snapshot := lessonAttendanceMeetingSnapshot{
+		SemesterID:   attendance.SemesterID,
+		RevisionID:   attendance.RevisionID,
+		Date:         attendance.Date,
+		SchoolDay:    attendance.SchoolDay,
+		Assignment:   assignment,
+		ClassVersion: classVersion,
+		Lesson: lessonAttendanceLessonSnapshot{
+			EntryID: lesson.ID, AssignmentID: lesson.AssignmentID,
+			ClassID: lesson.ClassID, ClassName: lesson.ClassName,
+			SubjectID: lesson.SubjectID, SubjectName: lesson.SubjectName,
+			TeacherID: lesson.TeacherID, TeacherName: lesson.TeacherName,
+			PeriodStart: lesson.PeriodStart, PeriodEnd: lesson.PeriodEnd,
+			StartsAt: lesson.StartsAt, EndsAt: lesson.EndsAt,
+		},
 	}
-	snapshot.PlanSnapshot = json.RawMessage(planSnapshot)
+	date, err := civilDate(attendance.Date)
+	if err != nil {
+		return lessonAttendanceMeetingSnapshot{}, err
+	}
+	weekday := int(date.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	snapshot.Weekday = weekday
+	snapshot.Calendar = lessonAttendanceCalendarSnapshot{
+		Version: calendar.Version, StartsOn: calendar.StartsOn, EndsOn: calendar.EndsOn,
+		Weekday: weekday, SchoolDay: attendance.SchoolDay,
+	}
+	for _, exception := range calendar.Exceptions {
+		if exception.Date == attendance.Date {
+			snapshot.Calendar.ExceptionLabel = exception.Label
+			break
+		}
+	}
+	snapshot.Periods = lessonPeriodsForEntry(periods, lesson)
+	snapshot.Segments = entrySegments(lesson, snapshot.Periods)
 	return snapshot, nil
+}
+
+func lessonPeriodsForEntry(periods []LessonPeriod, lesson TimetableEntry) []LessonPeriod {
+	var related []LessonPeriod
+	for _, period := range periods {
+		if period.Weekday == lesson.Weekday && period.Number >= lesson.PeriodStart && period.Number <= lesson.PeriodEnd {
+			related = append(related, period)
+		}
+	}
+	return related
+}
+
+func lessonAttendanceSnapshotForStudent(meeting lessonAttendanceMeetingSnapshot, student AttendanceStudent) lessonAttendanceSnapshot {
+	return lessonAttendanceSnapshot{
+		Meeting: meeting,
+		Student: lessonAttendanceStudentSnapshot{
+			ID: student.ID, PlacementID: student.PlacementID,
+			PlacementVersion: student.PlacementVersion, Version: student.StudentVersion,
+			StartsOn: student.StartsOn, Name: student.Name, NIS: student.NIS, NISN: student.NISN,
+		},
+	}
 }
 
 // lessonAttendanceFingerprint mengikat form pada data yang benar-benar dibaca.
