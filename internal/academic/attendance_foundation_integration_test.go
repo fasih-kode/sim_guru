@@ -296,3 +296,117 @@ func TestAttendanceFoundationIntegration(t *testing.T) {
 		t.Fatal("failed operation wrote history", len(history))
 	}
 }
+
+func TestTeacherLessonRosterFailureIsolationIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	s := &Store{DB: db}
+	ctx := context.Background()
+	admin, _ := testutil.User(t, db, "admin")
+	cur, _ := testutil.User(t, db, "kurikulum")
+	teacher, _ := testutil.User(t, db, "guru_mapel")
+	other, _ := testutil.User(t, db, "guru_mapel")
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	year, err := s.CreateYear(ctx, cur.ID, "Roster isolation "+testutil.Random(t)[:10])
+	must(err)
+	must(s.ActivateYear(ctx, cur.ID, year.ID))
+	classA, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "A", "", 0)
+	must(err)
+	classB, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "B", "", 0)
+	must(err)
+	var semester int64
+	must(db.QueryRow(`SELECT id FROM app.semesters WHERE school_year_id=$1 AND number=1`, year.ID).Scan(&semester))
+	must(s.SaveSemesterCalendar(ctx, cur.ID, SemesterCalendar{SemesterID: semester, StartsOn: "2020-07-01", EndsOn: "2020-12-31", SchoolDays: []int{1, 2, 3, 4, 5}}, "Test roster isolation"))
+
+	var teacherID, otherTeacherID, subjectA, subjectB int64
+	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Roster 7A/7B',$1) RETURNING id`, teacher.ID).Scan(&teacherID))
+	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Roster Lain',$1) RETURNING id`, other.ID).Scan(&otherTeacherID))
+	must(db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel Roster Utama') RETURNING id`, "RI"+testutil.Random(t)[:10]).Scan(&subjectA))
+	must(db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel Roster Lain') RETURNING id`, "RJ"+testutil.Random(t)[:10]).Scan(&subjectB))
+	starts, _ := time.Parse("2006-01-02", "2020-07-01")
+	must(s.AssignTeacher(ctx, cur.ID, semester, classA.ID, subjectA, teacherID, starts))
+	must(s.AssignTeacher(ctx, cur.ID, semester, classB.ID, subjectA, teacherID, starts))
+	must(s.AssignTeacher(ctx, cur.ID, semester, classA.ID, subjectB, otherTeacherID, starts))
+	must(s.SaveCurriculumRule(ctx, cur.ID, CurriculumRule{SemesterID: semester, Grade: 7, ClassID: classA.ID, SubjectID: subjectA, WeeklyJP: 1, Meetings: []int{1}}))
+	must(s.SaveCurriculumRule(ctx, cur.ID, CurriculumRule{SemesterID: semester, Grade: 7, ClassID: classB.ID, SubjectID: subjectA, WeeklyJP: 1, Meetings: []int{1}}))
+	must(s.SaveCurriculumRule(ctx, cur.ID, CurriculumRule{SemesterID: semester, Grade: 7, ClassID: classA.ID, SubjectID: subjectB, WeeklyJP: 1, Meetings: []int{1}}))
+	must(s.SaveLessonDay(ctx, cur.ID, semester, 2, []LessonPeriod{
+		{Number: 1, StartsAt: "07:00", EndsAt: "07:40"},
+		{Number: 2, StartsAt: "07:40", EndsAt: "08:20"},
+		{Number: 3, StartsAt: "08:20", EndsAt: "09:00"},
+	}))
+
+	var studentA, studentB, placementB int64
+	must(db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES('Siswa Roster Lengkap','2013-01-01','L') RETURNING id`).Scan(&studentA))
+	must(db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES('Siswa Roster Belum Lengkap','2013-01-01','L') RETURNING id`).Scan(&studentB))
+	_, err = s.CreatePlacement(ctx, admin.ID, studentA, classA.ID, "2020-07-01")
+	must(err)
+	placementB, err = s.CreatePlacement(ctx, admin.ID, studentB, classB.ID)
+	must(err)
+
+	revision, err := s.CreateTimetableDraft(ctx, cur.ID, semester, starts)
+	must(err)
+	must(s.AddTimetableEntry(ctx, cur.ID, revision.ID, 2, classA.ID, subjectA, teacherID, 1, 1))
+	must(s.AddTimetableEntry(ctx, cur.ID, revision.ID, 2, classB.ID, subjectA, teacherID, 2, 2))
+	must(s.AddTimetableEntry(ctx, cur.ID, revision.ID, 2, classA.ID, subjectB, otherTeacherID, 3, 3))
+	must(s.PublishTimetable(ctx, cur.ID, revision.ID))
+
+	// Role kesiswaan yang ditambahkan tidak boleh membuka cakupan roster Guru Mapel.
+	_, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'kesiswaan')`, teacher.ID)
+	must(err)
+	const date = "2020-07-07"
+	meetings, err := s.TeacherLessonsOnDate(ctx, teacher.ID, date)
+	must(err)
+	if len(meetings.Lessons) != 2 {
+		t.Fatalf("expected only the two assigned meetings, got %d", len(meetings.Lessons))
+	}
+	entries := make(map[int64]TimetableEntry)
+	for _, lesson := range meetings.Lessons {
+		entries[lesson.ClassID] = lesson
+	}
+	if entries[classA.ID].ID == 0 || entries[classB.ID].ID == 0 {
+		t.Fatalf("published meetings for both assigned classes must remain listed: %+v", meetings.Lessons)
+	}
+	var dailyBefore, dailyAfter int
+	must(db.QueryRow(`SELECT count(*) FROM app.student_daily_attendance WHERE student_id IN($1,$2)`, studentA, studentB).Scan(&dailyBefore))
+	lessonA, err := s.TeacherLessonAttendanceOnDate(ctx, teacher.ID, date, entries[classA.ID].ID)
+	if err != nil {
+		t.Fatalf("complete 7A roster should open: %v", err)
+	}
+	if len(lessonA.Students) != 1 || lessonA.Students[0].ID != studentA {
+		t.Fatalf("7A should return only its complete roster: %+v", lessonA.Students)
+	}
+	var rosterErr ValidationError
+	lessonB, err := s.TeacherLessonAttendanceOnDate(ctx, teacher.ID, date, entries[classB.ID].ID)
+	if !errors.As(err, &rosterErr) || rosterErr != ValidationError("Tanggal mulai penempatan siswa belum lengkap. Minta Admin melengkapinya.") {
+		t.Fatalf("incomplete 7B roster should return validation error, got %v", err)
+	}
+	if len(lessonB.Students) != 0 {
+		t.Fatalf("validation failure exposed a partial roster: %+v", lessonB.Students)
+	}
+	if _, err = s.TeacherLessonAttendanceOnDate(ctx, other.ID, date, entries[classA.ID].ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another teacher opened 7A meeting: %v", err)
+	}
+	otherMeetings, err := s.TeacherLessonsOnDate(ctx, other.ID, date)
+	must(err)
+	if len(otherMeetings.Lessons) != 1 || otherMeetings.Lessons[0].ClassID != classA.ID || otherMeetings.Lessons[0].SubjectID != subjectB {
+		t.Fatalf("another teacher should see only their own assigned meeting: %+v", otherMeetings.Lessons)
+	}
+	must(s.SavePlacementStart(ctx, admin.ID, placementB, 1, "2020-07-01", "Tanggal penempatan dikonfirmasi"))
+	lessonB, err = s.TeacherLessonAttendanceOnDate(ctx, teacher.ID, date, entries[classB.ID].ID)
+	if err != nil {
+		t.Fatalf("7B detail should open after placement date is completed: %v", err)
+	}
+	if len(lessonB.Students) != 1 || lessonB.Students[0].ID != studentB {
+		t.Fatalf("7B should return its roster after date completion: %+v", lessonB.Students)
+	}
+	must(db.QueryRow(`SELECT count(*) FROM app.student_daily_attendance WHERE student_id IN($1,$2)`, studentA, studentB).Scan(&dailyAfter))
+	if dailyAfter != dailyBefore {
+		t.Fatalf("GET contexts changed daily attendance count: before %d, after %d", dailyBefore, dailyAfter)
+	}
+}

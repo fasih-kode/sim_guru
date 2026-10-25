@@ -69,8 +69,8 @@ func (s *Store) TeacherLessonsOnDate(ctx context.Context, actor int64, date stri
 		assignmentsByClass[scope.classID][scope.id] = true
 	}
 	for classID, assignments := range assignmentsByClass {
-		// Fondasi menghitung kalender, revisi terbit, dan roster untuk kelas pada tanggal ini.
-		attendance, contextErr := s.attendanceContextForTeacherClass(ctx, actor, teacherID, classID, date)
+		// Daftar pertemuan perlu kalender dan jadwal, tidak membutuhkan roster siswa.
+		attendance, contextErr := s.attendanceContextForTeacherClass(ctx, actor, teacherID, classID, date, false)
 		if contextErr != nil {
 			return result, contextErr
 		}
@@ -117,7 +117,7 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 		return result, ErrNotFound
 	}
 	// Baca roster lewat jalur ketat agar role tambahan tidak memperluas akses.
-	attendance, err := s.attendanceContextForTeacherClass(ctx, actor, selected.TeacherID, selected.ClassID, date)
+	attendance, err := s.attendanceContextForTeacherClass(ctx, actor, selected.TeacherID, selected.ClassID, date, true)
 	if err != nil {
 		return result, err
 	}
@@ -135,8 +135,8 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 	return result, ErrNotFound
 }
 
-// attendanceContextForTeacherClass memakai fondasi kalender/roster tanpa memberi cakupan role rangkap.
-func (s *Store) attendanceContextForTeacherClass(ctx context.Context, actor, teacherID, classID int64, date string) (AttendanceContext, error) {
+// attendanceContextForTeacherClass memakai fondasi jadwal dengan cakupan Guru Mapel yang ketat.
+func (s *Store) attendanceContextForTeacherClass(ctx context.Context, actor, teacherID, classID int64, date string, includeRoster bool) (AttendanceContext, error) {
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return AttendanceContext{}, err
@@ -153,5 +153,5 @@ func (s *Store) attendanceContextForTeacherClass(ctx context.Context, actor, tea
 	if err != nil {
 		return AttendanceContext{}, err
 	}
-	return s.attendanceContextOnDateTx(ctx, tx, actor, classID, date, teacherID)
+	return s.attendanceContextOnDateTx(ctx, tx, actor, classID, date, teacherID, includeRoster)
 }

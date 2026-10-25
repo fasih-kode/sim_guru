@@ -344,10 +344,10 @@ func (s *Store) AttendanceContextOnDate(ctx context.Context, actor, class int64,
 	if e = s.authorize(ctx, tx, actor, "petugas_absensi", "guru_mapel", "wali_kelas", "kesiswaan", "kepala_sekolah"); e != nil {
 		return result, e
 	}
-	return s.attendanceContextOnDateTx(ctx, tx, actor, class, date, 0)
+	return s.attendanceContextOnDateTx(ctx, tx, actor, class, date, 0, true)
 }
 
-func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor, class int64, date string, teacherOnly int64) (AttendanceContext, error) {
+func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor, class int64, date string, teacherOnly int64, includeRoster bool) (AttendanceContext, error) {
 	result := AttendanceContext{Date: date}
 	if _, e := civilDate(date); e != nil {
 		return result, e
@@ -396,30 +396,32 @@ func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor
 	if e != nil {
 		return result, e
 	}
-	var unknown bool
-	e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$1 AND p.starts_on IS NULL AND app.student_placement_class_at(p.id,$3::date)=$2)`, year, class, date).Scan(&unknown)
-	if e != nil {
-		return result, e
-	}
-	if unknown {
-		return result, ValidationError("Tanggal mulai penempatan siswa belum lengkap. Minta Admin melengkapinya.")
-	}
-	rows, e := tx.QueryContext(ctx, `SELECT s.id,s.name,coalesce(s.nis,''),coalesce(s.nisn,'') FROM app.student_placements p JOIN app.students s ON s.id=p.student_id WHERE p.school_year_id=$1 AND p.starts_on<=$3::date AND app.student_placement_class_at(p.id,$3::date)=$2 ORDER BY s.name,s.id`, year, class, date)
-	if e != nil {
-		return result, e
-	}
-	for rows.Next() {
-		var v AttendanceStudent
-		if e = rows.Scan(&v.ID, &v.Name, &v.NIS, &v.NISN); e != nil {
-			rows.Close()
+	if includeRoster {
+		var unknown bool
+		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$1 AND p.starts_on IS NULL AND app.student_placement_class_at(p.id,$3::date)=$2)`, year, class, date).Scan(&unknown)
+		if e != nil {
 			return result, e
 		}
-		result.Students = append(result.Students, v)
-	}
-	e = rows.Err()
-	rows.Close()
-	if e != nil {
-		return result, e
+		if unknown {
+			return result, ValidationError("Tanggal mulai penempatan siswa belum lengkap. Minta Admin melengkapinya.")
+		}
+		rows, e := tx.QueryContext(ctx, `SELECT s.id,s.name,coalesce(s.nis,''),coalesce(s.nisn,'') FROM app.student_placements p JOIN app.students s ON s.id=p.student_id WHERE p.school_year_id=$1 AND p.starts_on<=$3::date AND app.student_placement_class_at(p.id,$3::date)=$2 ORDER BY s.name,s.id`, year, class, date)
+		if e != nil {
+			return result, e
+		}
+		for rows.Next() {
+			var v AttendanceStudent
+			if e = rows.Scan(&v.ID, &v.Name, &v.NIS, &v.NISN); e != nil {
+				rows.Close()
+				return result, e
+			}
+			result.Students = append(result.Students, v)
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return result, e
+		}
 	}
 	e = tx.QueryRowContext(ctx, `SELECT id FROM app.weekly_timetable_revisions WHERE semester_id=$1 AND status='published' AND effective_from<=$2::date ORDER BY effective_from DESC,revision_no DESC LIMIT 1`, result.SemesterID, date).Scan(&result.RevisionID)
 	if errors.Is(e, sql.ErrNoRows) {
