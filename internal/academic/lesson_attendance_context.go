@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"time"
 )
 
 // TeacherLessonDate berisi pertemuan terbit yang boleh dibuka guru pada tanggal tertentu.
@@ -19,6 +20,16 @@ type TeacherLessonAttendanceContext struct {
 	Fingerprint string
 	Lesson      TimetableEntry
 	Students    []AttendanceStudent
+	Records     []LessonAttendanceRecord
+}
+
+// LessonAttendanceRecord adalah bukti status yang sudah tersimpan untuk pertemuan.
+type LessonAttendanceRecord struct {
+	StudentID   int64
+	StudentName string
+	NIS         string
+	Status      string
+	RecordedAt  time.Time
 }
 
 // TeacherLessonsOnDate membatasi daftar pada penugasan Guru Mapel yang efektif.
@@ -130,6 +141,23 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 			result.Lesson = lesson
 			result.Students = attendance.Students
 			result.Fingerprint = attendance.Fingerprint
+			rows, queryErr := s.DB.QueryContext(ctx, `SELECT student_id,student_name,nis,status,recorded_at FROM app.student_lesson_attendance WHERE timetable_entry_id=$1 AND meeting_date=$2 AND teacher_id=$3 ORDER BY student_name,student_id`, lesson.ID, date, selected.TeacherID)
+			if queryErr != nil {
+				return TeacherLessonAttendanceContext{}, queryErr
+			}
+			for rows.Next() {
+				var record LessonAttendanceRecord
+				if queryErr = rows.Scan(&record.StudentID, &record.StudentName, &record.NIS, &record.Status, &record.RecordedAt); queryErr != nil {
+					rows.Close()
+					return TeacherLessonAttendanceContext{}, queryErr
+				}
+				result.Records = append(result.Records, record)
+			}
+			queryErr = rows.Err()
+			rows.Close()
+			if queryErr != nil {
+				return TeacherLessonAttendanceContext{}, queryErr
+			}
 			return result, nil
 		}
 	}

@@ -20,7 +20,7 @@
 <script src="/static/htmx.min.js" defer>
 </script>
 <script src="/static/app.js" defer>
-</script>{{end}}
+</script>{{if eq .Page "lesson-attendance"}}<script src="/static/lesson-attendance.js" defer></script>{{end}}{{end}}
 {{define "messages"}}{{if and .Error (not .ModalOpen)}}{{template "notification-error" .Error}}{{end}}{{if .Message}}{{template "notification-success" .Message}}{{end}}{{end}}
 {{define "login"}}<!doctype html>
 <html lang="id">
