@@ -15,9 +15,10 @@ type TeacherLessonDate struct {
 
 // TeacherLessonAttendanceContext adalah konteks baca-saja untuk satu pertemuan.
 type TeacherLessonAttendanceContext struct {
-	Date     string
-	Lesson   TimetableEntry
-	Students []AttendanceStudent
+	Date        string
+	Fingerprint string
+	Lesson      TimetableEntry
+	Students    []AttendanceStudent
 }
 
 // TeacherLessonsOnDate membatasi daftar pada penugasan Guru Mapel yang efektif.
@@ -128,6 +129,7 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 		if lesson.ID == selected.ID && lesson.TeacherID == selected.TeacherID && lesson.AssignmentID == selected.AssignmentID && attendance.RevisionID != 0 {
 			result.Lesson = lesson
 			result.Students = attendance.Students
+			result.Fingerprint = attendance.Fingerprint
 			return result, nil
 		}
 	}

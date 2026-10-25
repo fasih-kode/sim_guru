@@ -55,7 +55,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 20 || target != 20 {
+	if err != nil || current != 21 || target != 21 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool

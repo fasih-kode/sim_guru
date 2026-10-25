@@ -320,12 +320,13 @@ func (s *Store) SavePlacementStart(ctx context.Context, actor, id, version int64
 // Unknown initial dates block historical attendance; existing operational lists
 // retain their compatibility behavior until Admin has reviewed those dates.
 type AttendanceStudent struct {
-	ID              int64
-	Name, NIS, NISN string
+	ID, PlacementID, PlacementVersion, StudentVersion int64
+	Name, NIS, NISN, StartsOn                         string
 }
 type AttendanceContext struct {
 	SemesterID, RevisionID int64
 	Date                   string
+	Fingerprint            string
 	SchoolDay              bool
 	Students               []AttendanceStudent
 	Lessons                []TimetableEntry
@@ -405,13 +406,13 @@ func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor
 		if unknown {
 			return result, ValidationError("Tanggal mulai penempatan siswa belum lengkap. Minta Admin melengkapinya.")
 		}
-		rows, e := tx.QueryContext(ctx, `SELECT s.id,s.name,coalesce(s.nis,''),coalesce(s.nisn,'') FROM app.student_placements p JOIN app.students s ON s.id=p.student_id WHERE p.school_year_id=$1 AND p.starts_on<=$3::date AND app.student_placement_class_at(p.id,$3::date)=$2 ORDER BY s.name,s.id`, year, class, date)
+		rows, e := tx.QueryContext(ctx, `SELECT s.id,p.id,p.date_version,s.version,p.starts_on::text,s.name,coalesce(s.nis,''),coalesce(s.nisn,'') FROM app.student_placements p JOIN app.students s ON s.id=p.student_id WHERE p.school_year_id=$1 AND p.starts_on<=$3::date AND app.student_placement_class_at(p.id,$3::date)=$2 ORDER BY s.name,s.id`, year, class, date)
 		if e != nil {
 			return result, e
 		}
 		for rows.Next() {
 			var v AttendanceStudent
-			if e = rows.Scan(&v.ID, &v.Name, &v.NIS, &v.NISN); e != nil {
+			if e = rows.Scan(&v.ID, &v.PlacementID, &v.PlacementVersion, &v.StudentVersion, &v.StartsOn, &v.Name, &v.NIS, &v.NISN); e != nil {
 				rows.Close()
 				return result, e
 			}
@@ -466,6 +467,12 @@ func (s *Store) attendanceContextOnDateTx(ctx context.Context, tx *sql.Tx, actor
 				}
 			}
 			result.Lessons = append(result.Lessons, v)
+		}
+	}
+	if includeRoster && teacherOnly > 0 && result.RevisionID != 0 && result.SchoolDay {
+		result.Fingerprint, e = lessonAttendanceFingerprint(ctx, tx, actor, teacherOnly, result, c)
+		if e != nil {
+			return result, e
 		}
 	}
 	return result, nil
