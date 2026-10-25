@@ -40,6 +40,9 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
+	Arrival                     *arrivalView
+	Daily                       *dailyView
+	Foundation                  *foundationView
 	Movement                    *movementView
 	ASCImport                   *ascImportView
 	User                        *auth.User
@@ -89,6 +92,16 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		roleMenu = "admin"
 	}
 	switch {
+	case path == "/kesiswaan/batas-kedatangan":
+		return "arrival-rules", "attendance"
+	case path == "/absensi/harian/cepat":
+		return "daily-attendance", "attendance"
+	case strings.HasPrefix(path, "/absensi/kartu"):
+		return "student-cards", "attendance"
+	case path == "/absensi/pemindai":
+		return "daily-scanner", "attendance"
+	case path == "/absensi/harian":
+		return "daily-attendance", "attendance"
 	case path == "/":
 		return "home", "menu"
 	case strings.HasPrefix(path, "/akademik/penempatan/"):
@@ -126,6 +139,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "audit", "admin"
 	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):
 		return "years", "curriculum-calendar"
+	case path == "/akademik/kalender-sekolah":
+		return "school-calendar", "curriculum-calendar"
 	case path == "/akademik/semester" || strings.HasPrefix(path, "/akademik/semester/"):
 		return "semesters", "curriculum-calendar"
 	case path == "/akademik/pengampu":

@@ -30,8 +30,8 @@
 | Akademik | Tahun Ajaran, Semester, Kelas/Penempatan (baca-saja), Wali Kelas, Penugasan Mengajar, Transisi | Kurikulum |
 | Kelas Saya | Daftar kelas tahun aktif yang ditugaskan dan roster siswa per kelas | Wali Kelas; dibatasi role dan penugasan server |
 | Jadwal | Jam Pelajaran, Jadwal, Riwayat Perubahan | Kurikulum; Guru melihat Jadwal Saya |
-| Absensi | Guru QR, Siswa Harian, Absensi Pelajaran, Koreksi | Sesuai role/penugasan |
-| Kesiswaan | Siswa/Rekap Kehadiran, Catatan Pembinaan | Kesiswaan seluruh sekolah; Wali Kelas/Kepala Sekolah membaca catatan sesuai cakupan PRD bab 3B |
+| Absensi | Guru GPS/Selfie, Siswa Harian QR, Absensi Pelajaran, Koreksi | Sesuai role/penugasan |
+| Kesiswaan | Siswa/Rekap Kehadiran, Batas Kedatangan, Catatan Pembinaan | Kesiswaan seluruh sekolah; Wali Kelas/Kepala Sekolah membaca catatan sesuai cakupan PRD bab 3B |
 | BK | Siswa yang Ditangani, Catatan Bimbingan | BK sesuai siswa/kasus; Wali Kelas/Kepala Sekolah membaca catatan sesuai cakupan PRD bab 3B |
 | Jurnal | Jurnal Saya, Riwayat Koreksi | Guru Mapel; pengawasan sesuai role |
 | Penilaian | TP, Komponen, Nilai, Remedial, Nilai Akhir, Koreksi Final | Guru Mapel dan Kurikulum sesuai hak |
@@ -103,10 +103,12 @@ Tombol Impor XML berada pada Jadwal Mingguan Kurikulum. Form unggah menggunakan 
 
 Modal konfirmasi hanya aktif setelah pemeriksaan berhasil, menampilkan jumlah pertemuan dan persetujuan penggantian draf, draf belum lengkap dan penggunaan waktu sekolah jika diperlukan. Ekspor terpotong menahan penyimpanan; kelengkapan target sekolah dibedakan dari validitas blok sumber. Tidak ada publikasi otomatis. Tampilan ponsel membatasi scroll tabel dalam panel dan mempertahankan tombol utama yang muat. Batas format/validasi pada [PRD bab 6.4](PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md#64-impor-jadwal-xml-asc--23-oktober-2026).
 
-### 3.5 Absensi
-- Guru: tombol/QR masuk dan pulang, status tercatat, pesan gagal/fallback sesuai aturan yang disetujui.
-- Siswa: absensi harian dan pelajaran di layar terpisah; status Hadir/Sakit/Izin/Alpa/Belum Dicatat.
-- Koreksi: tampilkan nilai sebelumnya, nilai baru, alasan, simpan, riwayat. Tidak perlu approval Kepala Sekolah.
+### 3.5 Absensi — D-033 (24 Oktober 2026)
+- Fondasi pertama: Kurikulum → Kalender Akademik → Kalender Sekolah (semester/rentang/hari mingguan/libur/pengecualian, form modal, versi dan histori). Admin → Penempatan → Tanggal Mulai Penempatan (lengkapi tanggal lama tanpa menebak; koreksi modal beralasan). Waktu WIB; konteks roster/jadwal per tanggal.
+- Guru: Masuk/Pulang → lokasi dan selfie kamera langsung → hasil waktu aktual; radius awal 100 meter dapat diatur Admin; kompres foto maksimal 100 KB. Foto privat dihapus setelah dua bulan; metadata tetap tampil. Kesalahan GPS/akurasi/kamera/internet menawarkan penanganan Petugas Absensi beralasan.
+- Petugas: pemindai QR kartu siswa → nama/kelas/waktu/hasil; kedatangan saja; scan ganda aman; status lama tidak ditimpa. Daftar kelas untuk Sakit/Izin/Alpa/manual. Hilang → Ganti QR (kode lama mati), rusak masih dipegang → Cetak ulang kode sama; alasan/histori, identitas/absensi utuh.
+- Guru pengampu: Jadwal Saya → tanggal/pertemuan → absensi pelajaran; harian dan pelajaran terpisah; Hadir/Sakit/Izin/Alpa/Belum Dicatat. Tandai semua Hadir hanya lewat aksi eksplisit pengguna.
+- Koreksi: tampilkan nilai sebelumnya, nilai baru, alasan dan histori; konflik versi meminta muat ulang. Wali/Kesiswaan/Kepala Sekolah baca sesuai PRD 7, tanpa approval rutin. Ketentuan otoritatif dan urutan implementasi lengkap di PRD utama 7.1–7.5.
 
 ### 3.6 Jurnal
 - Guru pengampu resmi memilih jadwal/kelas, mengisi waktu/blok, materi, catatan, Simpan Draf/Finalkan. Identitas guru berasal dari akun/penugasan resmi; tidak ada dropdown Guru Pengganti atau Guru Cadangan.
@@ -162,8 +164,20 @@ Rujukan kebutuhan otoritatif: [PRD utama bab 3B](PRD_SIM_GURU_v1.0_REVISI_PEMBAG
 
 ## 6. Batasan keputusan UI
 
-Nama menu dan layout detail adalah **RANCANGAN**; aturan peran/penugasan sederhana adalah **FINAL**. Jangan menambah approval digital hanya karena tersedia komponen tombol/modal pada TailAdmin. Detail rumus nilai, katalog laporan, dan fallback QR mengikuti OPEN di PRD utama.
+Nama menu dan layout detail adalah **RANCANGAN**; aturan peran/penugasan sederhana adalah **FINAL**. Jangan menambah approval digital hanya karena tersedia komponen tombol/modal pada TailAdmin. Detail rumus nilai, katalog laporan, dan GPS/selfie dan QR siswa mengikuti D-033/PRD utama bab 7.
 
 Perpindahan D-031: aksi Pindah kelas hanya Kurikulum pada penempatan; Pindah sekolah hanya Admin pada master siswa. Form dan ringkasan konfirmasi mengikuti Form in Modal TailAdmin (pusat/blur), tombol leading icon/grup, histori bernomor/pagination. Tanggal berlaku dan alasan wajib; sekolah tujuan opsional. Badge Pindah sekolah atau Pindah terjadwal dengan tanggal berbeda dari nonaktif umum.
 
 D-032: Data Siswa Admin menyediakan Terima kembali hanya untuk siswa yang sudah keluar dan belum memiliki penerimaan terjadwal. Form/ringkasan memakai modal TailAdmin bersama. Tujuan belum dipilih otomatis; kelas pada tahun aktif, tingkat sama jika kembali pada tahun asal. Tampilkan sekolah asal terakhir opsional, tanggal kembali, alasan, checkbox konfirmasi, dan badge Kembali terjadwal. Riwayat menampilkan setiap keluar/kembali tanpa menggandakan identitas siswa.
+
+### Tanggal awal penempatan massal — D-034
+Halaman tanggal Admin menyediakan tombol Isi tanggal massal. Form mencakup filter kelas awal, tanggal dengan saran Semester 1, alasan, checkbox siswa, Pilih semua/Batalkan pilihan, hitungan seluruh pilihan, pencarian dan pagination 10 baris. Pencarian tidak membatalkan pilihan pada halaman lain. Pratinjau valid membuka modal ringkasan siswa/tanggal/alasan dengan checkbox konfirmasi; pratinjau bermasalah menampilkan alasan per siswa dan tidak menawarkan Simpan. Batas masa pratinjau 10 menit dijelaskan. Form penempatan awal tetap meminta tanggal dan dapat memakai saran semester yang terlihat.
+
+### Absensi harian siswa dan kartu — D-035
+Role berhak baca memperoleh menu Absensi Harian, filter tanggal/tahun-kelas, status dan pencarian; tabel bernomor/pagination 10 menampilkan status, sumber dan waktu WIB. Filter tanggal/kelas dipertahankan pada URL sesudah simpan/koreksi; filter status tersimpan selama sesi browser. Petugas memakai menu aksi Catat manual/Koreksi-histori; Wali/Kesiswaan/Kepsek hanya melihat histori. Modal menunjukkan nilai lama, nilai baru, alasan dan histori. Menu Pemindai QR dan Kartu QR Siswa hanya Petugas. Pemindai meminta kamera melalui tombol, menampilkan hasil nama/kelas/waktu, berhenti menunggu Scan siswa berikutnya dan menawarkan USB/manual saat gagal. Tidak mengunggah video/foto kamera pemindai. Kartu menyediakan filter kelas/pencarian, modal tindakan beserta konfirmasi dan alasan, serta halaman cetak privat yang hanya mencetak kartu. Cetak ulang dan penggantian kode dibedakan jelas.
+
+Perbaikan waktu manual harian (24 Oktober 2026): isian waktu datang memakai input 24 jam HH:MM dengan keypad angka dan format otomatis empat angka (0611 → 06:11, 1811 → 18:11). Tidak memakai pemilih native AM/PM yang kontrasnya bergantung perangkat. Teks bantuan menjelaskan pagi/sore; sesuai D-036 waktu wajib untuk Hadir baru/koreksi. Validasi browser/server menolak format AM/PM dan jam/menit di luar rentang. Berlaku untuk Catat manual dan Koreksi absensi harian.
+
+### Keterlambatan/Isi cepat — D-036
+Kesiswaan memiliki menu Batas Kedatangan: semester, semua/rombel, mingguan/tanggal, mulai berlaku, jam HH:MM 24 jam, toleransi menit, alasan dan histori versi. Perubahan tidak menulis ulang bukti lama. Tabel harian menampilkan keterangan ketepatan waktu. Jam Hadir baru/koreksi wajib; indikator data lama belum lengkap/batas belum diatur dibedakan dari status kehadiran.
+Petugas membuka Isi cepat: semua siswa satu kelas tanpa pagination saat mengisi; H/S/I/A langsung di tiap baris, waktu Hadir per siswa, pengisian jam bersama yang eksplisit, tombol tandai sisanya Hadir, alasan kelompok dan ringkasan sebelum Simpan. Baris QR/manual tersimpan terkunci. Pencarian hanya mengubah tampilan. Isian tetap saat validasi/konflik; navigasi diperingatkan saat ada perubahan belum disimpan. Tabel rekap tetap pagination 10. Aksi Catat datang sekarang mencatat Hadir dengan waktu server ketika petugas menerima siswa, bukan waktu rekap yang dianggap waktu datang.

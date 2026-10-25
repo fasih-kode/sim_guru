@@ -15,7 +15,7 @@ Semua rujukan berikut berasal dari [PRD utama](../PRD_SIM_GURU_v1.0_REVISI_PEMBA
 | Bab 9–11 | Rumus harus disetujui; koreksi nilai Final diperiksa Kurikulum; laporan dan audit dibatasi akses |
 
 ## OPEN
-Bab 14 adalah daftar otoritatif P0/P1. Termasuk formula/remedial/pembulatan, koreksi langsung oleh Kurikulum, QR/fallback, anomali, penutupan semester, penempatan khusus, katalog/cakupan laporan. Pengampu bersama dan pembagian hak nilai akhirnya ditunda di luar cakupan v1 sesuai D-020; jangan mengaktifkannya tanpa keputusan baru. Jangan menganggap OPEN disepakati atau menghalangi fondasi yang independen.
+Bab 14 adalah daftar otoritatif P0/P1. Termasuk formula/remedial/pembulatan, koreksi langsung oleh Kurikulum, GPS/selfie dan QR siswa sesuai D-033/fallback, anomali, penutupan semester, penempatan khusus, katalog/cakupan laporan. Pengampu bersama dan pembagian hak nilai akhirnya ditunda di luar cakupan v1 sesuai D-020; jangan mengaktifkannya tanpa keputusan baru. Jangan menganggap OPEN disepakati atau menghalangi fondasi yang independen.
 
 ## Bukti implementasi akses
 internal/auth dan internal/web menerapkan multi-role, perubahan role langsung pada sesi aktif, serta penolakan akses berdasarkan role. Kurikulum mengatur penugasan wali dari daftar kelas; daftar calon dibatasi ke profil guru aktif yang tertaut ke akun aktif dengan role Wali Kelas. Wali Kelas hanya membaca roster dari penugasan kelas tahun aktifnya, dan akses langsung ke kelas lain/tahun lama ditolak. Histori pergantian menyimpan guru lama/baru, actor dan waktu. Tes layanan/HTTP menguji akses positif dan negatif.
@@ -58,3 +58,12 @@ Mengikuti [PRD bab 6.4](../PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md#64-impor-
 Perpindahan D-031 mengikuti PRD bab 5: pindah kelas oleh Kurikulum; pindah sekolah keluar oleh Admin; tanggal WIB, alasan, ringkasan/konfirmasi dan histori. View roster efektif menjaga penempatan asli. Pindah terjadwal berbeda dari nonaktif umum; kejadian keluar tidak bisa dibatalkan melalui edit identitas.
 
 D-032: Admin menerima kembali identitas siswa lama, menjaga jeda keluar dan histori. Tingkat sama saat kembali dalam tahun yang sama; tingkat berdasarkan riwayat saat tahun berbeda. Kelas/status efektif mengikuti tanggal WIB; kejadian keluar yang sudah ditutup penerimaan efektif tidak lagi mengunci roster/transisi. Rincian otoritatif PRD bab 5.
+
+## Fase 8 — D-033
+Acuan otoritatif PRD bab 7.1–7.5 menggantikan QR guru baseline. Guru GPS/selfie; siswa harian QR; pelajaran terpisah; foto privat maksimal 100 KB/dihapus dua bulan, metadata tetap. Petugas menangani seluruh sekolah dan fallback/koreksi beralasan; QR hilang diganti kode, rusak dicetak ulang. Fondasi tanggal wajib eksplisit, roster dan jadwal sesuai tanggal; tanggal lama yang belum diisi tidak ditebak. Implementasi awal hanya fondasi; indikator anomali rinci belum ditetapkan; aturan terlambat siswa kini mengikuti D-036.
+
+- **D-034:** Admin mengisi tanggal penempatan kosong secara massal melalui pratinjau dan konfirmasi. Kalender Semester 1 hanya saran yang dapat diubah, tidak mengubah tanggal lama otomatis. Siswa pindahan dapat dikecualikan; tanggal terisi tidak ditimpa. Konflik/ubah data setelah pratinjau membatalkan seluruh batch; tanggal dan histori disimpan atomik.
+
+- **D-035:** Harian siswa satu catatan siswa/tanggal WIB. QR tidak mengisi absensi pelajaran, tidak menimpa Sakit/Izin/Alpa, scan Hadir berulang tidak mengubah waktu awal. Petugas saja mengelola tulisan/kartu; Wali baca kelas sendiri, Kesiswaan/Kepsek baca sekolah. Bukti dibekukan, koreksi beralasan+versi+histori. Hilang mencabut kode; cetak ulang mempertahankan kode. Detail otoritatif PRD 7.3 dan pelengkap D-035.
+
+- **D-036:** Kesiswaan mengatur batas/toleransi/pengecualian dan tanggal efektif kedatangan, Kurikulum tetap kalender/jadwal. Hadir baru/koreksi wajib waktu aktual; selain Hadir tanpa jam. Bukti menyimpan snapshot aturan dan penilaian, perubahan tidak menghitung ulang bukti lama. Isi cepat Petugas hanya menulis baris belum tercatat secara atomik dengan alasan bersama; perubahan aturan/roster/absensi menahan batch dan meminta tinjau ulang. Detail otoritatif PRD 7.6 dan DECISIONS.

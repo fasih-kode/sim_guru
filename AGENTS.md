@@ -29,3 +29,34 @@
 
 ## Tata kelola sumber
 [PRD](docs/PRD.md) menunjuk dokumen kebutuhan otoritatif. [DECISIONS](docs/DECISIONS.md) mencatat keputusan; jangan menggandakan kebutuhan lengkap. Bedakan fakta terverifikasi, keputusan disetujui, rekomendasi belum disetujui, dan pekerjaan belum selesai. Jika sumber bertentangan, laporkan dan minta keputusan sebelum mengganti kebijakan; lanjutkan pekerjaan independen yang aman.
+
+# Pedoman Pengembangan SIM-GURU
+
+## Prinsip
+- Prioritaskan readability, maintainability, dan testability.
+- Gunakan idiom Go dan struktur sederhana.
+- Hindari overengineering dan abstraksi yang tidak perlu.
+- Pertahankan perilaku aplikasi saat refactoring.
+- Jangan mengubah aturan bisnis tanpa persetujuan.
+
+## Komentar
+- Tulis komentar penjelasan dalam bahasa Indonesia.
+- Utamakan penjelasan alasan dan batasan bisnis.
+- Hindari komentar yang hanya mengulang kode.
+
+## Pengujian
+- Tambahkan regression test untuk perubahan berisiko.
+- Jalankan go test ./... dan go vet ./...
+- Jangan menyatakan test lulus tanpa menjalankannya.
+
+## Teknologi
+- Go, html/template, htmx, PostgreSQL.
+- TailAdmin Free dan Tailwind CSS.
+- Jangan mengganti stack tanpa persetujuan.
+
+## Cara Kerja
+- Kerjakan perubahan kecil dan terukur.
+- Periksa diff serta dampak perubahan.
+- Catat temuan yang tidak mendesak sebagai backlog.
+- Jangan menjadikan urusan monitoring atau deployment
+  sebagai penghalang refactoring lokal.

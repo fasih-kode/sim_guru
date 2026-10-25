@@ -490,3 +490,125 @@ document.querySelectorAll('[data-transition-row]').forEach((row) => {
   outcome.addEventListener('change', update);
   update();
 });
+
+// The chosen candidate belongs to the class already selected on the placement page.
+document.querySelectorAll('[data-placement-student-id]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const modal = document.getElementById('new-placement-modal');
+    if (!modal) return;
+    modal.querySelector('[name="student_id"]').value = button.dataset.placementStudentId;
+    modal.querySelector('[data-placement-student-label]').textContent = button.dataset.placementStudentName;
+  });
+});
+
+// Selection spans every page; searching only changes visibility.
+document.querySelectorAll('[data-placement-batch]').forEach(form => {
+  const boxes = [...form.querySelectorAll('[name="placement_ids"]')];
+  const count = form.querySelector('[data-batch-count]');
+  const update = () => { count.textContent = boxes.filter(box => box.checked).length; };
+  boxes.forEach(box => box.addEventListener('change', update));
+  form.querySelectorAll('[data-batch-select]').forEach(button => {
+    button.addEventListener('click', () => {
+      boxes.forEach(box => { box.checked = button.dataset.batchSelect === 'all'; });
+      update();
+    });
+  });
+  update();
+});
+
+document.querySelectorAll('[data-print-student-card]').forEach(button => {
+  button.addEventListener('click', () => window.print());
+});
+
+// Use an explicit 24-hour field instead of the device's AM/PM time picker.
+document.querySelectorAll('[data-time-24]').forEach(input => {
+  const update = () => {
+    if (/^[0-9]{3,4}$/.test(input.value)) {
+      input.value = `${input.value.slice(0, 2)}:${input.value.slice(2)}`;
+    }
+    const valid = !input.value || /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(input.value);
+    input.setCustomValidity(valid ? '' : 'Gunakan format 24 jam HH:MM, misalnya 06:11 atau 18:11.');
+  };
+  input.addEventListener('input', update);
+  update();
+});
+
+document.querySelectorAll('[data-arrival-rule-form]').forEach(form => {
+  const mode = form.querySelector('[data-arrival-rule-mode]');
+  const update = () => {
+    const dated = mode.value === 'date';
+    for (const [selector, visible] of [['[data-arrival-weekly]', !dated], ['[data-arrival-date]', dated]]) {
+      const panel = form.querySelector(selector);
+      panel.hidden = !visible;
+      panel.querySelectorAll('input,select').forEach(input => { input.disabled = !visible || input.hasAttribute('data-rule-scope'); });
+    }
+  };
+  mode.addEventListener('change', update);
+  update();
+});
+
+document.querySelectorAll('[data-daily-required-arrival]').forEach(input => {
+  const status = input.form.querySelector('[data-daily-arrival-status]');
+  const update = () => { input.required = status.value === 'hadir'; input.disabled = status.value !== 'hadir'; };
+  status.addEventListener('change', update);
+  update();
+});
+
+document.querySelectorAll('[data-daily-quick]').forEach(form => {
+  const rows = [...form.querySelectorAll('[data-quick-row]')];
+  const editable = rows.filter(row => !row.hasAttribute('data-quick-locked'));
+  const summary = form.querySelector('[data-quick-summary]');
+  let dirty = false;
+  const statusOf = row => row.querySelector('[data-quick-status]:checked')?.value || '';
+  const update = () => {
+    const counts = {hadir: 0, sakit: 0, izin: 0, alpa: 0, empty: 0};
+    let missing = 0;
+    editable.forEach(row => {
+      const status = statusOf(row);
+      counts[status || 'empty']++;
+      const arrival = row.querySelector('[data-quick-arrival]');
+      arrival.required = status === 'hadir';
+      arrival.disabled = status !== 'hadir';
+      arrival.placeholder = status === 'hadir' ? '06:50' : 'Tidak diperlukan';
+      if (arrival.required && !arrival.value) missing++;
+    });
+    summary.textContent = `${counts.hadir} Hadir · ${counts.sakit} Sakit · ${counts.izin} Izin · ${counts.alpa} Alpa · ${counts.empty} belum dipilih · ${rows.length - editable.length} sudah tersimpan${missing ? ` · ${missing} Hadir perlu jam datang` : ''}`;
+  };
+  form.addEventListener('input', event => { if (!event.target.matches('[data-quick-search]')) dirty = true; update(); });
+  form.addEventListener('change', () => { dirty = true; update(); });
+  form.querySelector('[data-quick-present]').addEventListener('click', () => {
+    editable.filter(row => !statusOf(row)).forEach(row => { row.querySelector('[data-quick-status][value="hadir"]').checked = true; });
+    dirty = true; update();
+  });
+  const common = form.querySelector('[data-quick-common-time]');
+  form.querySelector('[data-quick-apply-time]').addEventListener('click', () => {
+    if (!common.value || !common.reportValidity()) { common.focus(); return; }
+    editable.filter(row => statusOf(row) === 'hadir').forEach(row => {
+      const input = row.querySelector('[data-quick-arrival]');
+      if (!input.value) { input.value = common.value; input.dispatchEvent(new Event('input', {bubbles: true})); }
+    });
+    dirty = true; update();
+  });
+  editable.forEach(row => row.querySelector('[data-quick-clear]').addEventListener('click', () => {
+    row.querySelectorAll('[data-quick-status]').forEach(input => { input.checked = false; });
+    const arrival = row.querySelector('[data-quick-arrival]'); arrival.value = ''; arrival.dispatchEvent(new Event('input', {bubbles: true}));
+    dirty = true; update();
+  }));
+  const search = form.querySelector('[data-quick-search]');
+  search.addEventListener('input', () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    rows.forEach(row => { row.hidden = !row.textContent.toLocaleLowerCase().includes(query); });
+  });
+  const reason = form.querySelector('[name="reason_kind"]');
+  const note = form.querySelector('[name="reason_note"]');
+  const reasonState = () => { note.required = reason.value === 'other'; };
+  reason.addEventListener('change', reasonState); reasonState();
+  window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
+  form.addEventListener('submit', () => { dirty = false; });
+  document.querySelectorAll('[data-quick-navigation]').forEach(nav => nav.addEventListener('submit', event => {
+    if (dirty && !window.confirm('Ada isian absensi yang belum disimpan. Tinggalkan isian ini?')) { event.preventDefault(); nav.reset(); return; }
+    dirty = false;
+  }));
+  dirty = editable.some(row => statusOf(row)) || Boolean(reason.value || note.value);
+  update();
+});

@@ -64,6 +64,23 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Write([]byte("ready\n"))
 	})
 	a := &application{templates: templates, options: options}
+	mux.HandleFunc("GET /kesiswaan/batas-kedatangan", a.require("kesiswaan", a.arrivalRules))
+	mux.HandleFunc("POST /kesiswaan/batas-kedatangan", a.require("kesiswaan", a.arrivalRules))
+	mux.HandleFunc("GET /absensi/harian/cepat", a.require("petugas_absensi", a.dailyQuick))
+	mux.HandleFunc("POST /absensi/harian/cepat", a.require("petugas_absensi", a.dailyQuick))
+	mux.HandleFunc("GET /absensi/harian", a.require("", a.dailyAttendance))
+	mux.HandleFunc("POST /absensi/harian", a.require("petugas_absensi", a.dailyAttendance))
+	mux.HandleFunc("GET /absensi/pemindai", a.require("petugas_absensi", a.dailyScanner))
+	mux.HandleFunc("POST /absensi/scan", a.require("petugas_absensi", a.dailyScan))
+	mux.HandleFunc("GET /absensi/kartu", a.require("petugas_absensi", a.studentCards))
+	mux.HandleFunc("POST /absensi/kartu", a.require("petugas_absensi", a.studentCards))
+	mux.HandleFunc("GET /absensi/kartu/{id}/cetak", a.require("petugas_absensi", a.printStudentCard))
+	mux.HandleFunc("GET /akademik/kalender-sekolah", a.require("kurikulum", a.schoolCalendar))
+	mux.HandleFunc("POST /akademik/kalender-sekolah", a.require("kurikulum", a.schoolCalendar))
+	mux.HandleFunc("GET /admin/placements/dates/bulk", a.require("admin", a.placementDatesBulk))
+	mux.HandleFunc("POST /admin/placements/dates/bulk", a.require("admin", a.placementDatesBulk))
+	mux.HandleFunc("GET /admin/placements/dates", a.require("admin", a.placementDates))
+	mux.HandleFunc("POST /admin/placements/dates", a.require("admin", a.placementDates))
 	mux.HandleFunc("GET /login", a.login)
 	mux.HandleFunc("POST /login", a.login)
 	mux.HandleFunc("POST /logout", a.require("", a.logout))
@@ -202,6 +219,9 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		if r.URL.Path == "/absensi/pemindai" {
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		}
 		protected.ServeHTTP(w, r)
 	}), nil
 }

@@ -30,3 +30,11 @@ Impor XML aSc disetujui dan diterapkan pada 23 Oktober 2026, D-029/migration 000
 Perpindahan siswa D-031 (23 Oktober 2026): PRD bab 5 mengatur kewenangan, tanggal berlaku WIB, histori dan pengaruh ke roster/transisi. Implementasi migration 00015; verifikasi aktual pada HANDOVER.
 
 Penerimaan kembali siswa lama oleh Admin disetujui dan diterapkan sesuai D-032/migration 00016: PRD bab 5 mengatur identitas tetap, kelas tahun aktif, siklus keluar–kembali berulang, jeda dan status bertanggal. Bukti verifikasi terbaru pada HANDOVER.
+
+Fase 8 diperbarui melalui D-033 (24 Oktober 2026): guru GPS/selfie, harian siswa kartu QR, dan pelajaran terpisah. Ketentuan foto 100 KB/dua bulan dan kartu hilang ada di PRD utama bab 7.1–7.5. Pengguna mengotorisasi dokumentasi lengkap serta penerapan urutan pertama (kalender/tanggal penempatan/akses), bukan seluruh modul sekaligus.
+
+D-034 melengkapi fondasi Fase 8 dengan tanggal penempatan massal Admin: lihat pelengkap pada PRD utama, FE dan DECISIONS. Bukan implementasi modul pencatatan absensi.
+
+Fase 8 urutan 2 (D-035): harian siswa, kartu QR/cetak/ganti, manual, koreksi dan histori tersedia. Acuan PRD utama 7.3/pelengkap D-035, FE, DECISIONS dan HANDOVER; urutan 3–5 belum dianggap selesai.
+
+D-036 (24 Oktober 2026) mengganti penundaan keterlambatan dan jam Hadir opsional: Kesiswaan mengatur batas/toleransi bertanggal/rombel, penilaian tersimpan sebagai snapshot, Petugas memakai jam Hadir wajib dan Isi cepat per kelas. Lihat PRD utama 7.6, FE dan DECISIONS; status verifikasi/pemasangan pada HANDOVER.

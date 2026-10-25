@@ -66,19 +66,21 @@ type academicView struct {
 }
 
 type placementView struct {
-	Years         []academic.Year
-	Classes       []academic.Class
-	SelectedClass academic.Class
-	Candidates    []academic.StudentOption
-	Placements    []academic.Placement
-	YearID        int64
-	ClassID       int64
-	Page          int
-	Previous      int
-	Next          int
-	PreviousURL   string
-	NextURL       string
-	Search        string
+	CreateStudentID                   int64
+	CreateStudentName, CreateStartsOn string
+	Years                             []academic.Year
+	Classes                           []academic.Class
+	SelectedClass                     academic.Class
+	Candidates                        []academic.StudentOption
+	Placements                        []academic.Placement
+	YearID                            int64
+	ClassID                           int64
+	Page                              int
+	Previous                          int
+	Next                              int
+	PreviousURL                       string
+	NextURL                           string
+	Search                            string
 }
 
 func academicError(err error) (int, string) {
@@ -853,6 +855,12 @@ func placementPage(a *application, r *http.Request, yearID, classID int64, searc
 		}
 	}
 	p := &placementView{Years: years, YearID: yearID, ClassID: classID, Page: page, Search: search}
+	if principal(r).HasRole("admin") {
+		p.CreateStartsOn, err = a.options.Academics.SuggestedPlacementStart(r.Context(), principal(r).ID, yearID)
+		if err != nil {
+			return nil, 500, err
+		}
+	}
 	for _, class := range classes {
 		if class.SchoolYearID == yearID {
 			p.Classes = append(p.Classes, class)
@@ -949,7 +957,7 @@ func (a *application) studentPlacements(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "Pilihan tahun atau kelas tidak ditemukan.", code)
 			return
 		}
-		if _, err = a.options.Academics.CreatePlacement(r.Context(), principal(r).ID, studentID, classID); err != nil {
+		if _, err = a.options.Academics.CreatePlacement(r.Context(), principal(r).ID, studentID, classID, r.PostForm.Get("starts_on")); err != nil {
 			p, _, loadErr := placementPage(a, r, yearID, classID, search, page)
 			if loadErr != nil {
 				a.academicFailure(w, loadErr)
@@ -957,7 +965,15 @@ func (a *application) studentPlacements(w http.ResponseWriter, r *http.Request) 
 			}
 			_, message := academicError(err)
 			code, _ := academicError(err)
-			a.render(w, r, "page", code, view{Page: "student-placements", Title: "Penempatan Siswa", Error: message, Placement: p})
+			p.CreateStudentID = studentID
+			p.CreateStartsOn = r.PostForm.Get("starts_on")
+			for _, student := range p.Candidates {
+				if student.ID == studentID {
+					p.CreateStudentName = student.Name
+					break
+				}
+			}
+			a.render(w, r, "page", code, view{Page: "student-placements", Title: "Penempatan Siswa", Error: message, Placement: p, ModalOpen: true, ModalID: "new-placement-modal"})
 			return
 		}
 		query := make(url.Values)
