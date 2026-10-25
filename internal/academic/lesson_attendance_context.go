@@ -23,6 +23,13 @@ type TeacherLessonAttendanceContext struct {
 	Records     []LessonAttendanceRecord
 }
 
+// TeacherLessonAttendanceRevisionContext hanya membuka konteks pengganti setelah
+// penugasan guru pada kelas dan mapel yang sama diverifikasi ulang.
+type TeacherLessonAttendanceRevisionContext struct {
+	Lessons     []TimetableEntry
+	Replacement *TeacherLessonAttendanceContext
+}
+
 // LessonAttendanceRecord adalah bukti status yang sudah tersimpan untuk pertemuan.
 type LessonAttendanceRecord struct {
 	StudentID   int64
@@ -163,6 +170,100 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 	}
 	// Jadwal atau penugasan berubah di antara pembacaan; jangan tampilkan konteks yang basi.
 	return result, ErrNotFound
+}
+
+// TeacherLessonAttendanceAfterRevision menangani formulir lama tanpa membuka
+// roster jika guru atau penugasan pada konteks tersebut sudah tidak berwenang.
+func (s *Store) TeacherLessonAttendanceAfterRevision(ctx context.Context, actor int64, date string, oldEntryID int64) (TeacherLessonAttendanceRevisionContext, error) {
+	result := TeacherLessonAttendanceRevisionContext{}
+	if oldEntryID < 1 {
+		return result, ErrNotFound
+	}
+	d, err := civilDate(date)
+	if err != nil {
+		return result, err
+	}
+	weekday := int(d.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+
+	tx, err := s.reader(ctx, actor, "guru_mapel")
+	if err != nil {
+		return result, err
+	}
+	defer tx.Rollback()
+	var teacherID int64
+	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teachers WHERE user_id=$1 AND active`, actor).Scan(&teacherID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return result, ErrForbidden
+	}
+	if err != nil {
+		return result, err
+	}
+	var classID, subjectID, oldTeacherID, semesterID, oldRevisionID, currentRevisionID int64
+	err = tx.QueryRowContext(ctx, `SELECT e.class_id,e.subject_id,e.teacher_id,r.semester_id,r.id,
+		(SELECT current_revision.id FROM app.weekly_timetable_revisions current_revision WHERE current_revision.semester_id=r.semester_id AND current_revision.status='published' AND current_revision.effective_from<=$2::date ORDER BY current_revision.effective_from DESC,current_revision.revision_no DESC LIMIT 1)
+		FROM app.weekly_timetable_entries e
+		JOIN app.weekly_timetable_revisions r ON r.id=e.revision_id AND r.status='published' AND r.effective_from<=$2::date
+		JOIN app.semester_calendars cal ON cal.semester_id=r.semester_id AND $2::date BETWEEN cal.starts_on AND cal.ends_on
+		WHERE e.id=$1 AND e.weekday=$3`, oldEntryID, date, weekday).Scan(&classID, &subjectID, &oldTeacherID, &semesterID, &oldRevisionID, &currentRevisionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return result, ErrNotFound
+	}
+	if err != nil {
+		return result, err
+	}
+	if oldTeacherID != teacherID || currentRevisionID == 0 || currentRevisionID == oldRevisionID {
+		return result, ErrNotFound
+	}
+	var assigned bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.teaching_assignments a JOIN app.semesters sm ON sm.id=a.semester_id JOIN app.classes c ON c.id=a.class_id AND c.school_year_id=sm.school_year_id WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3 AND a.teacher_id=$4 AND a.effective_from<=$5::date AND (a.effective_until IS NULL OR a.effective_until>$5::date))`, semesterID, classID, subjectID, teacherID, date).Scan(&assigned)
+	if err != nil {
+		return result, err
+	}
+	if !assigned {
+		return result, ErrNotFound
+	}
+	tx.Rollback()
+
+	meetings, err := s.TeacherLessonsOnDate(ctx, actor, date)
+	if err != nil {
+		return result, err
+	}
+	result.Lessons = meetings.Lessons
+	replacementID, unique := UniqueReplacementLesson(meetings.Lessons, classID, subjectID, teacherID)
+	if !unique {
+		return result, nil
+	}
+	replacement, err := s.TeacherLessonAttendanceOnDate(ctx, actor, date, replacementID)
+	if err != nil {
+		var validation ValidationError
+		if errors.As(err, &validation) {
+			// Daftar terbaru tetap aman ditampilkan, tetapi roster yang tidak lengkap
+			// tidak boleh dipakai untuk memetakan pilihan formulir lama.
+			return result, nil
+		}
+		return result, err
+	}
+	result.Replacement = &replacement
+	return result, nil
+}
+
+// UniqueReplacementLesson memilih pertemuan hanya bila tepat satu entri cocok
+// berdasarkan kelas, mata pelajaran, dan guru.
+func UniqueReplacementLesson(lessons []TimetableEntry, classID, subjectID, teacherID int64) (int64, bool) {
+	var replacementID int64
+	for _, lesson := range lessons {
+		if lesson.ClassID != classID || lesson.SubjectID != subjectID || lesson.TeacherID != teacherID {
+			continue
+		}
+		if replacementID != 0 {
+			return 0, false
+		}
+		replacementID = lesson.ID
+	}
+	return replacementID, replacementID != 0
 }
 
 // attendanceContextForTeacherClass memakai fondasi jadwal dengan cakupan Guru Mapel yang ketat.

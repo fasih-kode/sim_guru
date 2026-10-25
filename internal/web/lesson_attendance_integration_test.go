@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,22 @@ import (
 )
 
 func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
+	matching := academic.TimetableEntry{ID: 1, ClassID: 2, SubjectID: 3, TeacherID: 4}
+	if id, ok := academic.UniqueReplacementLesson([]academic.TimetableEntry{matching}, 2, 3, 4); !ok || id != 1 {
+		t.Fatal("unique replacement meeting was not selected")
+	}
+	if _, ok := academic.UniqueReplacementLesson(nil, 2, 3, 4); ok {
+		t.Fatal("missing replacement meeting was accepted")
+	}
+	duplicate := matching
+	duplicate.ID = 2
+	if _, ok := academic.UniqueReplacementLesson([]academic.TimetableEntry{matching, duplicate}, 2, 3, 4); ok {
+		t.Fatal("ambiguous replacement meetings were accepted")
+	}
+	if _, ok := academic.UniqueReplacementLesson([]academic.TimetableEntry{matching}, 9, 3, 4); ok {
+		t.Fatal("meeting with a different class was accepted")
+	}
+
 	db := testutil.Database(t, "../../.env")
 	ctx := context.Background()
 	s := &academic.Store{DB: db}
@@ -172,6 +189,166 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 		if denied.StatusCode != http.StatusForbidden {
 			t.Fatalf("non-teacher POST status %d, want 403", denied.StatusCode)
 		}
+	}
+
+	// Revisi baru mengganti ID entri untuk tanggal yang form-nya sudah dibuka.
+	oldEntryID := entryID
+	oldForm := cloneValues(baseForm)
+	oldForm.Set("fingerprint", regexp.MustCompile(`name="fingerprint" value="([^"]+)"`).FindStringSubmatch(detail)[1])
+	oldForm.Add("student_ids", fmt.Sprint(studentID))
+	oldForm.Add("status_"+fmt.Sprint(studentID), "hadir")
+	newEffectiveFrom, _ := time.Parse("2006-01-02", "2020-07-07")
+	replacementEffectiveFrom, _ := time.Parse("2006-01-02", "2020-07-06")
+	replacementTeacher, replacementPassword := testutil.User(t, db, "guru_mapel")
+	var replacementTeacherID int64
+	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Pengganti Konteks Uji',$1) RETURNING id`, replacementTeacher.ID).Scan(&replacementTeacherID))
+	if err = s.AssignTeacher(ctx, curriculum.ID, semester, class.ID, subjectID, replacementTeacherID, replacementEffectiveFrom); err != nil {
+		t.Fatal(err)
+	}
+	replacementRevision, err := s.CreateTimetableDraft(ctx, curriculum.ID, semester, replacementEffectiveFrom)
+	must(err)
+	must(s.AddTimetableEntry(ctx, curriculum.ID, replacementRevision.ID, 2, class.ID, subjectID, replacementTeacherID, 1, 1))
+	must(s.PublishTimetable(ctx, curriculum.ID, replacementRevision.ID))
+	var replacementEntryID int64
+	must(db.QueryRow(`SELECT id FROM app.weekly_timetable_entries WHERE revision_id=$1`, replacementRevision.ID).Scan(&replacementEntryID))
+	replacementClient := login(replacementTeacher, replacementPassword)
+	oldTeacherResponse, postErr := teacherClient.PostForm(server.URL+"/jadwal-saya/absensi", oldForm)
+	must(postErr)
+	oldTeacherBody, _ := io.ReadAll(oldTeacherResponse.Body)
+	oldTeacherResponse.Body.Close()
+	if oldTeacherResponse.StatusCode != http.StatusNotFound || strings.Contains(string(oldTeacherBody), "Siswa Konteks Uji") {
+		t.Fatal("replaced teacher received a stale roster")
+	}
+	replacementForm := cloneValues(oldForm)
+	replacementAccount := get(replacementClient, "/account/password", http.StatusOK)
+	replacementCSRF := csrfRE.FindStringSubmatch(replacementAccount)
+	if len(replacementCSRF) != 2 {
+		t.Fatal("replacement teacher CSRF token missing")
+	}
+	replacementForm.Set("gorilla.csrf.Token", replacementCSRF[1])
+	replacementResponse, postErr := replacementClient.PostForm(server.URL+"/jadwal-saya/absensi", replacementForm)
+	must(postErr)
+	replacementBody, _ := io.ReadAll(replacementResponse.Body)
+	replacementResponse.Body.Close()
+	if replacementResponse.StatusCode != http.StatusNotFound || strings.Contains(string(replacementBody), "Siswa Konteks Uji") {
+		t.Fatal("replacement teacher could use the superseded teacher's form")
+	}
+	// A kembali mengampu mulai tanggal 7 Juli; revisi berikutnya mengembalikan
+	// pertemuan yang dapat dipetakan secara aman untuk formulir tanggal tersebut.
+	must(s.AssignTeacher(ctx, curriculum.ID, semester, class.ID, subjectID, teacherID, newEffectiveFrom))
+	newRevision, err := s.CreateTimetableDraft(ctx, curriculum.ID, semester, newEffectiveFrom)
+	must(err)
+	must(s.AddTimetableEntry(ctx, curriculum.ID, newRevision.ID, 2, class.ID, subjectID, teacherID, 1, 1))
+	must(s.PublishTimetable(ctx, curriculum.ID, newRevision.ID))
+	must(db.QueryRow(`SELECT id FROM app.weekly_timetable_entries WHERE revision_id=$1`, newRevision.ID).Scan(&entryID))
+	if entryID == oldEntryID {
+		t.Fatal("new published revision reused the old meeting entry ID")
+	}
+	var noAttendance, noHistory int
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance WHERE timetable_entry_id IN ($1,$2) AND meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noAttendance))
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id IN ($1,$2) AND a.meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noHistory))
+	if noAttendance != 0 || noHistory != 0 {
+		t.Fatalf("attendance existed before stale form test: rows=%d history=%d", noAttendance, noHistory)
+	}
+	response = post(oldForm, http.StatusConflict)
+	staleBody, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if !strings.Contains(string(staleBody), "Jadwal terbit berubah") || !strings.Contains(string(staleBody), `href="/jadwal-saya/absensi?date=2020-07-07"`) || !strings.Contains(string(staleBody), "Pilihan dipertahankan: Hadir") || !strings.Contains(string(staleBody), `value="`+oldForm.Get("fingerprint")+`"`) || strings.Contains(string(staleBody), "data-attendance-save") {
+		t.Fatal("published revision conflict did not preserve reviewable choices safely")
+	}
+	newDetailURL := fmt.Sprintf("%s&entry_id=%d", dateURL, entryID)
+	detail = get(teacherClient, newDetailURL, http.StatusOK)
+	if !strings.Contains(detail, "Siswa Konteks Uji") {
+		t.Fatal("authorized teacher could not open the replacement meeting")
+	}
+	baseForm.Set("entry_id", fmt.Sprint(entryID))
+	baseForm.Set("fingerprint", regexp.MustCompile(`name="fingerprint" value="([^"]+)"`).FindStringSubmatch(detail)[1])
+	csrfToken = csrfRE.FindStringSubmatch(detail)
+	if len(csrfToken) != 2 {
+		t.Fatal("replacement detail CSRF token missing")
+	}
+	baseForm.Set("gorilla.csrf.Token", csrfToken[1])
+	noAttendance, noHistory = 0, 0
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance WHERE timetable_entry_id IN ($1,$2) AND meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noAttendance))
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id IN ($1,$2) AND a.meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noHistory))
+	if noAttendance != 0 || noHistory != 0 {
+		t.Fatal("stale revision conflict wrote attendance or history")
+	}
+
+	// Guru lain dengan akun/identitas aktif tetap tidak memperoleh roster lama.
+	_, err = db.Exec(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Lain Konteks Uji',$1)`, unassigned.ID)
+	must(err)
+	otherAccount := get(unassignedClient, "/account/password", http.StatusOK)
+	otherCSRF := csrfRE.FindStringSubmatch(otherAccount)
+	if len(otherCSRF) != 2 {
+		t.Fatal("other teacher CSRF token missing")
+	}
+	otherForm := cloneValues(oldForm)
+	otherForm.Set("gorilla.csrf.Token", otherCSRF[1])
+	otherResponse, postErr := unassignedClient.PostForm(server.URL+"/jadwal-saya/absensi", otherForm)
+	must(postErr)
+	otherBody, _ := io.ReadAll(otherResponse.Body)
+	otherResponse.Body.Close()
+	if otherResponse.StatusCode != http.StatusNotFound || strings.Contains(string(otherBody), "Siswa Konteks Uji") {
+		t.Fatal("unassigned teacher received old meeting roster information")
+	}
+	combinedAccount := get(combinedClient, "/account/password", http.StatusOK)
+	combinedCSRF := csrfRE.FindStringSubmatch(combinedAccount)
+	if len(combinedCSRF) != 2 {
+		t.Fatal("combined role CSRF token missing")
+	}
+	combinedForm := cloneValues(oldForm)
+	combinedForm.Set("gorilla.csrf.Token", combinedCSRF[1])
+	combinedResponse, postErr := combinedClient.PostForm(server.URL+"/jadwal-saya/absensi", combinedForm)
+	must(postErr)
+	combinedBody, _ := io.ReadAll(combinedResponse.Body)
+	combinedResponse.Body.Close()
+	if combinedResponse.StatusCode != http.StatusForbidden || strings.Contains(string(combinedBody), "Siswa Konteks Uji") {
+		t.Fatal("combined role without teacher identity received roster information")
+	}
+	// Role tambahan tidak membuat identitas Guru Mapel lain berhak atas roster.
+	var combinedTeacherID int64
+	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Identitas Role Gabungan',$1) RETURNING id`, combined.ID).Scan(&combinedTeacherID))
+	if _, combinedErr := s.TeacherLessonAttendanceAfterRevision(ctx, combined.ID, "2020-07-07", oldEntryID); !errors.Is(combinedErr, academic.ErrNotFound) {
+		t.Fatalf("combined role with unrelated teacher identity got %v, want not found", combinedErr)
+	}
+	_, err = db.Exec(`DELETE FROM app.user_roles WHERE user_id=$1 AND role_code='guru_mapel'`, teacher.ID)
+	must(err)
+	if _, roleErr := s.TeacherLessonAttendanceAfterRevision(ctx, teacher.ID, "2020-07-07", oldEntryID); !errors.Is(roleErr, academic.ErrForbidden) {
+		t.Fatalf("teacher without Guru Mapel role got %v, want forbidden", roleErr)
+	}
+	_, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'guru_mapel')`, teacher.ID)
+	must(err)
+	_, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, teacher.ID)
+	must(err)
+	if _, inactiveErr := s.TeacherLessonAttendanceAfterRevision(ctx, teacher.ID, "2020-07-07", oldEntryID); !errors.Is(inactiveErr, academic.ErrForbidden) {
+		t.Fatalf("inactive teacher account got %v, want forbidden", inactiveErr)
+	}
+	_, err = db.Exec(`UPDATE app.users SET active=true WHERE id=$1`, teacher.ID)
+	must(err)
+
+	// Penugasan yang dicabut harus tetap menghasilkan penolakan aman.
+	var assignmentID int64
+	must(db.QueryRow(`SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4 AND effective_until IS NULL`, semester, class.ID, subjectID, teacherID).Scan(&assignmentID))
+	_, err = db.Exec(`UPDATE app.teaching_assignments SET effective_from='2020-07-08' WHERE id=$1`, assignmentID)
+	must(err)
+	defer func() {
+		_, _ = db.Exec(`UPDATE app.teaching_assignments SET effective_from='2020-07-07' WHERE id=$1`, assignmentID)
+	}()
+	revokedResponse, postErr := teacherClient.PostForm(server.URL+"/jadwal-saya/absensi", oldForm)
+	must(postErr)
+	revokedBody, _ := io.ReadAll(revokedResponse.Body)
+	revokedResponse.Body.Close()
+	if revokedResponse.StatusCode != http.StatusNotFound || strings.Contains(string(revokedBody), "Siswa Konteks Uji") {
+		t.Fatal("teacher with revoked assignment received roster information")
+	}
+	_, err = db.Exec(`UPDATE app.teaching_assignments SET effective_from='2020-07-07' WHERE id=$1`, assignmentID)
+	must(err)
+	noAttendance, noHistory = 0, 0
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance WHERE timetable_entry_id IN ($1,$2) AND meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noAttendance))
+	must(db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id IN ($1,$2) AND a.meeting_date='2020-07-07'`, oldEntryID, entryID).Scan(&noHistory))
+	if noAttendance != 0 || noHistory != 0 {
+		t.Fatal("stale or unauthorized requests wrote attendance or history")
 	}
 	missingChoice := cloneValues(baseForm)
 	missingChoice.Set("gorilla.csrf.Token", "invalid-token")

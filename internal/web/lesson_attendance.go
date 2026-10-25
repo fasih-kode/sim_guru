@@ -21,12 +21,13 @@ type lessonAttendanceStudentView struct {
 }
 
 type lessonAttendanceView struct {
-	Date        string
-	Lessons     []academic.TimetableEntry
-	Lesson      *academic.TimetableEntry
-	Students    []lessonAttendanceStudentView
-	Fingerprint string
-	Stale       bool
+	Date            string
+	Lessons         []academic.TimetableEntry
+	Lesson          *academic.TimetableEntry
+	Students        []lessonAttendanceStudentView
+	Fingerprint     string
+	Stale           bool
+	RevisionChanged bool
 }
 
 func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
@@ -77,27 +78,20 @@ func (a *application) saveLessonAttendance(w http.ResponseWriter, r *http.Reques
 	}
 	actor := principal(r).ID
 	current, err := a.options.Academics.TeacherLessonAttendanceOnDate(r.Context(), actor, date, entryID)
+	fingerprint := r.PostForm.Get("fingerprint")
+	if errors.Is(err, academic.ErrNotFound) {
+		statuses, _, _ := parseLessonAttendanceChoices(r.PostForm)
+		if changedErr := a.renderLessonAttendanceRevisionConflict(w, r, actor, date, entryID, fingerprint, statuses); changedErr == nil {
+			return
+		} else {
+			err = changedErr
+		}
+	}
 	if err != nil {
 		a.academicFailure(w, err)
 		return
 	}
-	statuses := make(map[int64]string, len(r.PostForm["student_ids"]))
-	choices := make([]academic.LessonAttendanceChoice, 0, len(r.PostForm["student_ids"]))
-	for _, rawID := range r.PostForm["student_ids"] {
-		studentID, parseErr := strconv.ParseInt(rawID, 10, 64)
-		if parseErr != nil || studentID < 1 {
-			err = academic.ValidationError("Pilihan siswa tidak valid.")
-			break
-		}
-		if _, exists := statuses[studentID]; exists {
-			err = academic.ValidationError("Pilihan siswa tidak valid atau berulang.")
-			break
-		}
-		status := r.PostForm.Get("status_" + rawID)
-		statuses[studentID] = status
-		choices = append(choices, academic.LessonAttendanceChoice{StudentID: studentID, Status: status})
-	}
-	fingerprint := r.PostForm.Get("fingerprint")
+	statuses, choices, err := parseLessonAttendanceChoices(r.PostForm)
 	var saveResult academic.LessonAttendanceSaveResult
 	if err == nil {
 		saveResult, err = a.options.Academics.SaveLessonAttendance(r.Context(), actor, academic.LessonAttendanceInput{
@@ -122,6 +116,13 @@ func (a *application) saveLessonAttendance(w http.ResponseWriter, r *http.Reques
 	if readErr == nil {
 		applyLessonAttendanceContext(v, latest, statuses)
 	} else {
+		if errors.Is(readErr, academic.ErrNotFound) {
+			if changedErr := a.renderLessonAttendanceRevisionConflict(w, r, actor, date, entryID, fingerprint, statuses); changedErr == nil {
+				return
+			} else {
+				readErr = changedErr
+			}
+		}
 		if errors.Is(readErr, academic.ErrForbidden) || errors.Is(readErr, academic.ErrNotFound) {
 			a.academicFailure(w, readErr)
 			return
@@ -145,6 +146,45 @@ func (a *application) saveLessonAttendance(w http.ResponseWriter, r *http.Reques
 		page.Error = "Konteks jadwal, penugasan, roster, atau catatan berubah. Tidak ada data yang disimpan; pilihan pada siswa yang masih cocok dipertahankan. Muat ulang konteks terbaru sebelum mencoba lagi."
 	}
 	a.render(w, r, "page", code, page)
+}
+
+func (a *application) renderLessonAttendanceRevisionConflict(w http.ResponseWriter, r *http.Request, actor int64, date string, oldEntryID int64, fingerprint string, pending map[int64]string) error {
+	changed, err := a.options.Academics.TeacherLessonAttendanceAfterRevision(r.Context(), actor, date, oldEntryID)
+	if err != nil {
+		return err
+	}
+	v := &lessonAttendanceView{Date: date, Lessons: changed.Lessons, RevisionChanged: true}
+	if changed.Replacement != nil {
+		applyLessonAttendanceContext(v, *changed.Replacement, pending)
+		v.Stale = true
+		v.Fingerprint = fingerprint
+	}
+	page := view{
+		Page:             "lesson-attendance",
+		Title:            "Absensi per Pelajaran",
+		LessonAttendance: v,
+		Error:            "Jadwal terbit berubah setelah formulir dibuka. Tidak ada absensi yang disimpan. Tinjau pertemuan terbaru sebelum mencatat kembali.",
+	}
+	a.render(w, r, "page", http.StatusConflict, page)
+	return nil
+}
+
+func parseLessonAttendanceChoices(form url.Values) (map[int64]string, []academic.LessonAttendanceChoice, error) {
+	statuses := make(map[int64]string, len(form["student_ids"]))
+	choices := make([]academic.LessonAttendanceChoice, 0, len(form["student_ids"]))
+	for _, rawID := range form["student_ids"] {
+		studentID, err := strconv.ParseInt(rawID, 10, 64)
+		if err != nil || studentID < 1 {
+			return statuses, choices, academic.ValidationError("Pilihan siswa tidak valid.")
+		}
+		if _, exists := statuses[studentID]; exists {
+			return statuses, choices, academic.ValidationError("Pilihan siswa tidak valid atau berulang.")
+		}
+		status := form.Get("status_" + rawID)
+		statuses[studentID] = status
+		choices = append(choices, academic.LessonAttendanceChoice{StudentID: studentID, Status: status})
+	}
+	return statuses, choices, nil
 }
 
 func hasSavedLessonAttendance(students []lessonAttendanceStudentView) bool {

@@ -1,5 +1,15 @@
 {{define "lesson-attendance"}}
 <section class="space-y-5">
+  {{if .LessonAttendance.RevisionChanged}}
+  <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+    {{if .LessonAttendance.Stale}}
+    Jadwal terbit berubah. Pilihan yang cocok dengan roster terbaru hanya ditampilkan untuk ditinjau dan belum siap disimpan.
+    {{else}}
+    Jadwal terbit berubah dan pilihan lama tidak dapat dipetakan dengan aman ke pertemuan terbaru.
+    {{end}}
+    <a class="ml-1 font-medium underline" href="/jadwal-saya/absensi?date={{.LessonAttendance.Date}}">Buka daftar pertemuan terbaru</a>.
+  </div>
+  {{end}}
   <section class="panel space-y-5">
     <div class="table-heading">
       <div>
