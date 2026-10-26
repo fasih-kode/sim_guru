@@ -15,6 +15,8 @@ const (
 	MaxTeacherLocationAccuracyM    = 50.0
 )
 
+var teacherAttendanceZone = loadTeacherAttendanceZone()
+
 type TeacherAttendanceLocationConfig struct {
 	Latitude, Longitude float64
 	RadiusM             int
@@ -79,7 +81,25 @@ func TeacherAttendanceDistanceM(lat1, lon1, lat2, lon2 float64) (float64, error)
 }
 
 func TeacherAttendanceWIBDate(at time.Time) string {
-	return at.In(time.FixedZone("Asia/Jakarta", 7*60*60)).Format("2006-01-02")
+	return TeacherAttendanceWIBTime(at).Format("2006-01-02")
+}
+
+// TeacherAttendanceWIBTime mengonversi instant ke zona waktu kalender sekolah.
+func TeacherAttendanceWIBTime(at time.Time) time.Time {
+	return at.In(teacherAttendanceWIBLocation())
+}
+
+func teacherAttendanceWIBLocation() *time.Location {
+	return teacherAttendanceZone
+}
+
+func loadTeacherAttendanceZone() *time.Location {
+	location, err := time.LoadLocation("Asia/Jakarta")
+	if err == nil {
+		return location
+	}
+	// Asia/Jakarta memakai WIB (UTC+07:00); gunakan offset eksplisit bila tzdata tidak tersedia.
+	return time.FixedZone("WIB", 7*60*60)
 }
 
 // TeacherAttendanceMakeupAllowed menerima hari ini dan tujuh tanggal sebelumnya.
@@ -90,20 +110,21 @@ func TeacherAttendanceMakeupAllowed(eventDate, today time.Time) bool {
 }
 
 func civilDay(t time.Time) time.Time {
-	loc := time.FixedZone("Asia/Jakarta", 7*60*60)
-	local := t.In(loc)
-	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+	local := TeacherAttendanceWIBTime(t)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
 }
 
 // TeacherAttendancePhotoRetainUntil menambah dua bulan kalender, bukan 60 hari.
 func TeacherAttendancePhotoRetainUntil(recordedAt time.Time) time.Time {
-	month := time.Date(recordedAt.Year(), recordedAt.Month()+2, 1, 0, 0, 0, 0, recordedAt.Location())
-	lastDay := time.Date(month.Year(), month.Month()+1, 0, 0, 0, 0, 0, recordedAt.Location()).Day()
-	day := recordedAt.Day()
+	local := TeacherAttendanceWIBTime(recordedAt)
+	location := local.Location()
+	month := time.Date(local.Year(), local.Month()+2, 1, 0, 0, 0, 0, location)
+	lastDay := time.Date(month.Year(), month.Month()+1, 0, 0, 0, 0, 0, location).Day()
+	day := local.Day()
 	if day > lastDay {
 		day = lastDay
 	}
-	return time.Date(month.Year(), month.Month(), day, recordedAt.Hour(), recordedAt.Minute(), recordedAt.Second(), recordedAt.Nanosecond(), recordedAt.Location())
+	return time.Date(month.Year(), month.Month(), day, local.Hour(), local.Minute(), local.Second(), local.Nanosecond(), location)
 }
 
 func (s *Store) TeacherAttendanceLocation(ctx context.Context, actor int64) (TeacherAttendanceLocationConfig, []History, error) {

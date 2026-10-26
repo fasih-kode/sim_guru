@@ -22,6 +22,7 @@ func (a *application) teacherAttendanceLocation(w http.ResponseWriter, r *http.R
 		return
 	}
 	f.Config, f.History = config, history
+	normalizeTeacherLocationViewTimes(f)
 	f.Latitude = strconv.FormatFloat(config.Latitude, 'f', -1, 64)
 	f.Longitude = strconv.FormatFloat(config.Longitude, 'f', -1, 64)
 	if !config.Configured {
@@ -67,8 +68,16 @@ func (a *application) teacherAttendanceLocation(w http.ResponseWriter, r *http.R
 			return
 		}
 		f.Config, f.History = config, history
+		normalizeTeacherLocationViewTimes(f)
 	} else if r.URL.Query().Get("saved") == "1" {
 		v.Message = "Pengaturan lokasi tersimpan dan tercatat dalam histori."
 	}
 	a.render(w, r, "page", status, v)
+}
+
+func normalizeTeacherLocationViewTimes(view *teacherLocationView) {
+	view.Config.UpdatedAt = academic.TeacherAttendanceWIBTime(view.Config.UpdatedAt)
+	for i := range view.History {
+		view.History[i].At = academic.TeacherAttendanceWIBTime(view.History[i].At)
+	}
 }

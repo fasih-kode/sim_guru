@@ -1,5 +1,10 @@
 # Handover
 
+## DEV-03B-FIX01 — konsistensi WIB pada retensi dan konfigurasi lokasi — 27 Oktober 2026
+Perbaikan lokal untuk review Tech Lead; belum commit/push. `TeacherAttendancePhotoRetainUntil` kini mengonversi instant ke zona IANA `Asia/Jakarta`, lalu menambah dua bulan kalender dan menjepit tanggal ke hari terakhir bulan tujuan sambil mempertahankan waktu hingga nanodetik. Konfigurasi zona memakai fallback offset WIB eksplisit bila tzdata sistem tidak tersedia. Form view lokasi mengonversi waktu konfigurasi dan histori ke WIB sebelum template memformatnya; timestamp sumber/database tidak diubah. Tidak ada perubahan migration, SQL, otorisasi, transaksi, atau absensi.
+
+Tes deterministik mencakup masukan 31 Desember 2026 01.00 WIB dan instant ekuivalen UTC, hasil 28 Februari 2027 01.00 WIB, akhir Februari tahun kabisat, tanggal biasa, kesamaan instant UTC/WIB, dan nanodetik. Tes rendering template dengan konfigurasi dan histori berlokasi UTC memverifikasi tampilan `31 Dec 2026 01:00 WIB` serta bahwa timestamp sumber tetap UTC. `GOPROXY=off go test ./internal/academic -run 'TestTeacherAttendancePhotoRetentionTwoCalendarMonths|TestTeacherAttendanceWIBDateAndMakeupWindow' -count=1`, `GOPROXY=off go test ./internal/web -run '^TestTeacherAttendanceLocationRenderUsesWIB$' -count=1`, `GOPROXY=off go test ./...`, `GOPROXY=off go vet ./...`, `git diff --check`, dan `gofmt` lulus. Tidak perlu tes database/UAT penuh untuk perubahan presentasi dan helper murni ini. DEV-03C belum dimulai.
+
 ## DEV-03B — fondasi dan pengaturan lokasi kehadiran guru — 27 Oktober 2026
 Status lokal untuk review Tech Lead; belum commit/push. Menambahkan migration aditif 00022, layanan lokasi singleton Admin dengan version/mutation lock/no-op/histori atomik, halaman Admin bernavigasi lewat Administrasi, serta helper domain murni untuk koordinat/akurasi/Haversine/tanggal WIB/jendela susulan/retensi dua bulan kalender. D-038 ditambahkan ke DECISIONS dan ringkasan PRD utama §7.2 serta PRD FE §3.5 diselaraskan. Tidak ada route pencatatan Masuk/Pulang, capture GPS/selfie, upload foto, event writer, fallback manual, atau worker retensi.
 

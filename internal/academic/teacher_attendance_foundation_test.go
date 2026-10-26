@@ -86,10 +86,50 @@ func TestTeacherAttendanceWIBDateAndMakeupWindow(t *testing.T) {
 
 func TestTeacherAttendancePhotoRetentionTwoCalendarMonths(t *testing.T) {
 	wib := time.FixedZone("WIB", 7*3600)
-	got := TeacherAttendancePhotoRetainUntil(time.Date(2026, time.December, 31, 12, 30, 0, 0, wib))
-	want := time.Date(2027, time.February, 28, 12, 30, 0, 0, wib)
-	if !got.Equal(want) {
-		t.Fatalf("retention=%v, want %v", got, want)
+	location := teacherAttendanceWIBLocation()
+	tests := []struct {
+		name string
+		in   time.Time
+		want time.Time
+	}{
+		{
+			name: "UTC input crossing year and month end",
+			in:   time.Date(2026, time.December, 30, 18, 0, 0, 123456789, time.UTC),
+			want: time.Date(2027, time.February, 28, 1, 0, 0, 123456789, location),
+		},
+		{
+			name: "leap year February clamp",
+			in:   time.Date(2027, time.December, 31, 1, 0, 0, 987654321, wib),
+			want: time.Date(2028, time.February, 29, 1, 0, 0, 987654321, location),
+		},
+		{
+			name: "ordinary date keeps day and time",
+			in:   time.Date(2026, time.June, 10, 13, 45, 12, 42, wib),
+			want: time.Date(2026, time.August, 10, 13, 45, 12, 42, location),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TeacherAttendancePhotoRetainUntil(tc.in)
+			if !got.Equal(tc.want) {
+				t.Fatalf("retention=%v, want %v", got, tc.want)
+			}
+			local := TeacherAttendanceWIBTime(got)
+			wantLocal := TeacherAttendanceWIBTime(tc.want)
+			if local.Format("2006-01-02 15:04:05.999999999 MST") != wantLocal.Format("2006-01-02 15:04:05.999999999 MST") {
+				t.Fatalf("WIB calendar retention=%s, want %s", local.Format("2006-01-02 15:04:05.999999999 MST"), wantLocal.Format("2006-01-02 15:04:05.999999999 MST"))
+			}
+		})
+	}
+
+	utc := time.Date(2026, time.December, 30, 18, 0, 0, 123456789, time.UTC)
+	wibInput := time.Date(2026, time.December, 31, 1, 0, 0, 123456789, wib)
+	fromUTC, fromWIB := TeacherAttendancePhotoRetainUntil(utc), TeacherAttendancePhotoRetainUntil(wibInput)
+	if !fromUTC.Equal(fromWIB) {
+		t.Fatalf("equivalent instants produced different retention: UTC=%v WIB=%v", fromUTC, fromWIB)
+	}
+	if got := TeacherAttendanceWIBTime(fromUTC).Format("2006-01-02 15:04:05.999999999 MST"); got != "2027-02-28 01:00:00.123456789 WIB" {
+		t.Fatalf("UTC input retention in WIB=%s", got)
 	}
 }
 
