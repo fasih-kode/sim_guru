@@ -160,6 +160,7 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .table-filter-panel label { margin-bottom:5px; color:#475467; font-size:12px; }
 .table-filter-panel select { min-height:38px; padding-block:7px !important; }
 .table-surface { overflow-x:auto; border:1px solid #e4e7ec; border-radius:14px; background:#fff; }
+.lesson-attendance-roster-surface { position:relative; }
 table.app-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
 .app-table thead tr { border-bottom:1px solid #eaecf0; }
 .app-table th { padding:13px 12px; color:#667085; font-weight:400; white-space:nowrap; }
