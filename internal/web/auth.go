@@ -43,6 +43,7 @@ type view struct {
 	Arrival                     *arrivalView
 	Daily                       *dailyView
 	Foundation                  *foundationView
+	TeacherLocation              *teacherLocationView
 	Movement                    *movementView
 	ASCImport                   *ascImportView
 	User                        *auth.User
@@ -143,6 +144,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "transitions", "curriculum-students"
 	case strings.HasPrefix(path, "/admin/users"):
 		return "users", "admin"
+	case path == "/admin/attendance/location":
+		return "teacher-attendance-location", "admin"
 	case strings.HasPrefix(path, "/admin/audit"):
 		return "audit", "admin"
 	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):

@@ -1,0 +1,55 @@
+{{define "teacher-attendance-location"}}
+{{with .TeacherLocation}}
+<section class="panel mb-5">
+  <div class="table-heading">
+    <div>
+      <h2>Lokasi sekolah untuk kehadiran guru</h2>
+      {{if .Config.Configured}}
+      <p class="mt-2 text-sm text-gray-500">Versi {{.Config.Version}} · diperbarui {{.Config.UpdatedAt.Format "02 Jan 2006 15:04 MST"}}</p>
+      {{else}}
+      <p class="mt-2"><span class="status-badge status-badge--warning">Belum siap</span> Koordinat sekolah belum diatur.</p>
+      {{end}}
+    </div>
+    <button type="button" class="button-primary" data-modal-open="teacher-location-modal">{{template "icon-edit" $}} {{if .Config.Configured}}Ubah lokasi{{else}}Atur lokasi{{end}}</button>
+  </div>
+  <p class="text-sm text-gray-500">Radius awal 100 meter. Radius yang dapat diatur 25–500 meter; akurasi GPS nanti dibatasi 50 meter. Koordinat perangkat tidak disimpan oleh pengaturan ini.</p>
+  {{if .Config.Configured}}
+  <dl class="mt-5 grid gap-4 sm:grid-cols-3">
+    <div><dt class="text-sm text-gray-500">Latitude</dt><dd class="font-medium">{{printf "%.7f" .Config.Latitude}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Longitude</dt><dd class="font-medium">{{printf "%.7f" .Config.Longitude}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Radius</dt><dd class="font-medium">{{.Config.RadiusM}} meter</dd></div>
+  </dl>
+  {{end}}
+</section>
+<section class="panel">
+  <h2>Riwayat perubahan</h2>
+  <div class="mt-4 space-y-4">
+    {{range .History}}
+    <article class="border-b border-gray-100 pb-4">
+      <p class="font-medium">{{.Reason}}</p>
+      <p class="text-sm text-gray-500">{{.Actor}} · {{.At.Format "02 Jan 2006 15:04 MST"}}</p>
+      <details class="mt-2 text-sm"><summary>Lihat sebelum dan sesudah</summary><p>Sebelum</p><pre class="overflow-x-auto text-xs">{{.Before}}</pre><p>Sesudah</p><pre class="overflow-x-auto text-xs">{{.After}}</pre></details>
+    </article>
+    {{else}}
+    <p class="text-sm text-gray-500">Belum ada perubahan.</p>
+    {{end}}
+  </div>
+</section>
+<dialog id="teacher-location-modal" class="form-modal" data-form-modal{{if and $.ModalOpen (eq $.ModalID "teacher-location-modal")}} data-modal-open-on-load{{end}} aria-labelledby="teacher-location-title">
+  <div class="form-modal-card">
+    <div class="form-modal-heading"><h2 id="teacher-location-title">{{if .Config.Configured}}Ubah{{else}}Atur{{end}} lokasi sekolah</h2><button class="form-modal-close" type="button" data-modal-close aria-label="Tutup">×</button></div>
+    {{if and $.Error (eq $.ModalID "teacher-location-modal")}}{{template "notification-error" $.Error}}{{end}}
+    <form method="post" action="/admin/attendance/location" class="space-y-4">
+      {{$.CSRF}}
+      <input type="hidden" name="version" value="{{.Version}}">
+      <div><label for="teacher-location-lat">Latitude sekolah</label><input id="teacher-location-lat" name="latitude" type="number" min="-90" max="90" step="any" value="{{.Latitude}}" required></div>
+      <div><label for="teacher-location-lon">Longitude sekolah</label><input id="teacher-location-lon" name="longitude" type="number" min="-180" max="180" step="any" value="{{.Longitude}}" required></div>
+      <div><label for="teacher-location-radius">Radius (meter)</label><input id="teacher-location-radius" name="radius_m" type="number" min="25" max="500" value="{{.Radius}}" required></div>
+      <div><label for="teacher-location-reason">Alasan perubahan</label><textarea id="teacher-location-reason" name="reason" maxlength="500" required>{{.Reason}}</textarea></div>
+      <p class="text-sm text-gray-500">Pastikan koordinat berasal dari titik sekolah yang benar. Tanpa koordinat sah, absensi GPS belum dapat digunakan.</p>
+      <div class="form-modal-actions"><div class="button-group button-group--primary"><button type="button" class="button-secondary" data-modal-close>{{template "icon-close" $}}Tutup</button><button type="submit" class="button-primary">{{template "icon-save" $}}Simpan</button></div></div>
+    </form>
+  </div>
+</dialog>
+{{end}}
+{{end}}

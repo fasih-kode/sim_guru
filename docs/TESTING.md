@@ -1,5 +1,10 @@
 # Pengujian
 
+## DEV-03B — fondasi lokasi kehadiran guru
+Tes unit `TestValidateTeacherLocationAndAccuracy`, `TestTeacherAttendanceDistanceRadiusBoundaries`, `TestTeacherAttendanceWIBDateAndMakeupWindow`, `TestTeacherAttendancePhotoRetentionTwoCalendarMonths`, dan `TestValidateTeacherLocationReason` memeriksa koordinat finite/rentang, radius 25/100/500 m, akurasi 50 m, Haversine di dalam/pada/luar radius, pergantian tanggal WIB, jendela susulan inklusif, alasan, serta dua bulan kalender dengan clamp akhir bulan.
+
+Integration service `TestTeacherAttendanceLocationIntegration` memeriksa konfigurasi singleton awal/update/no-op/version basi, role dan akun nonaktif, multi-role Admin, histori before/after, rollback bila insert histori gagal, konkurensi versi sama, dan isolasi absensi harian. Integration HTTP `TestTeacherAttendanceLocationHTTPIntegration` memeriksa Admin, penolakan role lain, CSRF, validasi 422 dengan input tetap, redirect 303, konflik 409 dan tidak adanya kontrol Masuk/Pulang. Tes migration menargetkan versi 22. Hasil aktual DEV-03B dicatat pada HANDOVER; tes integrasi hanya boleh memakai database `sim_guru_test` yang sudah diverifikasi aman.
+
 ## Perintah yang tersedia
 Jalankan dari root proyek. Go 1.27.3 dipilih melalui go.mod; GOTOOLCHAIN=auto dapat mengunduh toolchain terverifikasi.
 

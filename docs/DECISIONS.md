@@ -210,3 +210,15 @@ Kurikulum menjadi fallback administratif hanya bila akun guru historis tidak akt
 Koreksi memakai ID catatan permanen, expected version, status Hadir/Sakit/Izin/Alpa, dan alasan 1–500 karakter. Mutation lock, row lock, optimistic version, perubahan status/version, dan penambahan histori before/after berjalan atomik. Snapshot kejadian, identitas, `recorded_by`, waktu rekam, tanggal serta ID pertemuan tidak berubah. Versi basi ditolak; status sama dengan versi terbaru adalah no-op tanpa histori koreksi. Histori mencatat actor, waktu server, alasan, versi dan penanda koreksi administratif. Catatan dapat dibaca/ditemukan melalui ID permanen meskipun jadwal atau roster telah berubah; daftar tanggal hanya menampilkan cakupan yang diizinkan.
 
 Kebutuhan otoritatif ada di PRD utama §7.4 dan PRD FE §3.5. D-037 menetapkan kebijakan dan tidak mengubah kewenangan baca rekap. Implementasi DEV-02C2 dicatat di HANDOVER; skema migration 00021 digunakan tanpa migration baru.
+
+## D-038 — Kebijakan Kehadiran Guru GPS/Selfie dan Pencatatan Manual (27 Oktober 2026)
+
+Admin mengatur koordinat sekolah dan radius geofence; nilai awal radius 100 m, dapat diatur 25–500 m. Akurasi browser maksimal 50 m. Jarak dan akurasi adalah dua pemeriksaan terpisah; server menghitung jarak dengan Haversine. Koordinat mentah perangkat tidak disimpan permanen. Bukti event menyimpan jarak, akurasi, serta snapshot koordinat dan radius sekolah yang berlaku saat kejadian.
+
+Satu identitas guru dipakai untuk seluruh role. Ada paling banyak satu Masuk dan satu Pulang per tanggal WIB; Pulang tanpa Masuk diperbolehkan dan Masuk tetap Belum Dicatat. Pengiriman ulang yang identik mengembalikan bukti/histori terdahulu; isi berbeda untuk event yang sama konflik. Waktu absensi mandiri memakai waktu server. Guru Mapel atau Wali Kelas aktif boleh melakukan absensi mandiri bila akun aktif dan profil guru tertaut; guru tanpa akun tidak dapat absen mandiri. Role rangkap tidak menggandakan identitas.
+
+Petugas Absensi menjadi fallback saat GPS/kamera gagal atau lokasi di luar radius dan dapat mencatat guru aktif tanpa akun. Pencatatan susulan dibatasi tanggal kejadian dari tujuh hari kalender lalu sampai hari ini secara inklusif menurut WIB server; waktu kejadian masa depan ditolak. Waktu kejadian terpisah dari waktu rekam server. Alasan manual wajib. Koreksi petugas memakai version dan histori, tanpa approval Kepala Sekolah.
+
+Selfie wajib untuk Masuk/Pulang mandiri, maksimal 100 KB per foto, disimpan privat dan hanya dapat diakses guru pemilik serta Petugas Absensi berwenang. Berkas foto dihapus setelah dua bulan kalender, sementara metadata dan histori dipertahankan. Koordinat perangkat mentah tidak disimpan. D-038 tidak mengubah absensi siswa harian, absensi per pelajaran, atau kebijakan koreksi D-037.
+
+DEV-03B menyiapkan migration 00022, pengaturan lokasi Admin dan helper domain saja. Belum ada alur GPS/selfie, event operasional, unggah foto, fallback manual, atau worker retensi.

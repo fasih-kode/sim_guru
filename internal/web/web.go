@@ -96,6 +96,8 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("POST /admin/users/{id}/edit", a.require("admin", a.userForm))
 	mux.HandleFunc("GET /admin/audit", a.require("admin", a.audit))
+	mux.HandleFunc("GET /admin/attendance/location", a.require("admin", a.teacherAttendanceLocation))
+	mux.HandleFunc("POST /admin/attendance/location", a.require("admin", a.teacherAttendanceLocation))
 	mux.HandleFunc("GET /akademik/penempatan/{id}/pindah-kelas", a.require("kurikulum", func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("mode", "pindah-kelas")
 		a.studentMovement(w, r)
