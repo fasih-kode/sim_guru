@@ -1,5 +1,14 @@
 # Pengujian
 
+## DEV-03C2 — service pencatatan kehadiran guru GPS/selfie
+Tes unit `TestValidateTeacherAttendanceCapture`, `TestTeacherAttendanceCaptureRejectsMissingLocation`, dan `TestTeacherAttendanceEvidenceFingerprint` memeriksa aksi, token retry 128-bit, koordinat finite/rentang, batas akurasi, pemetaan konfigurasi lokasi kosong menjadi validasi, serta fingerprint bukti stabil. `TestPrepareDoesNotPublishFileUntilSaved` membuktikan foto dapat divalidasi tanpa file final dan hanya diterbitkan oleh `SavePrepared`.
+
+Integration `TestCaptureTeacherAttendanceIntegration` memakai `sim_guru_test` dan storage privat sementara. Cakupan: Guru Mapel/Wali Kelas/role gabungan, role atau akun/profil nonaktif, identitas tanpa tautan, lokasi belum dikonfigurasi (jika database test memang belum memiliki konfigurasi), radius tepat/di luar, akurasi 50/>50, foto rusak/hasil terlalu besar, upload gagal, satu event/foto/histori, retry identik termasuk tanggal WIB berikutnya, bukti berbeda, pulang tanpa masuk, snapshot lokasi setelah perubahan, rollback saat histori/constraint gagal, orphan cleanup/reconciliation, konkurensi, serta isolasi absensi siswa. Pemetaan hasil query tanpa konfigurasi diuji deterministik oleh `TestTeacherAttendanceCaptureRejectsMissingLocation`; integration service penuh untuk lokasi kosong tidak dipaksakan karena menghapus baris konfigurasi yang dirujuk histori akan merusak fixture audit bersama.
+
+Preflight pelaksanaan DEV-03C2 mengonfirmasi database test `sim_guru_test`, URL berbeda dari development, role test tanpa superuser/CREATEDB/CREATEROLE, target migration 22 dan tidak ada proses `go test` lain. Integration terfokus dengan `-p 1 -count=1 -race -tags=integration` lulus. Database test saat itu memiliki konfigurasi lokasi; service integration penuh tidak menghapus konfigurasi yang direferensikan histori. Hasil `go test ./...`, `go vet ./...`, gofmt, dan diff-check final dicatat pada HANDOVER.
+
+Hasil ini menguji service, bukan workflow browser. Belum ada route/UI Masuk-Pulang, pengujian kamera/GPS browser, pembacaan foto berotorisasi, worker retensi, atau simulasi commit yang hasilnya ambigu.
+
 ## DEV-03B — fondasi lokasi kehadiran guru
 Tes unit `TestValidateTeacherLocationAndAccuracy`, `TestTeacherAttendanceDistanceRadiusBoundaries`, `TestTeacherAttendanceWIBDateAndMakeupWindow`, `TestTeacherAttendancePhotoRetentionTwoCalendarMonths`, dan `TestValidateTeacherLocationReason` memeriksa koordinat finite/rentang, radius 25/100/500 m, akurasi 50 m, Haversine di dalam/pada/luar radius, pergantian tanggal WIB, jendela susulan inklusif, alasan, serta dua bulan kalender dengan clamp akhir bulan.
 

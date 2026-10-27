@@ -120,6 +120,33 @@ func TestSaveOpenDeleteAndMetadata(t *testing.T) {
 	}
 }
 
+func TestPrepareDoesNotPublishFileUntilSaved(t *testing.T) {
+	store, directory, _ := testStore(t)
+	prepared, err := store.Prepare(bytes.NewReader(syntheticImage(t, "jpeg", 40, 30, false)), "image/jpeg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.MIMEType() != "image/jpeg" || prepared.SizeBytes() < 1 || prepared.SizeBytes() > MaxPhotoBytes || len(prepared.ChecksumSHA256()) != 64 {
+		t.Fatalf("unexpected prepared metadata: mime=%q size=%d checksum length=%d", prepared.MIMEType(), prepared.SizeBytes(), len(prepared.ChecksumSHA256()))
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("Prepare published files: entries=%d err=%v", len(entries), err)
+	}
+	metadata, err := store.SavePrepared(prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err = os.ReadDir(directory)
+	if err != nil || len(entries) != 1 || entries[0].Name() != metadata.StorageKey {
+		t.Fatalf("SavePrepared did not publish exactly one final file: entries=%v err=%v", entries, err)
+	}
+	keys, err := store.ListKeys()
+	if err != nil || len(keys) != 1 || keys[0] != metadata.StorageKey {
+		t.Fatalf("ListKeys mismatch: keys=%v err=%v", keys, err)
+	}
+}
+
 func TestSaveAcceptsPNGAndStoresJPEG(t *testing.T) {
 	store, directory, _ := testStore(t)
 	meta, err := store.Save(bytes.NewReader(syntheticImage(t, "png", 40, 30, false)), "image/png")

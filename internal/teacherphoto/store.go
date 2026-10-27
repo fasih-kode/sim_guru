@@ -56,6 +56,17 @@ type Metadata struct {
 	ChecksumSHA256 string
 }
 
+// PreparedPhoto berisi JPEG yang sudah divalidasi dan dinormalisasi, tanpa file.
+// Byte gambar tetap privat; metadata ini memungkinkan pemeriksaan retry sebelum menulis file.
+type PreparedPhoto struct {
+	data     []byte
+	checksum string
+}
+
+func (p PreparedPhoto) MIMEType() string       { return "image/jpeg" }
+func (p PreparedPhoto) SizeBytes() int         { return len(p.data) }
+func (p PreparedPhoto) ChecksumSHA256() string { return p.checksum }
+
 type Store struct {
 	mu     sync.Mutex
 	root   *os.Root
@@ -153,18 +164,43 @@ func (s *Store) Close() error {
 // Save memvalidasi dan menormalkan gambar, lalu menerbitkan file secara atomik.
 // contentType hanya petunjuk dari pemanggil dan harus cocok dengan format hasil decode.
 func (s *Store) Save(source io.Reader, contentType string) (Metadata, error) {
+	prepared, err := s.Prepare(source, contentType)
+	if err != nil {
+		return Metadata{}, err
+	}
+	return s.SavePrepared(prepared)
+}
+
+// Prepare memvalidasi, mendekode, menormalkan, dan menghitung hash gambar tanpa membuat file.
+func (s *Store) Prepare(source io.Reader, contentType string) (PreparedPhoto, error) {
 	if s == nil || s.root == nil {
-		return Metadata{}, ErrNotConfigured
+		return PreparedPhoto{}, ErrNotConfigured
 	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return Metadata{}, ErrClosed
+		return PreparedPhoto{}, ErrClosed
 	}
 	s.mu.Unlock()
 	finalBytes, err := normalizeImage(source, contentType)
 	if err != nil {
-		return Metadata{}, err
+		return PreparedPhoto{}, err
+	}
+	checksum := sha256.Sum256(finalBytes)
+	return PreparedPhoto{data: finalBytes, checksum: hex.EncodeToString(checksum[:])}, nil
+}
+
+// SavePrepared menyimpan JPEG yang sudah divalidasi dengan kunci yang dibuat oleh storage.
+func (s *Store) SavePrepared(prepared PreparedPhoto) (Metadata, error) {
+	if s == nil || s.root == nil {
+		return Metadata{}, ErrNotConfigured
+	}
+	if len(prepared.data) == 0 || len(prepared.data) > MaxPhotoBytes || prepared.checksum == "" {
+		return Metadata{}, ErrInvalidImage
+	}
+	digest := sha256.Sum256(prepared.data)
+	if prepared.checksum != hex.EncodeToString(digest[:]) {
+		return Metadata{}, ErrInvalidImage
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -188,7 +224,7 @@ func (s *Store) Save(source io.Reader, contentType string) (Metadata, error) {
 		}
 	}()
 
-	if err = writeAll(temp, finalBytes); err != nil {
+	if err = writeAll(temp, prepared.data); err != nil {
 		temp.Close()
 		return Metadata{}, ErrStorage
 	}
@@ -227,12 +263,11 @@ func (s *Store) Save(source io.Reader, contentType string) (Metadata, error) {
 	}
 	tempExists = false
 
-	checksum := sha256.Sum256(finalBytes)
 	return Metadata{
 		StorageKey:     storageKey,
 		MIMEType:       "image/jpeg",
-		SizeBytes:      len(finalBytes),
-		ChecksumSHA256: hex.EncodeToString(checksum[:]),
+		SizeBytes:      len(prepared.data),
+		ChecksumSHA256: prepared.checksum,
 	}, nil
 }
 
@@ -292,6 +327,39 @@ func (s *Store) Delete(storageKey string) error {
 		return ErrStorage
 	}
 	return nil
+}
+
+// ListKeys mengembalikan nama file final saja untuk rekonsiliasi internal.
+// Berkas sementara tidak pernah disajikan sebagai foto.
+func (s *Store) ListKeys() ([]string, error) {
+	if s == nil || s.root == nil {
+		return nil, ErrNotConfigured
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	entries, err := readRootEntries(s.root)
+	if err != nil {
+		return nil, ErrStorage
+	}
+	keys := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if validTempName(name) {
+			continue
+		}
+		if !validStorageKey(name) {
+			return nil, ErrStorage
+		}
+		info, statErr := s.root.Lstat(name)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || info.Size() > MaxPhotoBytes {
+			return nil, ErrStorage
+		}
+		keys = append(keys, name)
+	}
+	return keys, nil
 }
 
 // CleanupTemps membuang file temporer valid yang lebih lama dari umur yang ditentukan.

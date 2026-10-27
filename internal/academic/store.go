@@ -10,7 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB     *sql.DB
+	Photos TeacherAttendancePhotoStorage
+}
 
 type rowScanner interface{ Scan(...any) error }
 
