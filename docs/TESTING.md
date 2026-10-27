@@ -1,5 +1,13 @@
 # Pengujian
 
+## DEV-03E1 — service retensi foto privat
+
+`TestTeacherAttendancePhotoExpiry` menguji sebelum/tepat/sesudah tenggat, metadata yang sudah dihapus, pergantian bulan, Februari biasa/kabisat, dan instant UTC/WIB menggunakan helper dua bulan kalender yang sudah tersedia. `TestTeacherAttendancePhotoPurgeLimit` menguji limit 1–50 dan penolakan nilai di luar batas. Tes storage `TestSaveOpenDeleteAndMetadata` yang sudah ada melindungi Delete idempoten.
+
+`TestPurgeExpiredTeacherAttendancePhotosIntegration` menggunakan foto sintetis pada temporary directory dan metadata fixture sendiri di `sim_guru_test` migration 22. Tes menolak berjalan jika ada metadata kedaluwarsa lama agar tidak membersihkan bukti bersama dengan storage fixture. Cakupan: batch terbatas, foto belum kedaluwarsa, penghapusan pada tenggat yang sudah tercapai dan lewat tenggat, metadata/event/histori tetap, timestamp PostgreSQL, kegagalan storage tanpa menggagalkan foto lain dalam batch yang sama maupun batch satu foto berturut-turut, penghitung kegagalan dan kategori aman, pengosongan error setelah retry berhasil, file sudah hilang, retry berurutan, dua purge bersamaan, mutation lock, pemeriksaan ulang kandidat basi, kegagalan UPDATE dan COMMIT setelah file dihapus serta pemulihan retry, koreksi tidak mengubah retensi, dan absensi siswa tetap. Batas tepat sama dengan tenggat diuji deterministik pada unit test; integrasi memakai tenggat yang telah tercapai saat worker berjalan.
+
+Perintah aktual PASS pada 28 Oktober 2026: `GOPROXY=off go test -race -count=1 ./internal/teacherphoto` dan `GOPROXY=off go test -p 1 -count=1 -race -tags=integration ./internal/academic -run '^TestPurgeExpiredTeacherAttendancePhotosIntegration$'`. Kegagalan commit deterministik diuji dengan constraint trigger tertunda yang dibatasi pada ID fixture. Putus jaringan dengan hasil COMMIT ambigu belum di-fault-inject; service mengembalikan kategori commit gagal dan tidak menghitung kandidat tersebut sebagai sukses. Scheduler dan pembacaan foto berotorisasi belum tersedia; UAT browser tidak diperlukan untuk service ini. Final gate mengulang kedua perintah tersebut, `GOPROXY=off go test -count=1 ./...`, serta `GOPROXY=off go vet ./...` dengan hasil PASS. Kompatibilitas capture/rekonsiliasi ditinjau dari mutation lock yang sama; tes konkurensi ini tidak menjalankan kedua service tersebut bersamaan dengan purge.
+
 ## DEV-03D2 — koreksi historis kehadiran guru
 Tes unit `TestValidateTeacherAttendanceCorrectionInput`, `TestValidateTeacherAttendanceCorrectionTime`, dan `TestTeacherAttendanceCorrectionManualReason` mencakup ID/version, alasan koreksi dan manual, parsing WIB, masa depan, tanggal WIB, serta pemisahan alasan manual dari alasan koreksi.
 
