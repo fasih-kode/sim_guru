@@ -6,14 +6,16 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Environment, Address, DatabaseURL string
-	CSRFKey                           []byte
+	Environment, Address, DatabaseURL     string
+	TeacherPhotoDirectory, RepositoryRoot string
+	CSRFKey                               []byte
 }
 
 // Load reads optional local configuration without overriding exported variables.
@@ -59,5 +61,10 @@ func Parse(get func(string) string) (Config, error) {
 	if err != nil || len(key) != 32 {
 		return Config{}, errors.New("CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak")
 	}
-	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key}, nil
+	photoDirectory, repositoryRoot := get("TEACHER_PHOTO_DIR"), get("APP_REPOSITORY_ROOT")
+	if photoDirectory != "" && (!filepath.IsAbs(photoDirectory) || !filepath.IsAbs(repositoryRoot)) {
+		return Config{}, errors.New("TEACHER_PHOTO_DIR dan APP_REPOSITORY_ROOT wajib berupa path absolut saat storage foto diaktifkan")
+	}
+	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key,
+		TeacherPhotoDirectory: photoDirectory, RepositoryRoot: repositoryRoot}, nil
 }

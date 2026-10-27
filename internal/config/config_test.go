@@ -24,6 +24,11 @@ func TestParse(t *testing.T) {
 		{"missing db name", map[string]string{"DATABASE_URL": "postgres://localhost/"}, false},
 		{"production tls", map[string]string{"APP_ENV": "production"}, false},
 		{"production verified", map[string]string{"APP_ENV": "production", "DATABASE_URL": "postgres://localhost/db?sslmode=verify-full"}, true},
+		{"photo storage disabled", map[string]string{"TEACHER_PHOTO_DIR": ""}, true},
+		{"absolute photo storage", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, true},
+		{"relative photo directory", map[string]string{"TEACHER_PHOTO_DIR": "private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, false},
+		{"missing repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies"}, false},
+		{"relative repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "sim_guru"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost/db", "CSRF_AUTH_KEY": strings.Repeat("a", 64)}
@@ -42,6 +47,9 @@ func TestParse(t *testing.T) {
 			}
 			if tc.name == "defaults" && cfg.Address != "127.0.0.1:18743" {
 				t.Fatalf("unexpected address %s", cfg.Address)
+			}
+			if tc.name == "absolute photo storage" && (cfg.TeacherPhotoDirectory != tc.values["TEACHER_PHOTO_DIR"] || cfg.RepositoryRoot != tc.values["APP_REPOSITORY_ROOT"]) {
+				t.Fatal("konfigurasi storage foto tidak diteruskan")
 			}
 		})
 	}

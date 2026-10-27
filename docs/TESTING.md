@@ -1,5 +1,16 @@
 # Pengujian
 
+## DEV-03E2 — wiring storage dan lifecycle worker
+
+Tes konfigurasi `TestParse` mencakup storage kosong, pasangan path absolut, root hilang, dan path relatif. `TestOpenTeacherPhotoStorage` memakai root sumber fixture dengan identitas modul serta direktori static yang sesuai; mencakup storage valid tanpa bergantung pada cwd, lokasi di repository/public, permission tidak aman, root salah, modul lain, direktori static hilang, symlink parent/direktori foto, parent writable oleh pihak lain, dan parent belum tersedia. Validasi `teacherphoto.NewStore` tidak dilonggarkan.
+
+`TestTeacherPhotoRetentionCycles` memakai kanal tick manual, mencakup pemeriksaan awal, siklus lanjutan setelah error parsial, batch 50, deadline satu menit, tidak overlap, pembatalan saat purge, dan log ringkas yang tidak membocorkan error mentah/path/key. `TestTeacherPhotoRetentionCancelledBeforeStart` memastikan pembatalan awal tidak menjalankan purge. `TestServeStopsWorkerBeforeStorageClose` menguji pembatalan context maupun server HTTP ditutup saat purge berjalan; storage nyata di temporary directory masih terbuka sampai worker keluar. `TestServeListenFailureDoesNotStartWorker` membuktikan port yang sudah terpakai menolak startup sebelum purge dimulai. `TestServeWithoutPhotoStorage` menjalankan HTTP fixture tanpa storage; `TestServeShutdownTimeoutStillStopsWorker` menahan request sintetis sampai timeout shutdown 10 detik, lalu memeriksa HTTP dan worker berhenti. Seluruh HTTP lifecycle memakai loopback port sementara, purger sintetis, dan tidak menghubungkan server fixture ke database pengguna.
+
+PASS pada 28 Oktober 2026: `GOPROXY=off go test -race -count=1 ./cmd/server ./internal/config` (cmd/server 11,029 detik), `GOPROXY=off go test -count=1 ./...`, `GOPROXY=off go vet ./...`, serta integrasi regresi `GOPROXY=off go test -p 1 -count=1 -race -tags=integration ./internal/academic -run '^TestPurgeExpiredTeacherAttendancePhotosIntegration$'` (3,644 detik). Integrasi memakai `sim_guru_test` migration 22, role terbatas, URL berbeda dari development, tanpa koneksi test lain atau foto kedaluwarsa bersama. Wiring lifecycle diuji tanpa database; integrasi yang dijalankan melindungi kontrak service retensi yang tetap sama. Interval 24 jam diuji melalui tick sintetis, bukan menunggu waktu nyata. Tidak ada UAT browser atau deployment.
+
+
+Final gate mengulang `go test -count=1 ./...`, `go vet ./...`, serta tes race `./cmd/server ./internal/config` dengan `GOPROXY=off`, semuanya PASS setelah perluasan tes keamanan root/symlink. Final gate tidak mengulang integrasi PostgreSQL karena SQL dan service retensi tidak berubah; hasil integrasi di atas merupakan hasil tahap implementasi. Sinkronisasi tes worker menggunakan channel; SIGINT/SIGTERM ditinjau pada `signal.NotifyContext`, sedangkan tes lifecycle memakai pembatalan context tanpa mengirim sinyal ke proses server pengguna.
+
 ## DEV-03E1 — service retensi foto privat
 
 `TestTeacherAttendancePhotoExpiry` menguji sebelum/tepat/sesudah tenggat, metadata yang sudah dihapus, pergantian bulan, Februari biasa/kabisat, dan instant UTC/WIB menggunakan helper dua bulan kalender yang sudah tersedia. `TestTeacherAttendancePhotoPurgeLimit` menguji limit 1–50 dan penolakan nilai di luar batas. Tes storage `TestSaveOpenDeleteAndMetadata` yang sudah ada melindungi Delete idempoten.

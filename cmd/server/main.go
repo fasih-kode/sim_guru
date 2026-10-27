@@ -51,31 +51,29 @@ func run() error {
 	if err != nil {
 		return errors.New("database belum siap; jalankan migrasi dan periksa koneksi")
 	}
+	photos, err := openTeacherPhotoStorage(cfg)
+	if err != nil {
+		return err
+	}
+	if photos != nil {
+		defer photos.Close()
+	}
+	academics := &academic.Store{DB: db}
+	var purge teacherPhotoPurger
+	if photos != nil {
+		academics.Photos = photos
+		purge = academics
+	}
 	accounts, err := auth.New(db)
 	if err != nil {
 		return errors.New("inisialisasi autentikasi gagal")
 	}
-	handler, err := web.New(ready, web.Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: &academic.Store{DB: db}, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
+	handler, err := web.New(ready, web.Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: academics, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
 	if err != nil {
 		return errors.New("inisialisasi template gagal")
 	}
 	server := &http.Server{Addr: cfg.Address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
-	errs := make(chan error, 1)
-	go func() {
-		slog.Info("server dimulai", "address", cfg.Address, "environment", cfg.Environment)
-		errs <- server.ListenAndServe()
-	}()
-	select {
-	case err := <-errs:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		return server.Shutdown(shutdownCtx)
-	}
+	return serve(ctx, server, purge, slog.Default().With("environment", cfg.Environment))
 }
 func main() {
 	if err := run(); err != nil {
