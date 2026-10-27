@@ -159,7 +159,7 @@ func (s *Store) CaptureTeacherAttendance(ctx context.Context, actorID int64, inp
 		  AND h.after_state->>'IdempotencyKeyHash'=$4
 		ORDER BY h.id LIMIT 1`, teacherID, actorID, string(input.Action), keyHash).Scan(&retryEventID)
 	if err == nil {
-		proof, fingerprint, retryErr := loadTeacherAttendanceRetry(ctx, tx, retryEventID, actorID, input, "", keyHash, true, nil, s.Photos)
+		proof, fingerprint, retryErr := loadTeacherAttendanceRetry(ctx, tx, retryEventID, actorID, input, "", keyHash, nil, s.Photos)
 		if retryErr != nil {
 			return TeacherAttendanceCaptureProof{}, retryErr
 		}
@@ -176,11 +176,7 @@ func (s *Store) CaptureTeacherAttendance(ctx context.Context, actorID int64, inp
 	var existingID int64
 	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teacher_attendance_events WHERE teacher_id=$1 AND on_date=$2::date AND action=$3`, teacherID, onDate, string(input.Action)).Scan(&existingID)
 	if err == nil {
-		prepared, prepErr := s.Photos.Prepare(input.Selfie, input.SelfieMIMEType)
-		if prepErr != nil {
-			return TeacherAttendanceCaptureProof{}, prepErr
-		}
-		proof, fingerprint, retryErr := loadTeacherAttendanceRetry(ctx, tx, existingID, actorID, input, onDate, keyHash, false, &prepared, s.Photos)
+		proof, fingerprint, retryErr := loadTeacherAttendanceRetry(ctx, tx, existingID, actorID, input, onDate, keyHash, nil, s.Photos)
 		if retryErr != nil {
 			return TeacherAttendanceCaptureProof{}, retryErr
 		}
@@ -331,7 +327,7 @@ func teacherAttendanceDeviceLocationProof(key []byte, latitude, longitude float6
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorID int64, input TeacherAttendanceCaptureInput, expectedDate, keyHash string, requireKeyMatch bool, prepared *teacherphoto.PreparedPhoto, photos TeacherAttendancePhotoStorage) (TeacherAttendanceCaptureProof, string, error) {
+func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorID int64, input TeacherAttendanceCaptureInput, expectedDate, keyHash string, prepared *teacherphoto.PreparedPhoto, photos TeacherAttendancePhotoStorage) (TeacherAttendanceCaptureProof, string, error) {
 	var proof TeacherAttendanceCaptureProof
 	var eventActor int64
 	var source string
@@ -371,14 +367,12 @@ func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorI
 	if err = json.Unmarshal([]byte(historyJSON.String), &snapshot); err != nil || snapshot.EvidenceFingerprint == "" {
 		return proof, "", ErrConflict
 	}
-	if requireKeyMatch && snapshot.IdempotencyKeyHash != keyHash {
+	if snapshot.IdempotencyKeyHash != keyHash {
 		return proof, "", nil
 	}
-	if snapshot.IdempotencyKeyHash == keyHash {
-		keyBytes, decodeErr := hex.DecodeString(input.IdempotencyKey)
-		if decodeErr != nil || teacherAttendanceDeviceLocationProof(keyBytes, input.Latitude, input.Longitude) != snapshot.DeviceLocationProof {
-			return proof, "", nil
-		}
+	keyBytes, decodeErr := hex.DecodeString(input.IdempotencyKey)
+	if decodeErr != nil || teacherAttendanceDeviceLocationProof(keyBytes, input.Latitude, input.Longitude) != snapshot.DeviceLocationProof {
+		return proof, "", nil
 	}
 	proof.PhotoMIMEType, proof.PhotoSizeBytes, proof.PhotoChecksumSHA256 = photoMIME, photoSize, photoChecksum
 	var image teacherphoto.PreparedPhoto
@@ -476,7 +470,7 @@ func (s *Store) resolveTeacherAttendanceCommit(ctx context.Context, teacherID, a
 	if err != nil {
 		return TeacherAttendanceCaptureProof{}, false, err
 	}
-	proof, fingerprint, err := loadTeacherAttendanceRetry(ctx, tx, eventID, actorID, input, onDate, keyHash, true, &prepared, s.Photos)
+	proof, fingerprint, err := loadTeacherAttendanceRetry(ctx, tx, eventID, actorID, input, onDate, keyHash, &prepared, s.Photos)
 	if err != nil {
 		return TeacherAttendanceCaptureProof{}, false, err
 	}

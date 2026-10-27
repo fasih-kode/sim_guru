@@ -158,27 +158,22 @@ func TestCaptureTeacherAttendanceIntegration(t *testing.T) {
 	if err != nil || len(keys) != 1 {
 		t.Fatalf("identical retry created extra photo: keys=%d err=%v", len(keys), err)
 	}
-	newRequestKeyRetry, err := service.CaptureTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCaptureInput{
+	assertCaptureRejectedWithoutWrites(t, db, service, store, teacher.ID, teacherID, academic.TeacherAttendanceCaptureInput{
 		IdempotencyKey: testutil.Random(t)[:32], Action: academic.TeacherCheckIn, Latitude: boundaryLatitude, Longitude: 0, AccuracyM: 50,
 		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
-	})
-	if err != nil || !newRequestKeyRetry.Idempotent || newRequestKeyRetry.EventID != first.EventID {
-		t.Fatalf("same-day identical evidence with a new request key was not idempotent: proof=%+v err=%v", newRequestKeyRetry, err)
-	}
-	changed, err := service.CaptureTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCaptureInput{
+	}, academic.ErrConflict)
+	assertCaptureRejectedWithoutWrites(t, db, service, store, teacher.ID, teacherID, academic.TeacherAttendanceCaptureInput{
 		IdempotencyKey: firstRequestKey, Action: academic.TeacherCheckIn, Latitude: boundaryLatitude, Longitude: 0, AccuracyM: 49,
 		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
-	})
-	if !errors.Is(err, academic.ErrConflict) {
-		t.Fatalf("different evidence should conflict, proof=%+v err=%v", changed, err)
-	}
-	changedCoordinate, err := service.CaptureTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCaptureInput{
+	}, academic.ErrConflict)
+	assertCaptureRejectedWithoutWrites(t, db, service, store, teacher.ID, teacherID, academic.TeacherAttendanceCaptureInput{
 		IdempotencyKey: firstRequestKey, Action: academic.TeacherCheckIn, Latitude: -boundaryLatitude, Longitude: 0, AccuracyM: 50,
 		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
-	})
-	if !errors.Is(err, academic.ErrConflict) {
-		t.Fatalf("different coordinates with identical distance should conflict for the same request key: proof=%+v err=%v", changedCoordinate, err)
-	}
+	}, academic.ErrConflict)
+	assertCaptureRejectedWithoutWrites(t, db, service, store, teacher.ID, teacherID, academic.TeacherAttendanceCaptureInput{
+		IdempotencyKey: testutil.Random(t)[:32], Action: academic.TeacherCheckIn, Latitude: -boundaryLatitude, Longitude: 0, AccuracyM: 50,
+		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
+	}, academic.ErrConflict)
 	previousDate := shiftCaptureEventToPreviousDay(t, db, first.EventID)
 	crossDateRetry, err := service.CaptureTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCaptureInput{
 		IdempotencyKey: firstRequestKey, Action: academic.TeacherCheckIn, Latitude: boundaryLatitude, Longitude: 0, AccuracyM: 50,
@@ -228,6 +223,13 @@ func TestCaptureTeacherAttendanceIntegration(t *testing.T) {
 		Latitude: 3, Longitude: 4, RadiusM: 150, ExpectedVersion: latest.Version, Reason: "Uji perubahan sesudah snapshot",
 	}); err != nil {
 		t.Fatal(err)
+	}
+	radiusChangedRetry, err := service.CaptureTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCaptureInput{
+		IdempotencyKey: firstRequestKey, Action: academic.TeacherCheckIn, Latitude: boundaryLatitude, Longitude: 0, AccuracyM: 50,
+		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
+	})
+	if err != nil || !radiusChangedRetry.Idempotent || radiusChangedRetry.EventID != first.EventID {
+		t.Fatalf("retry with the same key failed after geofence changed: proof=%+v err=%v", radiusChangedRetry, err)
 	}
 	var snapLat, snapLon float64
 	var snapRadius int
