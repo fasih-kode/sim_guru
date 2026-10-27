@@ -378,6 +378,61 @@ func TestCaptureTeacherAttendanceIntegration(t *testing.T) {
 		t.Fatalf("concurrent retry published an extra photo: keys=%d err=%v", len(keys), err)
 	}
 
+	// Koreksi event GPS tidak mengubah foto/bukti, dan retry awal tidak menimpa koreksi.
+	var originalGPSState string
+	var originalRecordedAt time.Time
+	var originalPhotoID int64
+	var originalPhotoState string
+	if err = db.QueryRow(`SELECT to_jsonb(e)::text,e.recorded_at,e.photo_metadata_id FROM app.teacher_attendance_events e WHERE e.id=$1`, first.EventID).Scan(&originalGPSState, &originalRecordedAt, &originalPhotoID); err != nil {
+		t.Fatal("read original GPS event before correction:", err)
+	}
+	if err = db.QueryRow(`SELECT to_jsonb(p)::text FROM app.teacher_attendance_photos p WHERE p.id=$1`, originalPhotoID).Scan(&originalPhotoState); err != nil {
+		t.Fatal("read original GPS photo metadata:", err)
+	}
+	correctionOfficer, _ := testutil.User(t, db, "petugas_absensi")
+	gpsCorrection, err := service.CorrectTeacherAttendance(ctx, correctionOfficer.ID, academic.TeacherAttendanceCorrectionInput{
+		EventID: first.EventID, ExpectedVersion: 1, OccurredAt: previousDate + "T00:01", CorrectionReason: "Waktu selfie disesuaikan dengan register piket",
+	})
+	if err != nil || gpsCorrection.Version != 2 || gpsCorrection.Source != "gps_selfie" {
+		t.Fatalf("GPS attendance correction=%+v err=%v", gpsCorrection, err)
+	}
+	var correctedGPSState string
+	var correctedRecordedAt time.Time
+	if err = db.QueryRow(`SELECT to_jsonb(e)::text,e.recorded_at FROM app.teacher_attendance_events e WHERE e.id=$1`, first.EventID).Scan(&correctedGPSState, &correctedRecordedAt); err != nil {
+		t.Fatal("read corrected GPS event:", err)
+	}
+	if !correctedRecordedAt.Equal(originalRecordedAt) || !strings.Contains(correctedGPSState, `"version": 2`) || !strings.Contains(correctedGPSState, `"photo_metadata_id": `+fmt.Sprint(originalPhotoID)) {
+		t.Fatal("GPS correction changed immutable recorded_at or photo reference")
+	}
+	var correctedPhotoState string
+	if err = db.QueryRow(`SELECT to_jsonb(p)::text FROM app.teacher_attendance_photos p WHERE p.id=$1`, originalPhotoID).Scan(&correctedPhotoState); err != nil || correctedPhotoState != originalPhotoState {
+		t.Fatalf("GPS correction changed photo metadata: err=%v", err)
+	}
+	var gpsHistory int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teacher_attendance_history WHERE event_id=$1`, first.EventID).Scan(&gpsHistory); err != nil || gpsHistory != 2 {
+		t.Fatalf("GPS history count=%d err=%v", gpsHistory, err)
+	}
+	var beforeJSON, afterJSON string
+	if err = db.QueryRow(`SELECT before_state::text,after_state::text FROM app.teacher_attendance_history WHERE event_id=$1 AND action='corrected'`, first.EventID).Scan(&beforeJSON, &afterJSON); err != nil {
+		t.Fatal("read GPS correction snapshots:", err)
+	}
+	var beforeState, afterState map[string]json.RawMessage
+	if err = json.Unmarshal([]byte(beforeJSON), &beforeState); err != nil {
+		t.Fatal("decode GPS before snapshot:", err)
+	}
+	if err = json.Unmarshal([]byte(afterJSON), &afterState); err != nil {
+		t.Fatal("decode GPS after snapshot:", err)
+	}
+	for _, field := range []string{"teacher_id", "teacher_name", "on_date", "action", "source", "recorded_by", "recorded_at", "distance_m", "accuracy_m", "school_latitude", "school_longitude", "geofence_radius_m", "photo_metadata_id", "photo_mime_type", "photo_size_bytes", "photo_checksum_sha256", "photo_created_at", "retain_until", "photo_deleted_at", "photo_cleanup_attempts"} {
+		if (len(beforeState[field]) == 0 && field != "photo_deleted_at") || !bytes.Equal(beforeState[field], afterState[field]) {
+			t.Errorf("GPS correction did not preserve snapshot field %q: before=%s after=%s", field, beforeJSON, afterJSON)
+		}
+	}
+	assertCaptureRejectedWithoutWrites(t, db, service, store, teacher.ID, teacherID, academic.TeacherAttendanceCaptureInput{
+		IdempotencyKey: firstRequestKey, Action: academic.TeacherCheckIn, Latitude: boundaryLatitude, Longitude: 0, AccuracyM: 50,
+		Selfie: bytes.NewReader(firstImage), SelfieMIMEType: "image/jpeg",
+	}, academic.ErrConflict)
+
 	dailyAfter, lessonAfter := attendanceStudentCounts(t, db)
 	if dailyAfter != dailyBefore || lessonAfter != lessonBefore {
 		t.Fatalf("student attendance changed: daily %d->%d, lesson %d->%d", dailyBefore, dailyAfter, lessonBefore, lessonAfter)

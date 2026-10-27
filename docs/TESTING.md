@@ -1,5 +1,10 @@
 # Pengujian
 
+## DEV-03D2 — koreksi historis kehadiran guru
+Tes unit `TestValidateTeacherAttendanceCorrectionInput`, `TestValidateTeacherAttendanceCorrectionTime`, dan `TestTeacherAttendanceCorrectionManualReason` mencakup ID/version, alasan koreksi dan manual, parsing WIB, masa depan, tanggal WIB, serta pemisahan alasan manual dari alasan koreksi.
+
+Integration `TestCorrectTeacherAttendanceIntegration` memakai fixture sintetis di `sim_guru_test` migration 22. Cakupan lulus: otorisasi Petugas aktif dan penolakan role lain/akun Petugas nonaktif, koreksi ketika guru historis nonaktif, perubahan alasan manual terpisah dari alasan histori, optimistic version, no-op, dua koreksi bersamaan, rollback saat insert histori gagal, snapshot awal tetap utuh, dan isolasi absensi siswa. `TestCaptureTeacherAttendanceIntegration` juga lulus setelah diperluas untuk membuktikan koreksi GPS tidak mengubah foto/metadata/`recorded_at`, serta retry pencatatan awal setelah koreksi menjadi konflik tanpa penambahan event, foto, atau histori. Kedua tes dijalankan serial dengan `GOPROXY=off go test -p 1 -count=1 -race -tags=integration ./internal/academic -run '^(TestCorrectTeacherAttendanceIntegration|TestCaptureTeacherAttendanceIntegration)$'` pada database test terpisah, role tanpa hak superuser/CREATEDB/CREATEROLE, migration 22, tanpa proses test bersamaan. DEV-03D2 hanya menambahkan service dan tes; route/UI belum tersedia.
+
 ## DEV-03D1 — pencatatan manual kehadiran guru
 Tes unit `TestParseTeacherAttendanceManualTime`, `TestValidateTeacherAttendanceManualInput`, `TestValidateTeacherAttendanceManualWindow`, dan `TestTeacherAttendanceManualEvidenceFingerprint` mencakup parsing eksplisit `Asia/Jakarta`, format/waktu invalid, alasan dan kunci, jendela hari ini hingga tujuh tanggal sebelumnya, masa depan, pergantian tanggal WIB, serta fingerprint bukti.
 

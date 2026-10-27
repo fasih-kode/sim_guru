@@ -331,12 +331,13 @@ func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorI
 	var proof TeacherAttendanceCaptureProof
 	var eventActor int64
 	var source string
+	var currentVersion int64
 	var photoChecksum, photoMIME string
 	var photoSize int
 	var historyJSON sql.NullString
 	err := tx.QueryRowContext(ctx, `
 		SELECT e.id,e.teacher_id,e.teacher_name,e.on_date::text,e.action,e.source,e.actor_id,
-		       e.occurred_at,e.recorded_at,e.distance_m,e.accuracy_m,e.school_latitude,e.school_longitude,
+		       e.occurred_at,e.recorded_at,e.version,e.distance_m,e.accuracy_m,e.school_latitude,e.school_longitude,
 		       e.geofence_radius_m,e.photo_metadata_id,p.mime_type,p.size_bytes,p.checksum_sha256,p.retain_until,
 		       h.after_state
 		FROM app.teacher_attendance_events e
@@ -346,7 +347,7 @@ func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorI
 		) h ON true
 		WHERE e.id=$1`, eventID).Scan(
 		&proof.EventID, &proof.TeacherID, &proof.TeacherName, &proof.OnDate, &proof.Action, &source, &eventActor,
-		&proof.OccurredAt, &proof.RecordedAt, &proof.DistanceM, &proof.AccuracyM, &proof.SchoolLatitude,
+		&proof.OccurredAt, &proof.RecordedAt, &currentVersion, &proof.DistanceM, &proof.AccuracyM, &proof.SchoolLatitude,
 		&proof.SchoolLongitude, &proof.GeofenceRadiusM, &proof.PhotoMetadataID, &photoMIME, &photoSize,
 		&photoChecksum, &proof.RetainUntil, &historyJSON)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -359,13 +360,19 @@ func loadTeacherAttendanceRetry(ctx context.Context, tx *sql.Tx, eventID, actorI
 		return proof, "", nil
 	}
 	var snapshot struct {
-		LocationVersion     int64  `json:"LocationVersion"`
-		EvidenceFingerprint string `json:"EvidenceFingerprint"`
-		IdempotencyKeyHash  string `json:"IdempotencyKeyHash"`
-		DeviceLocationProof string `json:"DeviceLocationProof"`
+		OccurredAt          time.Time `json:"OccurredAt"`
+		Version             int64     `json:"Version"`
+		LocationVersion     int64     `json:"LocationVersion"`
+		EvidenceFingerprint string    `json:"EvidenceFingerprint"`
+		IdempotencyKeyHash  string    `json:"IdempotencyKeyHash"`
+		DeviceLocationProof string    `json:"DeviceLocationProof"`
 	}
 	if err = json.Unmarshal([]byte(historyJSON.String), &snapshot); err != nil || snapshot.EvidenceFingerprint == "" {
 		return proof, "", ErrConflict
+	}
+	// Snapshot bukti awal tidak boleh membuat retry mengabaikan koreksi yang sah.
+	if currentVersion != snapshot.Version || !proof.OccurredAt.Equal(snapshot.OccurredAt) {
+		return proof, "", nil
 	}
 	if snapshot.IdempotencyKeyHash != keyHash {
 		return proof, "", nil

@@ -482,3 +482,244 @@ func cleanupTeacherAttendanceManualEvents(t *testing.T, db *sql.DB, photos *teac
 		}
 	}
 }
+
+func TestCorrectTeacherAttendanceIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	ctx := context.Background()
+	service := &academic.Store{DB: db}
+	petugas, _ := testutil.User(t, db, "petugas_absensi")
+	photos := newCapturePhotoStore(t)
+	var eventIDs, teacherIDs []int64
+	actorIDs := []int64{petugas.ID}
+	t.Cleanup(func() {
+		cleanupTeacherAttendanceManualEvents(t, db, photos, eventIDs, teacherIDs)
+		for _, actorID := range actorIDs {
+			if _, cleanupErr := db.Exec(`DELETE FROM app.user_roles WHERE user_id=$1`, actorID); cleanupErr != nil {
+				t.Errorf("delete synthetic correction roles: %v", cleanupErr)
+				continue
+			}
+			if _, cleanupErr := db.Exec(`DELETE FROM app.users WHERE id=$1`, actorID); cleanupErr != nil {
+				t.Errorf("delete synthetic correction actor: %v", cleanupErr)
+			}
+		}
+	})
+
+	initialOccurredAt := teacherAttendanceCorrectionTime(t, db, 10)
+	onDate := strings.SplitN(initialOccurredAt, "T", 2)[0]
+	teacherID := createManualTeacher(t, db, "Guru koreksi historis")
+	teacherIDs = append(teacherIDs, teacherID)
+	input := inputForTeacher(manualAttendanceInput(t, 301, academic.TeacherCheckIn, initialOccurredAt, "Mesin presensi tidak aktif"), teacherID)
+	recorded, err := service.RecordTeacherAttendanceManual(ctx, petugas.ID, input)
+	if err != nil {
+		t.Fatal("record synthetic event:", err)
+	}
+	eventIDs = append(eventIDs, recorded.EventID)
+	var initialHistory string
+	var initialRecordedAt time.Time
+	if err = db.QueryRow(`SELECT h.after_state::text,e.recorded_at FROM app.teacher_attendance_history h JOIN app.teacher_attendance_events e ON e.id=h.event_id WHERE h.event_id=$1 AND h.action='recorded'`, recorded.EventID).Scan(&initialHistory, &initialRecordedAt); err != nil {
+		t.Fatal("read initial evidence:", err)
+	}
+	dailyBefore, lessonBefore := attendanceStudentCounts(t, db)
+	newReason := "Perangkat pencatat tiba terlambat"
+	correct := func(version int64, occurred, manualReason, correctionReason string) academic.TeacherAttendanceCorrectionInput {
+		in := academic.TeacherAttendanceCorrectionInput{EventID: recorded.EventID, ExpectedVersion: version, OccurredAt: occurred, CorrectionReason: correctionReason}
+		if manualReason != "" {
+			in.ManualReason = &manualReason
+		}
+		return in
+	}
+
+	trigger, function := "test_teacher_correction_"+testutil.Random(t)[:12], "test_teacher_correction_fn_"+testutil.Random(t)[:12]
+	if _, err = db.Exec(fmt.Sprintf(`CREATE FUNCTION app.%s() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='corrected' THEN RAISE EXCEPTION 'synthetic correction history failure'; END IF; RETURN NEW; END $$`, function)); err != nil {
+		t.Fatal("create correction history trigger:", err)
+	}
+	if _, err = db.Exec(fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON app.teacher_attendance_history FOR EACH ROW EXECUTE FUNCTION app.%s()`, trigger, function)); err != nil {
+		t.Fatal("install correction history trigger:", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(fmt.Sprintf(`DROP TRIGGER IF EXISTS %s ON app.teacher_attendance_history`, trigger))
+		_, _ = db.Exec(fmt.Sprintf(`DROP FUNCTION IF EXISTS app.%s()`, function))
+	})
+	if _, err = service.CorrectTeacherAttendance(ctx, petugas.ID, correct(1, initialOccurredAt, newReason, "Koreksi alasan manual")); err == nil {
+		t.Fatal("correction succeeded despite history failure")
+	}
+	assertTeacherCorrectionState(t, db, recorded.EventID, 1, 1, initialHistory)
+	if _, err = db.Exec(fmt.Sprintf(`DROP TRIGGER %s ON app.teacher_attendance_history`, trigger)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(fmt.Sprintf(`DROP FUNCTION app.%s()`, function)); err != nil {
+		t.Fatal(err)
+	}
+	manualReasonCorrection, err := service.CorrectTeacherAttendance(ctx, petugas.ID, correct(1, onDate+"T00:10", newReason, "Alasan manual dikoreksi"))
+	if err != nil || manualReasonCorrection.Version != 2 || manualReasonCorrection.Noop || manualReasonCorrection.ManualReason != newReason {
+		t.Fatalf("manual-reason-only correction=%+v err=%v", manualReasonCorrection, err)
+	}
+	if _, retryErr := service.RecordTeacherAttendanceManual(ctx, petugas.ID, input); !errors.Is(retryErr, academic.ErrConflict) {
+		t.Fatalf("manual retry after reason correction error=%v, want conflict", retryErr)
+	}
+	assertTeacherCorrectionState(t, db, recorded.EventID, 2, 2, initialHistory)
+	timeOnlyOccurredAt := teacherAttendanceCorrectionTime(t, db, 8)
+	timeCorrection, err := service.CorrectTeacherAttendance(ctx, petugas.ID, correct(2, timeOnlyOccurredAt, "", "Waktu manual dikoreksi"))
+	if err != nil || timeCorrection.Version != 3 || timeCorrection.Noop || timeCorrection.ManualReason != newReason {
+		t.Fatalf("time-only correction=%+v err=%v", timeCorrection, err)
+	}
+	timeRetryInput := input
+	timeRetryInput.Reason = newReason
+	if _, retryErr := service.RecordTeacherAttendanceManual(ctx, petugas.ID, timeRetryInput); !errors.Is(retryErr, academic.ErrConflict) {
+		t.Fatalf("manual retry after time correction error=%v, want conflict", retryErr)
+	}
+	assertTeacherCorrectionState(t, db, recorded.EventID, 3, 3, initialHistory)
+
+	if _, err = db.Exec(`UPDATE app.teachers SET active=false WHERE id=$1`, teacherID); err != nil {
+		t.Fatal("deactivate historical synthetic teacher:", err)
+	}
+	inactiveTeacherCorrectionTime := teacherAttendanceCorrectionTime(t, db, 6)
+	for _, role := range []string{"admin", "kurikulum", "kesiswaan", "guru_mapel", "wali_kelas", "kepala_sekolah"} {
+		actor, _ := testutil.User(t, db, role)
+		actorIDs = append(actorIDs, actor.ID)
+		if _, denied := service.CorrectTeacherAttendance(ctx, actor.ID, correct(3, inactiveTeacherCorrectionTime, "", "Ditolak")); !errors.Is(denied, academic.ErrForbidden) {
+			t.Errorf("role %s correction error=%v, want forbidden", role, denied)
+		}
+	}
+	inactive, _ := testutil.User(t, db, "petugas_absensi")
+	actorIDs = append(actorIDs, inactive.ID)
+	if _, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, inactive.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, denied := service.CorrectTeacherAttendance(ctx, inactive.ID, correct(3, inactiveTeacherCorrectionTime, "", "Ditolak")); !errors.Is(denied, academic.ErrForbidden) {
+		t.Fatalf("inactive Petugas error=%v", denied)
+	}
+
+	updated, err := service.CorrectTeacherAttendance(ctx, petugas.ID, correct(3, inactiveTeacherCorrectionTime, "", "Waktu diperiksa dari buku piket"))
+	if err != nil || updated.Version != 4 || updated.Noop || updated.ManualReason != newReason || updated.CorrectedBy != petugas.ID {
+		t.Fatalf("manual correction=%+v err=%v", updated, err)
+	}
+	if !updated.RecordedAt.Equal(recorded.RecordedAt) || academic.TeacherAttendanceWIBTime(updated.OccurredAt).Format("2006-01-02T15:04") != inactiveTeacherCorrectionTime {
+		t.Fatalf("incorrect corrected times: %+v", updated)
+	}
+	var histories int
+	var initialAfter, beforeJSON, afterJSON, correctionReason string
+	if err = db.QueryRow(`SELECT
+		(SELECT count(*) FROM app.teacher_attendance_history WHERE event_id=$1),
+		(SELECT after_state::text FROM app.teacher_attendance_history WHERE event_id=$1 AND action='recorded' ORDER BY id LIMIT 1),
+		(SELECT before_state::text FROM app.teacher_attendance_history WHERE event_id=$1 AND action='corrected' ORDER BY id DESC LIMIT 1),
+		(SELECT after_state::text FROM app.teacher_attendance_history WHERE event_id=$1 AND action='corrected' ORDER BY id DESC LIMIT 1),
+		(SELECT reason FROM app.teacher_attendance_history WHERE event_id=$1 AND action='corrected' ORDER BY id DESC LIMIT 1)`, recorded.EventID).Scan(&histories, &initialAfter, &beforeJSON, &afterJSON, &correctionReason); err != nil {
+		t.Fatal(err)
+	}
+	if histories != 4 || initialAfter != initialHistory || correctionReason != "Waktu diperiksa dari buku piket" {
+		t.Fatalf("history count=%d reason=%q", histories, correctionReason)
+	}
+	var beforeState, afterState map[string]json.RawMessage
+	if err = json.Unmarshal([]byte(beforeJSON), &beforeState); err != nil {
+		t.Fatal("decode before snapshot:", err)
+	}
+	if err = json.Unmarshal([]byte(afterJSON), &afterState); err != nil {
+		t.Fatal("decode after snapshot:", err)
+	}
+	var beforeVersion, afterVersion int64
+	var afterOccurredAt, afterManualReason, afterSource string
+	if err = json.Unmarshal(beforeState["version"], &beforeVersion); err != nil {
+		t.Fatal("read before version:", err)
+	}
+	if err = json.Unmarshal(afterState["version"], &afterVersion); err != nil {
+		t.Fatal("read after version:", err)
+	}
+	if err = json.Unmarshal(afterState["occurred_at"], &afterOccurredAt); err != nil {
+		t.Fatal("read after occurrence time:", err)
+	}
+	if err = json.Unmarshal(afterState["manual_reason"], &afterManualReason); err != nil {
+		t.Fatal("read after manual reason:", err)
+	}
+	if err = json.Unmarshal(afterState["source"], &afterSource); err != nil {
+		t.Fatal("read after source:", err)
+	}
+	if beforeVersion != 3 || afterVersion != 4 || afterManualReason != newReason || afterSource != "manual" || afterOccurredAt == "" {
+		t.Fatalf("before/after snapshots incomplete: before=%s after=%s", beforeJSON, afterJSON)
+	}
+	if !strings.Contains(initialAfter, "Mesin presensi tidak aktif") {
+		t.Fatal("initial evidence changed")
+	}
+
+	noop, err := service.CorrectTeacherAttendance(ctx, petugas.ID, correct(4, inactiveTeacherCorrectionTime, "", "Tidak ada perubahan"))
+	if err != nil || !noop.Noop || noop.Version != 4 {
+		t.Fatalf("no-op=%+v err=%v", noop, err)
+	}
+	combinedOfficer, _ := testutil.User(t, db, "petugas_absensi", "admin")
+	actorIDs = append(actorIDs, combinedOfficer.ID)
+	if combinedNoop, combinedErr := service.CorrectTeacherAttendance(ctx, combinedOfficer.ID, correct(4, inactiveTeacherCorrectionTime, "", "Role gabungan")); combinedErr != nil || !combinedNoop.Noop {
+		t.Fatalf("active combined role with Petugas permission was not authorized: result=%+v err=%v", combinedNoop, combinedErr)
+	}
+	if _, err = service.CorrectTeacherAttendance(ctx, petugas.ID, correct(3, teacherAttendanceCorrectionTime(t, db, 5), "", "Versi lama")); !errors.Is(err, academic.ErrConflict) {
+		t.Fatalf("stale version error=%v", err)
+	}
+	localDate, parseErr := time.ParseInLocation("2006-01-02", onDate, time.FixedZone("WIB", 7*60*60))
+	if parseErr != nil {
+		t.Fatal("parse fixture WIB date:", parseErr)
+	}
+	priorDate := localDate.AddDate(0, 0, -1).Format("2006-01-02")
+	if _, err = service.CorrectTeacherAttendance(ctx, petugas.ID, correct(4, priorDate+"T23:59", "", "Tanggal lain")); err == nil {
+		t.Fatal("date-changing correction accepted")
+	}
+	var futureTime string
+	if err = db.QueryRow(`SELECT to_char((clock_timestamp() AT TIME ZONE 'Asia/Jakarta') + interval '1 minute','YYYY-MM-DD"T"HH24:MI')`).Scan(&futureTime); err != nil {
+		t.Fatal("read future fixture time:", err)
+	}
+	if _, err = service.CorrectTeacherAttendance(ctx, petugas.ID, correct(4, futureTime, "", "Waktu masa depan")); err == nil {
+		t.Fatal("future correction time accepted")
+	}
+
+	var wait sync.WaitGroup
+	errs := make(chan error, 2)
+	concurrentTimes := []string{teacherAttendanceCorrectionTime(t, db, 4), teacherAttendanceCorrectionTime(t, db, 3)}
+	for _, occurredAt := range concurrentTimes {
+		wait.Add(1)
+		go func(value string) {
+			defer wait.Done()
+			_, callErr := service.CorrectTeacherAttendance(ctx, petugas.ID, correct(4, value, "", "Koreksi bersamaan"))
+			errs <- callErr
+		}(occurredAt)
+	}
+	wait.Wait()
+	close(errs)
+	success, conflict := 0, 0
+	for callErr := range errs {
+		if callErr == nil {
+			success++
+		} else if errors.Is(callErr, academic.ErrConflict) {
+			conflict++
+		} else {
+			t.Fatalf("concurrent correction error=%v", callErr)
+		}
+	}
+	if success != 1 || conflict != 1 {
+		t.Fatalf("concurrent success=%d conflict=%d", success, conflict)
+	}
+	assertTeacherCorrectionState(t, db, recorded.EventID, 5, 5, initialHistory)
+	dailyAfter, lessonAfter := attendanceStudentCounts(t, db)
+	if dailyAfter != dailyBefore || lessonAfter != lessonBefore {
+		t.Fatalf("student attendance changed: daily %d->%d, lesson %d->%d", dailyBefore, dailyAfter, lessonBefore, lessonAfter)
+	}
+}
+
+func teacherAttendanceCorrectionTime(t *testing.T, db *sql.DB, minutesAgo int) string {
+	t.Helper()
+	var value string
+	if err := db.QueryRow(`SELECT to_char((clock_timestamp() - $1 * interval '1 minute') AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD"T"HH24:MI')`, minutesAgo).Scan(&value); err != nil {
+		t.Fatal("read synthetic WIB correction time:", err)
+	}
+	return value
+}
+
+func assertTeacherCorrectionState(t *testing.T, db *sql.DB, eventID, wantVersion int64, wantHistory int, initialSnapshot string) {
+	t.Helper()
+	var version int64
+	var count int
+	var initial string
+	if err := db.QueryRow(`SELECT e.version,count(h.id),max(h.after_state::text) FILTER(WHERE h.action='recorded') FROM app.teacher_attendance_events e LEFT JOIN app.teacher_attendance_history h ON h.event_id=e.id WHERE e.id=$1 GROUP BY e.id`, eventID).Scan(&version, &count, &initial); err != nil {
+		t.Fatal(err)
+	}
+	if version != wantVersion || count != wantHistory || initial != initialSnapshot {
+		t.Fatalf("state version=%d history=%d initialSame=%v", version, count, initial == initialSnapshot)
+	}
+}
