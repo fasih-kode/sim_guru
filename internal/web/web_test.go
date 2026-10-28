@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"regexp"
 	"strings"
 	"testing"
@@ -179,8 +180,9 @@ func TestLoginLimiter(t *testing.T) {
 func TestSessionCookieAttributes(t *testing.T) {
 	for _, secure := range []bool{false, true} {
 		app := application{options: Options{SecureCookies: secure}}
+		r := httptest.NewRequest(http.MethodGet, "http://localhost/login", nil)
 		w := httptest.NewRecorder()
-		app.setSession(w, strings.Repeat("a", 64))
+		app.setSession(w, r, strings.Repeat("a", 64))
 		cookies := w.Result().Cookies()
 		if len(cookies) != 1 {
 			t.Fatal("missing session cookie")
@@ -190,11 +192,38 @@ func TestSessionCookieAttributes(t *testing.T) {
 			t.Fatal("unsafe cookie attributes")
 		}
 		w = httptest.NewRecorder()
-		app.clearSession(w)
+		app.clearSession(w, r)
 		c = w.Result().Cookies()[0]
 		if c.MaxAge != -1 || c.Value != "" || c.Secure != secure {
 			t.Fatal("cookie was not expired correctly")
 		}
+	}
+}
+
+func TestTrustedProxyRequestNormalization(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
+	for _, tc := range []struct {
+		name, remote, proto, forwardedHost, wantHost string
+		wantSecure                                   bool
+	}{
+		{name: "https dari proxy tepercaya", remote: "127.0.0.1:4567", proto: "https", forwardedHost: "school.ngrok-free.dev", wantHost: "school.ngrok-free.dev", wantSecure: true},
+		{name: "header dari sumber tidak tepercaya", remote: "203.0.113.8:4567", proto: "https", forwardedHost: "evil.example", wantHost: "internal.local", wantSecure: false},
+		{name: "daftar host ambigu", remote: "127.0.0.1:4567", proto: "https", forwardedHost: "school.ngrok-free.dev,evil.example", wantHost: "internal.local", wantSecure: false},
+		{name: "protokol bukan https", remote: "127.0.0.1:4567", proto: "http", forwardedHost: "school.ngrok-free.dev", wantHost: "internal.local", wantSecure: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "http://internal.local/login", nil)
+			r.RemoteAddr, r.Host = tc.remote, "internal.local"
+			r.Header.Set("X-Forwarded-Proto", tc.proto)
+			r.Header.Set("X-Forwarded-Host", tc.forwardedHost)
+			got, secure := normalizeTrustedProxyRequest(r, trusted)
+			if got.Host != tc.wantHost || secure != tc.wantSecure {
+				t.Fatalf("host=%q secure=%v", got.Host, secure)
+			}
+			if got.Header.Get("X-Forwarded-Proto") != "" || got.Header.Get("X-Forwarded-Host") != "" {
+				t.Fatal("header proxy diteruskan ke handler")
+			}
+		})
 	}
 }
 

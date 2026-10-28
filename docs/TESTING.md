@@ -1,5 +1,11 @@
 # Pengujian
 
+## HOTFIX-F1-NGROK-CSRF-01 — login HTTPS melalui proxy tepercaya
+
+`TestTrustedProxyRequestNormalization` memeriksa CIDR peer tepercaya, host/protokol eksternal, peer tidak tepercaya, header ambigu, dan penolakan protokol selain HTTPS. `TestHTTPSReverseProxyLoginCSRFIntegration` memakai `sim_guru_test` serta akun/guru sintetis dan reverse proxy TLS loopback. Tes membuktikan GET/login HTTP lokal, POST login dengan CSRF valid lewat HTTPS proxy, cookie CSRF dan sesi beratribut `Secure`, sesi dapat membuka `/kehadiran-saya`, serta penolakan token hilang/salah, Origin palsu, POST logout/password/presensi tanpa CSRF, dan X-Forwarded palsu dari peer di luar CIDR. Cleanup menghapus hanya fixture sintetis yang dibuat tes. Tidak ada presensi yang dicatat.
+
+Tes integrasi ini menguji perilaku HTTPS reverse proxy sintetis, bukan tunnel ngrok hidup atau browser Android. Smoke test live tunnel hanya boleh dilaporkan jika benar-benar dijalankan. `APP_TRUSTED_PROXY_CIDRS` kosong secara default; uji dan penggunaan proxy harus menetapkan CIDR peer yang benar-benar dipercaya.
+
 ## DEV-03F1 — UI kehadiran mandiri GPS/selfie
 
 Unit `TestTeacherAttendanceUploadValidation`, `TestTeacherAttendanceHTTPErrorSafe`, `TestTeacherAttendanceRouteSecurity`, dan `TestTeacherAttendanceTemplate` mencakup multipart/field tidak valid, pemetaan error aman, autentikasi/CSRF, body terlalu besar sebelum dependency DB, no-store/CSP kamera, autoescaping, satu tautan untuk role gabungan, status awal, storage nonaktif, dan notifikasi retry lintas tanggal WIB (`TestTeacherAttendanceSavedMessageAcrossWIBDay`).

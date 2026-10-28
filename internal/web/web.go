@@ -185,11 +185,15 @@ func New(check Check, options Options) (http.Handler, error) {
 		}
 		a.render(w, r, name, 200, view{Page: "home", Title: "Beranda"})
 	}))
-	csrfMiddleware := csrf.Protect(options.CSRFKey, csrf.Secure(options.SecureCookies), csrf.Path("/"), csrf.SameSite(csrf.SameSiteLaxMode), csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	csrfError := csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Form kedaluwarsa atau tidak sah. Muat ulang halaman dan coba kembali.", 403)
-	})))
+	}))
+	csrfMiddleware := func(secure bool) func(http.Handler) http.Handler {
+		return csrf.Protect(options.CSRFKey, csrf.Secure(secure), csrf.Path("/"), csrf.SameSite(csrf.SameSiteLaxMode), csrfError)
+	}
+	csrfHTTP, csrfHTTPS := csrfMiddleware(false), csrfMiddleware(true)
 	authenticated := a.authenticate(mux)
-	protectedApp := csrfMiddleware(authenticated)
+	protectedHTTP, protectedHTTPS := csrfHTTP(authenticated), csrfHTTPS(authenticated)
 	appHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/health/") {
 			mux.ServeHTTP(w, r)
@@ -219,12 +223,14 @@ func New(check Check, options Options) (http.Handler, error) {
 				r.MultipartForm.RemoveAll()
 			}
 		}()
-		if !options.SecureCookies {
-			r = csrf.PlaintextHTTPRequest(r)
+		if requestIsSecure(r, options.SecureCookies) {
+			protectedHTTPS.ServeHTTP(w, r)
+			return
 		}
-		protectedApp.ServeHTTP(w, r)
+		r = csrf.PlaintextHTTPRequest(r)
+		protectedHTTP.ServeHTTP(w, r)
 	})
-	protected := http.NewCrossOriginProtection().Handler(appHandler)
+	protected := trustedProxyMiddleware(options.TrustedProxyCIDRs, http.NewCrossOriginProtection().Handler(appHandler))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")

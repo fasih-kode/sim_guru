@@ -33,6 +33,15 @@ make run
 
 Buka http://127.0.0.1:18743. APP_HOST default 127.0.0.1; APP_PORT default 18743. APP_ENV menerima development/test/production. DATABASE_URL wajib berupa URL PostgreSQL dengan nama database; production mensyaratkan sslmode=verify-full. File .env.example menyediakan nama variabel tanpa rahasia. Jangan menggunakan .env development pada produksi.
 
+### Reverse proxy HTTPS lokal (misalnya ngrok)
+Secara default aplikasi tidak mempercayai `X-Forwarded-Proto` maupun `X-Forwarded-Host`. Jika reverse proxy berjalan di mesin yang sama, jalankan proses aplikasi dengan `APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128`; kosongkan variabel untuk penggunaan tanpa proxy. Daftar hanya memuat alamat koneksi proxy yang benar-benar dipercaya. Jangan gunakan `0.0.0.0/0`, jangan memasukkan seluruh domain ngrok sebagai origin tepercaya, dan jangan mengubah header forwarded dari sumber lain menjadi tepercaya. Proxy harus mengirim satu `X-Forwarded-Proto: https` dan satu `X-Forwarded-Host` yang berisi host permintaan HTTPS; aplikasi menolak nilai ganda atau host yang malformed. Pada koneksi proxy yang lolos pemeriksaan CIDR, pemeriksaan CSRF memakai skema/host HTTPS eksternal dan cookie CSRF serta sesi memakai atribut `Secure`. HTTP localhost langsung tetap memakai cookie development non-Secure. Contoh peluncuran tanpa mengubah `.env`:
+
+```sh
+APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128 APP_REPOSITORY_ROOT="$(pwd -P)" TEACHER_PHOTO_DIR="$HOME/.local/share/sim-guru-private/teacher-photos" make run
+```
+
+Jika proxy berjalan pada host lain, konfigurasi hanya CIDR alamat proxy tersebut setelah memastikan jalur koneksi dan perilaku sanitasi headernya. Tidak ada wildcard origin; CSRF dan `CrossOriginProtection` tetap aktif.
+
 Untuk binary mandiri dengan template/aset embed: make build lalu ./bin/sim-guru dari root agar .env ditemukan. Aset harus dibangun sebelum binary ketika CSS/htmx berubah. Server tidak menjalankan migrasi otomatis dan menolak mulai bila database belum siap. Ctrl+C atau SIGTERM memicu graceful shutdown.
 
 ## Standar visual frontend

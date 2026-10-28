@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,11 +24,12 @@ import (
 const sessionCookie = "sim_guru_session"
 
 type Options struct {
-	Accounts      *auth.Store
-	Masters       *master.Store
-	Academics     *academic.Store
-	CSRFKey       []byte
-	SecureCookies bool
+	Accounts          *auth.Store
+	Masters           *master.Store
+	Academics         *academic.Store
+	CSRFKey           []byte
+	SecureCookies     bool
+	TrustedProxyCIDRs []netip.Prefix
 }
 type principalKey struct{}
 type application struct {
@@ -193,7 +195,7 @@ func (a *application) authenticate(next http.Handler) http.Handler {
 			if err == nil {
 				r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &u))
 			} else if errors.Is(err, auth.ErrSession) || errors.Is(err, auth.ErrNotFound) {
-				a.clearSession(w)
+				a.clearSession(w, r)
 			} else {
 				a.failure(w, err)
 				return
@@ -258,11 +260,11 @@ func parseForm(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
-func (a *application) setSession(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: a.options.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: int(auth.SessionLifetime.Seconds())})
+func (a *application) setSession(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: requestIsSecure(r, a.options.SecureCookies), SameSite: http.SameSiteLaxMode, MaxAge: int(auth.SessionLifetime.Seconds())})
 }
-func (a *application) clearSession(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: a.options.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+func (a *application) clearSession(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: requestIsSecure(r, a.options.SecureCookies), SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 func (a *application) login(w http.ResponseWriter, r *http.Request) {
 	if principal(r) != nil {
@@ -312,7 +314,7 @@ func (a *application) login(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, "login", code, v)
 		return
 	}
-	a.setSession(w, token)
+	a.setSession(w, r, token)
 	http.Redirect(w, r, "/", 303)
 }
 func (a *application) logout(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +325,7 @@ func (a *application) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	a.clearSession(w)
+	a.clearSession(w, r)
 	http.Redirect(w, r, "/login", 303)
 }
 func (a *application) password(w http.ResponseWriter, r *http.Request) {
@@ -350,7 +352,7 @@ func (a *application) password(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, "page", code, v)
 		return
 	}
-	a.clearSession(w)
+	a.clearSession(w, r)
 	http.Redirect(w, r, "/login?changed=1", 303)
 }
 func (a *application) users(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,8 @@ func TestParse(t *testing.T) {
 	}{
 		{"defaults", map[string]string{}, true},
 		{"custom port", map[string]string{"APP_PORT": "9095"}, true},
+		{"trusted proxy cidrs", map[string]string{"APP_TRUSTED_PROXY_CIDRS": "127.0.0.1/32, ::1/128"}, true},
+		{"invalid trusted proxy cidr", map[string]string{"APP_TRUSTED_PROXY_CIDRS": "not-a-cidr"}, false},
 		{"invalid port", map[string]string{"APP_PORT": "0"}, false},
 		{"port overflow", map[string]string{"APP_PORT": "65536"}, false},
 		{"environment", map[string]string{"APP_ENV": "staging"}, false},
@@ -47,6 +49,9 @@ func TestParse(t *testing.T) {
 			}
 			if tc.name == "defaults" && cfg.Address != "127.0.0.1:18743" {
 				t.Fatalf("unexpected address %s", cfg.Address)
+			}
+			if tc.name == "trusted proxy cidrs" && (len(cfg.TrustedProxyCIDRs) != 2 || cfg.TrustedProxyCIDRs[0].String() != "127.0.0.1/32" || cfg.TrustedProxyCIDRs[1].String() != "::1/128") {
+				t.Fatal("CIDR proxy tepercaya tidak diparsing dengan benar")
 			}
 			if tc.name == "absolute photo storage" && (cfg.TeacherPhotoDirectory != tc.values["TEACHER_PHOTO_DIR"] || cfg.RepositoryRoot != tc.values["APP_REPOSITORY_ROOT"]) {
 				t.Fatal("konfigurasi storage foto tidak diteruskan")

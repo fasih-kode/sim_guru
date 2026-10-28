@@ -4,10 +4,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -15,6 +17,7 @@ import (
 type Config struct {
 	Environment, Address, DatabaseURL     string
 	TeacherPhotoDirectory, RepositoryRoot string
+	TrustedProxyCIDRs                     []netip.Prefix
 	CSRFKey                               []byte
 }
 
@@ -65,6 +68,25 @@ func Parse(get func(string) string) (Config, error) {
 	if photoDirectory != "" && (!filepath.IsAbs(photoDirectory) || !filepath.IsAbs(repositoryRoot)) {
 		return Config{}, errors.New("TEACHER_PHOTO_DIR dan APP_REPOSITORY_ROOT wajib berupa path absolut saat storage foto diaktifkan")
 	}
+	trustedProxyCIDRs, err := parseTrustedProxyCIDRs(get("APP_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key,
-		TeacherPhotoDirectory: photoDirectory, RepositoryRoot: repositoryRoot}, nil
+		TeacherPhotoDirectory: photoDirectory, RepositoryRoot: repositoryRoot, TrustedProxyCIDRs: trustedProxyCIDRs}, nil
+}
+
+func parseTrustedProxyCIDRs(value string) ([]netip.Prefix, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	prefixes := make([]netip.Prefix, 0)
+	for _, item := range strings.Split(value, ",") {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(item))
+		if err != nil {
+			return nil, errors.New("APP_TRUSTED_PROXY_CIDRS harus berisi CIDR yang valid")
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
 }

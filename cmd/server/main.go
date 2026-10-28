@@ -68,7 +68,7 @@ func run() error {
 	if err != nil {
 		return errors.New("inisialisasi autentikasi gagal")
 	}
-	handler, err := web.New(ready, web.Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: academics, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production"})
+	handler, err := web.New(ready, web.Options{Accounts: accounts, Masters: &master.Store{DB: db}, Academics: academics, CSRFKey: cfg.CSRFKey, SecureCookies: cfg.Environment == "production", TrustedProxyCIDRs: cfg.TrustedProxyCIDRs})
 	if err != nil {
 		return errors.New("inisialisasi template gagal")
 	}
