@@ -40,10 +40,11 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
+	TeacherAttendance           *teacherAttendanceView
 	Arrival                     *arrivalView
 	Daily                       *dailyView
 	Foundation                  *foundationView
-	TeacherLocation              *teacherLocationView
+	TeacherLocation             *teacherLocationView
 	Movement                    *movementView
 	ASCImport                   *ascImportView
 	User                        *auth.User
@@ -94,6 +95,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		roleMenu = "admin"
 	}
 	switch {
+	case path == "/kehadiran-saya":
+		return "teacher-attendance", "teacher-attendance"
 	case path == "/kesiswaan/batas-kedatangan":
 		return "arrival-rules", "attendance"
 	case path == "/absensi/harian/cepat":

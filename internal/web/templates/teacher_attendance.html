@@ -1,0 +1,64 @@
+{{define "teacher-attendance"}}
+<section data-teacher-attendance data-response-error="{{.Error}}" data-response-message="{{.Message}}">
+  <section class="panel mb-5" data-teacher-attendance-context>
+    <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
+    <p class="text-sm text-gray-500">{{.TeacherAttendance.Day.Date}} · WIB</p>
+    <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan Petugas Absensi.</p>
+    {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi Petugas Absensi.</p>{{end}}
+  </section>
+  <p class="mb-4 text-sm" role="status" data-attendance-result hidden></p>
+  <div class="mb-5 grid gap-5 sm:grid-cols-2" data-teacher-attendance-status tabindex="-1" aria-label="Status kehadiran terbaru">
+    <section class="panel">
+      <h2 class="mb-4 text-lg font-semibold">Masuk</h2>
+      {{with .TeacherAttendance.CheckIn}}
+        <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
+        <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat Petugas{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
+      {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
+      <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_in" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckIn}}disabled{{end}}>Catat Masuk</button>
+    </section>
+    <section class="panel">
+      <h2 class="mb-4 text-lg font-semibold">Pulang</h2>
+      {{with .TeacherAttendance.CheckOut}}
+        <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
+        <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat Petugas{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
+      {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
+      <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_out" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckOut}}disabled{{end}}>Catat Pulang</button>
+    </section>
+  </div>
+  <p class="mb-5 text-sm text-gray-500">Pulang tetap dapat dicatat meskipun Masuk belum dicatat. Waktu mengikuti server dan ditampilkan dalam WIB.</p>
+  <noscript><p role="alert">Aktifkan JavaScript untuk menggunakan GPS dan kamera, atau hubungi Petugas Absensi.</p></noscript>
+  <dialog class="form-modal" id="teacher-attendance-modal" aria-labelledby="teacher-attendance-heading" data-teacher-attendance-modal>
+    <div class="form-modal-card">
+      <div class="form-modal-heading">
+        <h2 id="teacher-attendance-heading" data-attendance-heading>Catat Kehadiran</h2>
+        <button class="form-modal-close" type="button" data-attendance-cancel aria-label="Tutup dialog kehadiran">×</button>
+      </div>
+      <form method="post" action="/kehadiran-saya" enctype="multipart/form-data" data-attendance-form>
+        {{.CSRF}}
+        <p class="mb-4 text-sm text-gray-500">Pastikan Anda berada di sekolah. Foto diambil sekarang dan dikirim setelah Anda menekan Konfirmasi.</p>
+        <p class="mb-3 text-sm text-error-600" role="alert" data-attendance-error hidden></p>
+        <div class="mb-4 flex flex-wrap gap-3">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-location>Ambil lokasi</button>
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-camera>Buka kamera</button>
+        </div>
+        <p class="mb-3 text-sm text-gray-500" role="status" aria-live="polite" data-attendance-location-status>Lokasi belum diambil.</p>
+        <video class="mb-4 max-h-64 w-full rounded-xl bg-gray-900 object-contain" autoplay playsinline muted data-attendance-video hidden></video>
+        <canvas class="mb-4 max-h-64 w-full rounded-xl bg-gray-900 object-contain" data-attendance-preview hidden aria-label="Pratinjau selfie Anda"></canvas>
+        <div class="mb-4 flex flex-wrap gap-3">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-take disabled>Ambil Foto</button>
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-retake disabled>Ulangi Foto</button>
+        </div>
+        <p class="mb-4 text-sm text-gray-500" role="status" aria-live="polite" data-attendance-progress>Selfie belum diambil.</p>
+        <div class="form-modal-actions">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-cancel>Batal</button>
+          <button type="submit" class="button-primary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-confirm disabled>Konfirmasi</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+</section>
+{{end}}

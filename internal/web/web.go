@@ -64,6 +64,8 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Write([]byte("ready\n"))
 	})
 	a := &application{templates: templates, options: options}
+	mux.HandleFunc("GET /kehadiran-saya", a.require("", a.teacherAttendance))
+	mux.HandleFunc("POST /kehadiran-saya", a.require("", a.teacherAttendance))
 	mux.HandleFunc("GET /kesiswaan/batas-kedatangan", a.require("kesiswaan", a.arrivalRules))
 	mux.HandleFunc("POST /kesiswaan/batas-kedatangan", a.require("kesiswaan", a.arrivalRules))
 	mux.HandleFunc("GET /absensi/harian/cepat", a.require("petugas_absensi", a.dailyQuick))
@@ -194,6 +196,9 @@ func New(check Check, options Options) (http.Handler, error) {
 			return
 		}
 		limit := int64(32 << 10)
+		if r.Method == "POST" && r.URL.Path == "/kehadiran-saya" {
+			limit = teacherSelfieRequestLimit
+		}
 		if r.Method == "POST" && (r.URL.Path == "/master/students/import" || r.URL.Path == "/master/teachers/import") {
 			limit = master.MaxImportBytes + (256 << 10)
 		}
@@ -225,7 +230,7 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-		if r.URL.Path == "/absensi/pemindai" {
+		if r.URL.Path == "/absensi/pemindai" || r.URL.Path == "/kehadiran-saya" {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		}
 		protected.ServeHTTP(w, r)
