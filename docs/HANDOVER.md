@@ -692,3 +692,49 @@ Daftar pengelolaan TU harus memuat semua guru aktif, bukan hanya akun yang juga 
 Pemeriksaan browser lokal memakai akun dan data sintetis pada `sim_guru_test`, dengan viewport desktop 1440×1000 dan ponsel 390×844. Daftar, inbox permintaan guru, detail/histori, form permintaan guru, dan modal koreksi terlihat. Tabel ponsel memiliki scroll horizontal lokal; form filter menyesuaikan layar. Product Owner menyatakan preview ini PASS; ini bukan pengujian perangkat fisik atau operasional sekolah. Preview lokal berakhir setelah final gate.
 
 Verifikasi final: `GOPROXY=off go test ./...`, `GOPROXY=off go vet ./...`, `npm run build`, `node --check internal/web/static/teacher-attendance.js`, `git diff --check`, dan pemeriksaan `gofmt` lulus. Migration integration test versi 23 PASS. Integration test race terfokus untuk pencatatan manual, koreksi historis, permintaan guru, fallback Admin, serta daftar semua guru dan larangan TU mengoreksi diri sendiri PASS terhadap `sim_guru_test`. Tes memastikan Petugas Absensi Siswa ditolak, guru hanya mengirim permintaan tanpa mutasi, pencatatan/koreksi lebih dari setahun diperbolehkan, dan waktu kejadian masa depan ditolak. Absensi harian siswa tetap diuji tanpa perubahan kontraknya. Perubahan dipublikasikan setelah UAT Product Owner; tidak ada merge, deployment, atau akses EC2. DEV-03G2 belum dimulai.
+
+## DEV-03G2 — laporan Izin/Sakit/Dinas Luar — PASS/CLOSED 28 Oktober 2026
+
+Baseline `0059fcbc421f320eb30c3ad81848be81a98fd3b4`, branch `review/sim-guru-checkpoint`, working tree awal bersih. Guru yang memenuhi prasyarat kehadiran mandiri dapat membuat laporan sendiri untuk tanggal lampau, hari ini atau mendatang, termasuk satu rentang inklusif tanpa batas durasi baru. Keterangan wajib 1–500 karakter. Laporan langsung aktif tanpa approval, tanpa GPS/selfie/lampiran sebagai syarat laporan. Guru membaca riwayat sendiri dan meminta koreksi melalui inbox TU existing. Guru tidak mendapat jalur edit, pembatalan atau penghapusan laporan.
+
+Migration aditif 00024 menambah tabel `teacher_attendance_reports`, histori before/after, key hash/fingerprint awal, exclusion GiST memakai range bawaan PostgreSQL untuk menolak overlap aktif tanpa extension, serta relasi report_id pada permintaan koreksi existing. Retry dengan key/isi sama membaca ID permanen tanpa duplikasi; key sama dengan isi berbeda konflik. TU berwenang memakai mutation lock, row lock, expected version dan transaksi update+histori untuk koreksi/pembatalan. Status sama adalah no-op; version basi konflik. Pembatalan tidak menghapus histori dan membebaskan tanggal, tetapi tidak mengaktifkan ulang laporan yang telah dibatalkan. Otorisasi memakai pasangan role TU dan fallback Admin D-039 existing; TU dilarang mengoreksi dirinya sendiri. Migration 00025 memperlebar batas nama snapshot permintaan dari 120 ke 200 karakter agar konsisten dengan master guru; migration lama tidak diubah. Bukti Masuk/Pulang, selfie, retensi dan absensi siswa tidak dipakai sebagai sumber mutasi laporan.
+
+UI guru tersedia melalui `/kehadiran-saya` → Buat Laporan/Riwayat Laporan Saya, dengan halaman `/kehadiran-saya/laporan` dan detail ber-ID permanen. TU membuka `/tu/kehadiran-guru/laporan`; daftar/filter, detail, histori, koreksi dan pembatalan mengikuti pola modal TailAdmin Free existing. Fallback Admin memakai `/admin/kehadiran-tu/laporan` dengan cakupan identitasnya sesuai D-039. Daftar, histori serta inbox menggunakan pagination 10 baris; input dan versi asli dipertahankan saat validasi atau konflik. Error tampil sekali di modal dengan role alert. Source referensi: demo TailAdmin `/modals` (Form in Modal) dan source Free `src/partials/main/profile/edit-personal-info-modal.html`.
+
+Verifikasi aktual: `GOPROXY=off go test ./...`, `GOPROXY=off go vet ./...`, build binary, `npm run build`, `node --check` untuk app.js/teacher-attendance.js, gofmt dan diff-check PASS. Unit validasi/kategori PASS. Integration test serial/race pada sim_guru_test: migration 25 PASS (1,033 detik); suite akademik terfokus laporan, capture GPS/selfie, manual/koreksi G1, request, fallback Admin dan absensi harian siswa PASS (163,972 detik); tes nama panjang/role gabungan PASS (3,383 detik). Tes HTTP laporan G2 serta regresi kehadiran mandiri G1 PASS (93,633 detik). Regresi HTTP pertama gagal karena fixture lama masih menggunakan Petugas Absensi untuk mencatat guru dan label sumber lama; fixture diperbarui ke TU serta mempertahankan assertion penolakan Petugas, lalu lulus. Ini bukan perubahan mekanisme GPS/selfie. Tes baru juga membuktikan overlap langsung di database, concurrent create/retry/correction, rollback kegagalan histori, kepemilikan/role negatif, immutable evidence, CSRF, XSS, filter dan pagination. Tidak menjalankan ulang suite integrasi enam paket penuh.
+
+Prosedur Product Owner terbaru diterapkan: semua tes database hanya di sim_guru_test. Setelah tes PASS, perintah migration resmi `go run ./cmd/migrate status/up/status` menerapkan 00023–00025 pada sim_guru_dev (22 → 25). Hitungan/hash 56 tabel existing dibandingkan sebelum dan sesudah; semuanya identik dengan pengecualian eksplisit dua role katalog yang memang ditambahkan. Akun tetap 17, profil guru 13; user_roles, password hash, penugasan dan histori existing tidak berubah. Tidak ada reset, salinan fixture test, perubahan kredensial, atau pemberian role otomatis. sim_guru_test dan sim_guru_dev kini versi 25. Tidak ada akun TU berpasangan role pada saat pemasangan; Product Owner/Admin perlu menetapkan `pegawai_tu` + `pengelola_kehadiran_guru` pada akun existing yang dipilih melalui Pengguna dan Role untuk UAT TU.
+
+Preview `http://127.0.0.1:18743` menjalankan binary terbaru dari `/tmp/sim-guru-dev03g2-server`, database runtime diverifikasi sim_guru_dev dan environment development. Port kosong teridentifikasi sebelum start; storage privat existing dipakai dan worker retensi awal memeriksa nol foto kedaluwarsa. Login akun Admin dan Guru existing dilakukan sendiri oleh Product Owner. Pemeriksaan visual read-only: daftar administratif desktop 1440×1000 serta 390×844, halaman guru, modal Buat Laporan, pilihan jenis, input tanggal dan Batal berfungsi. Modal mobile lebar 366 px/tinggi 600 px pada viewport 390×844; tombol Simpan berada pada y658–700. Tidak ada overflow dokumen atau error JavaScript; tabel menggulir horizontal di container lokal. Screenshot disimpan di `/tmp/sim-guru-dev03g2-visual`, di luar repository. Tidak ada laporan development atau presensi aktual yang dibuat oleh agen. Uji visual detail/koreksi/pembatalan dengan laporan development terisi serta Android fisik belum dijalankan; service/HTTP terkait sudah diuji pada database test.
+
+Status DEV-03G2: PASS/CLOSED. Product Owner menyatakan UAT menggunakan akun development existing PASS dan mengotorisasi publikasi. Final gate memeriksa baseline lokal/remote, scope 28 file, migration 00024–00025 terpasang pada sim_guru_dev versi 25, gofmt, diff-check, build/aset, unit test dan vet. Bukti integration test serial/race di atas tetap berlaku karena source aplikasi tidak berubah setelah pengujian; tes berat tidak diulang tanpa perubahan. Akun development tetap 17 dan profil guru 13 pada final gate; tidak ada reset, penghapusan, atau pemberian role otomatis oleh agen. Role yang ditetapkan Product Owner selama UAT tetap dipertahankan. Publikasi memakai commit `feat: add teacher leave and official duty reports` ke `review/sim-guru-checkpoint`. DEV-03G3 belum dilaksanakan: mesin status akhir berdasarkan jadwal/tugas, keterlambatan, pulang cepat dan rekap terpadu. Tidak ada merge, deployment, akses EC2 atau perubahan production.
+
+File perubahan DEV-03G2 dalam commit publikasi:
+- `PRD_FE_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md`
+- `PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md`
+- `docs/DECISIONS.md`
+- `docs/DEVELOPMENT.md`
+- `docs/HANDOVER.md`
+- `docs/PRD.md`
+- `docs/TESTING.md`
+- `internal/academic/teacher_attendance_governance.go`
+- `internal/academic/teacher_attendance_report_reads.go`
+- `internal/academic/teacher_attendance_reports.go`
+- `internal/academic/teacher_attendance_reports_integration_test.go`
+- `internal/academic/teacher_attendance_reports_test.go`
+- `internal/web/auth.go`
+- `internal/web/static/app.css`
+- `internal/web/teacher_attendance.go`
+- `internal/web/teacher_attendance_integration_test.go`
+- `internal/web/teacher_attendance_management.go`
+- `internal/web/teacher_attendance_reports.go`
+- `internal/web/teacher_attendance_reports_integration_test.go`
+- `internal/web/templates/page.html`
+- `internal/web/templates/teacher_attendance.html`
+- `internal/web/templates/teacher_attendance_management.html`
+- `internal/web/templates/teacher_attendance_reports.html`
+- `internal/web/web.go`
+- `migrations/00024_teacher_attendance_reports.sql`
+- `migrations/00025_teacher_report_request_names.sql`
+- `migrations/integration_test.go`
+- `web/styles/app.css`

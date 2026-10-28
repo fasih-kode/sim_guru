@@ -20,6 +20,14 @@ Cluster sudah diinisialisasi dan dua database tersedia: sim_guru_dev dan sim_gur
 
 Cluster tidak otomatis mulai setelah reboot; jalankan perintah start. Script membutuhkan pg_config dan binary PostgreSQL versi cluster. Jangan upgrade versi mayor atau menghapus .local tanpa strategi migrasi/pemulihan dan persetujuan.
 
+## Prosedur pengujian dan preview — berlaku sejak DEV-03G2
+
+Seluruh tes yang memakai database, termasuk integration dan migration test, hanya memakai `sim_guru_test`. Unit test murni berjalan normal. Setelah seluruh tes relevan PASS, periksa `make migrate-status` pada koneksi development lalu terapkan migration aditif yang tertunda melalui `make migrate-up`. Periksa versi lagi sebelum menjalankan aplikasi terbaru pada `sim_guru_dev` di `http://127.0.0.1:18743`.
+
+Preview/UAT Product Owner memakai akun development existing. Jangan membuat akun sintetis, menyalin fixture test, mengubah `.env`/kredensial, mereset database, atau memberi role tambahan secara otomatis. Admin menetapkan role TU melalui pengelolaan akun. Catat jumlah/hash data existing sebelum dan sesudah migration untuk memastikan akun, role pengguna, penugasan dan histori tetap tersedia. Identifikasi proses sebelum restart. Jika tes atau migration gagal, hentikan tahap terkait dan laporkan; jangan memperbaiki dengan reset atau SQL destruktif. Instruksi ini menggantikan prosedur preview terdahulu yang memakai database test.
+
+Setelah UAT Product Owner PASS, lakukan final gate proporsional, commit dan push ke branch review tanpa meminta persetujuan tambahan. Tidak ada merge/deployment tanpa instruksi tersendiri.
+
 ## Menjalankan fondasi
 
 ```sh

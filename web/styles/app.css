@@ -291,3 +291,8 @@ body:has(.form-modal[open]) { overflow:hidden; }
 }
 
 .daily-quick-table [data-quick-arrival]:disabled { background:#f2f4f7; color:#667085; }
+
+.teacher-report-surface { position:relative; }
+.teacher-report-table { min-width:880px; }
+.teacher-report-description { max-width:280px; overflow-wrap:anywhere; }
+.teacher-report-content { overflow-wrap:anywhere; }

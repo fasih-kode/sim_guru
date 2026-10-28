@@ -72,6 +72,17 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 	if r.URL.Query().Get("request_saved") == "1" {
 		v.Message = "Permintaan terkirim kepada TU. Catatan kehadiran tidak berubah."
 	}
+	reports, reportErr := a.options.Academics.TeacherAttendanceReports(r.Context(), principal(r).ID, academic.TeacherAttendanceReportFilter{Scope: academic.TeacherReportOwn, Page: 1})
+	if reportErr != nil {
+		a.academicFailure(w, reportErr)
+		return
+	}
+	v.TeacherReports = &teacherReportsView{Base: "/kehadiran-saya/laporan", Own: true, CanCreate: true, Filter: academic.TeacherAttendanceReportFilter{Page: 1}, Reports: reports}
+	if len(reports) > 10 {
+		v.TeacherReports.Next = 2
+		v.TeacherReports.NextURL = "/kehadiran-saya/laporan?page=2"
+		v.TeacherReports.Reports = reports[:10]
+	}
 	a.render(w, r, "page", status, v)
 }
 

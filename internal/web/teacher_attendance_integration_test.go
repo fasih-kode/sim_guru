@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -308,11 +309,16 @@ func TestTeacherAttendanceHTTPIntegration(t *testing.T) {
 	}
 	officer := makeUser(false, "petugas_absensi")
 	manualKey, _ := academic.NewTeacherAttendanceIdempotencyKey()
-	_, err = service.RecordTeacherAttendanceManual(ctx, officer.user.ID, academic.TeacherAttendanceManualInput{TeacherID: isolated.teacher, Action: academic.TeacherCheckIn, OccurredAt: date + "T00:00", Reason: "Fixture bantuan petugas F1", IdempotencyKey: manualKey})
-	if err != nil {
-		t.Fatal("manual fixture:", err)
+	_, err = service.RecordTeacherAttendanceManual(ctx, officer.user.ID, academic.TeacherAttendanceManualInput{TeacherID: isolated.teacher, Action: academic.TeacherCheckIn, OccurredAt: date + "T00:00", Reason: "Fixture bantuan TU F1", IdempotencyKey: manualKey})
+	if !errors.Is(err, academic.ErrForbidden) {
+		t.Fatal("Petugas Absensi Siswa should not record teacher attendance:", err)
 	}
-	if !strings.Contains(get(isolated.client, "/kehadiran-saya", 200), "Dicatat Petugas") {
+	manager := makeUser(false, "pegawai_tu", "pengelola_kehadiran_guru")
+	_, err = service.RecordTeacherAttendanceManual(ctx, manager.user.ID, academic.TeacherAttendanceManualInput{TeacherID: isolated.teacher, Action: academic.TeacherCheckIn, OccurredAt: date + "T00:00", Reason: "Fixture bantuan TU F1", IdempotencyKey: manualKey})
+	if err != nil {
+		t.Fatal("manual TU fixture:", err)
+	}
+	if !strings.Contains(get(isolated.client, "/kehadiran-saya", 200), "Dicatat TU") {
 		t.Fatal("manual source not shown")
 	}
 	noStorage := &academic.Store{DB: db}

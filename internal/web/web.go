@@ -26,6 +26,7 @@ func New(check Check, options Options) (http.Handler, error) {
 		return nil, errors.New("auth/master/academic store dan CSRF key 32 byte wajib tersedia")
 	}
 	templates, err := template.New("web").Funcs(template.FuncMap{
+
 		"rowNumber": func(page, index int) int {
 			if page < 1 {
 				page = 1
@@ -64,6 +65,19 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Write([]byte("ready\n"))
 	})
 	a := &application{templates: templates, options: options}
+	mux.HandleFunc("GET /kehadiran-saya/laporan", a.require("", a.teacherReports))
+	mux.HandleFunc("POST /kehadiran-saya/laporan", a.require("", a.createTeacherReport))
+	mux.HandleFunc("GET /kehadiran-saya/laporan/{id}", a.require("", a.teacherReportDetail))
+	mux.HandleFunc("POST /kehadiran-saya/laporan/{id}/permintaan", a.require("", a.requestTeacherReportCorrection))
+	mux.HandleFunc("GET /tu/kehadiran-guru/laporan", a.require("pengelola_kehadiran_guru", a.teacherReports))
+	mux.HandleFunc("GET /tu/kehadiran-guru/laporan/{id}", a.require("pengelola_kehadiran_guru", a.teacherReportDetail))
+	mux.HandleFunc("POST /tu/kehadiran-guru/laporan/{id}/koreksi", a.require("pengelola_kehadiran_guru", a.changeTeacherReport))
+	mux.HandleFunc("POST /tu/kehadiran-guru/laporan/{id}/batalkan", a.require("pengelola_kehadiran_guru", a.changeTeacherReport))
+	mux.HandleFunc("GET /admin/kehadiran-tu/laporan", a.require("admin", a.teacherReports))
+	mux.HandleFunc("GET /admin/kehadiran-tu/laporan/{id}", a.require("admin", a.teacherReportDetail))
+	mux.HandleFunc("POST /admin/kehadiran-tu/laporan/{id}/koreksi", a.require("admin", a.changeTeacherReport))
+	mux.HandleFunc("POST /admin/kehadiran-tu/laporan/{id}/batalkan", a.require("admin", a.changeTeacherReport))
+
 	mux.HandleFunc("GET /kehadiran-saya", a.require("", a.teacherAttendance))
 	mux.HandleFunc("POST /kehadiran-saya", a.require("", a.teacherAttendance))
 	mux.HandleFunc("POST /kehadiran-saya/permintaan", a.require("", a.teacherAttendanceRequest))

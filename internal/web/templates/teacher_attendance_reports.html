@@ -1,0 +1,115 @@
+{{define "teacher-reports"}}
+<div class="mb-5 flex flex-wrap gap-3">
+  <a class="button-secondary" href="{{if .TeacherReports.Own}}/kehadiran-saya{{else if eq .TeacherReports.Base "/admin/kehadiran-tu/laporan"}}/admin/kehadiran-tu{{else}}/tu/kehadiran-guru{{end}}">Kembali ke kehadiran</a>
+  {{if and .TeacherReports.Own .TeacherReports.CanCreate}}<a class="button-primary" href="{{.TeacherReports.Base}}?new=1">Buat Laporan</a>{{end}}
+</div>
+{{if not .TeacherReports.Own}}
+<section class="panel mb-5">
+  <h2 class="mb-4 text-lg font-semibold">Filter laporan guru</h2>
+  <form method="get" action="{{.TeacherReports.Base}}" class="grid gap-4 sm:grid-cols-2">
+    <div><label for="report-search">Cari guru</label><input id="report-search" type="search" name="q" maxlength="120" value="{{.TeacherReports.Filter.Search}}" placeholder="Nama guru"></div>
+    <div><label for="report-kind-filter">Jenis laporan</label><select id="report-kind-filter" name="kind"><option value="">Semua jenis</option><option value="izin" {{if eq .TeacherReports.Filter.Kind "izin"}}selected{{end}}>Izin</option><option value="sakit" {{if eq .TeacherReports.Filter.Kind "sakit"}}selected{{end}}>Sakit</option><option value="dinas_luar" {{if eq .TeacherReports.Filter.Kind "dinas_luar"}}selected{{end}}>Dinas Luar</option></select></div>
+    <div><label for="report-from-filter">Rentang mulai</label><input id="report-from-filter" type="date" name="from" value="{{.TeacherReports.Filter.StartsOn}}"></div>
+    <div><label for="report-to-filter">Rentang selesai</label><input id="report-to-filter" type="date" name="to" value="{{.TeacherReports.Filter.EndsOn}}"></div>
+    <div><label for="report-status-filter">Status</label><select id="report-status-filter" name="status"><option value="">Semua status</option><option value="active" {{if eq .TeacherReports.Filter.Status "active"}}selected{{end}}>Aktif</option><option value="cancelled" {{if eq .TeacherReports.Filter.Status "cancelled"}}selected{{end}}>Dibatalkan</option></select></div>
+    <div class="flex items-end"><button class="button-primary" type="submit">Tampilkan laporan</button></div>
+  </form>
+</section>
+{{end}}
+{{template "teacher-report-list" .}}
+{{if eq .TeacherReports.Modal "create"}}
+<dialog class="form-modal" id="teacher-report-create" data-form-modal data-modal-open-on-load aria-labelledby="teacher-report-create-title">
+  <div class="form-modal-card">
+    <div class="form-modal-heading"><h2 id="teacher-report-create-title">Buat Laporan Kehadiran</h2><a class="form-modal-close" href="{{.TeacherReports.Base}}" aria-label="Tutup dialog">×</a></div>
+    {{if .Error}}{{template "notification-error" .Error}}{{end}}
+    <p class="mb-5 text-sm text-gray-500">Laporan langsung tercatat tanpa persetujuan. Setelah disimpan, perubahan atau pembatalan ditangani TU Pengelola Kehadiran Guru.</p>
+    <form method="post" action="{{.TeacherReports.Base}}" class="space-y-4">
+      {{.CSRF}}<input type="hidden" name="idempotency_key" value="{{.TeacherReports.Form.Key}}">
+      {{template "teacher-report-fields" .}}
+      <div class="form-modal-actions"><a class="button-secondary" href="{{.TeacherReports.Base}}">Batal</a><button class="button-primary" type="submit">Simpan Laporan</button></div>
+    </form>
+  </div>
+</dialog>
+{{end}}
+{{end}}
+
+{{define "teacher-report-list"}}
+<section class="panel mt-5">
+  <h2 class="text-lg font-semibold">{{if .TeacherReports.Own}}Riwayat Laporan Saya{{else}}Laporan Guru{{end}}</h2>
+  <p class="my-4 text-sm text-gray-500">Laporan dan bukti Masuk/Pulang disimpan terpisah. Status akhir berdasarkan jadwal dan tugas belum dihitung pada halaman ini.</p>
+  <div class="table-surface teacher-report-surface">
+    <table class="app-table teacher-report-table">
+      <caption class="sr-only">Daftar laporan kehadiran guru</caption>
+      <thead><tr><th>No.</th>{{if not .TeacherReports.Own}}<th>Guru</th>{{end}}<th>Jenis</th><th>Rentang tanggal</th><th>Keterangan</th><th>Status</th><th>Dicatat (WIB)</th><th>Tindakan</th></tr></thead>
+      <tbody>
+        {{range $i,$report := .TeacherReports.Reports}}
+        <tr><td>{{rowNumber $.TeacherReports.Filter.Page $i}}</td>{{if not $.TeacherReports.Own}}<td>{{$report.TeacherName}}</td>{{end}}<td>{{$report.KindLabel}}</td><td>{{$report.StartsOn}}{{if ne $report.StartsOn $report.EndsOn}} s.d. {{$report.EndsOn}}{{end}}</td><td class="teacher-report-description">{{$report.Description}}</td><td><span class="status-badge {{if $report.Active}}status-badge--active{{else}}status-badge--inactive{{end}}">{{if $report.Active}}Aktif{{else}}Dibatalkan{{end}}</span></td><td>{{$report.RecordedAt.Format "02 Jan 2006 15:04"}}</td><td><a class="button-secondary" href="{{$.TeacherReports.Base}}/{{$report.ID}}">Detail / histori</a>{{if and $.TeacherReports.Own $.TeacherReports.CanCreate}}<a class="block mt-2" href="{{$.TeacherReports.Base}}/{{$report.ID}}?modal=request">Minta Koreksi</a>{{end}}</td></tr>
+        {{else}}<tr><td colspan="8">Belum ada laporan yang cocok.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  {{if or .TeacherReports.Previous .TeacherReports.Next}}<nav class="table-pagination mt-4" aria-label="Halaman laporan">
+    {{if .TeacherReports.Previous}}<a href="{{.TeacherReports.PreviousURL}}">← Sebelumnya</a>{{else}}<span></span>{{end}}
+    <span>Halaman {{.TeacherReports.Filter.Page}}</span>
+    {{if .TeacherReports.Next}}<a href="{{.TeacherReports.NextURL}}">Berikutnya →</a>{{else}}<span></span>{{end}}
+  </nav>{{end}}
+</section>
+{{end}}
+
+{{define "teacher-report-fields"}}
+<div><label for="teacher-report-kind">Jenis laporan</label><select id="teacher-report-kind" name="kind" required><option value="">Pilih jenis</option><option value="izin" {{if eq .TeacherReports.Form.Kind "izin"}}selected{{end}}>Izin</option><option value="sakit" {{if eq .TeacherReports.Form.Kind "sakit"}}selected{{end}}>Sakit</option><option value="dinas_luar" {{if eq .TeacherReports.Form.Kind "dinas_luar"}}selected{{end}}>Dinas Luar</option></select></div>
+<div class="grid gap-4 sm:grid-cols-2">
+  <div><label for="teacher-report-start">Tanggal mulai (WIB)</label><input id="teacher-report-start" type="date" name="starts_on" value="{{.TeacherReports.Form.StartsOn}}" required></div>
+  <div><label for="teacher-report-end">Tanggal selesai (WIB)</label><input id="teacher-report-end" type="date" name="ends_on" value="{{.TeacherReports.Form.EndsOn}}" required></div>
+</div>
+<div><label for="teacher-report-description">Keterangan</label><textarea id="teacher-report-description" name="description" maxlength="500" required>{{.TeacherReports.Form.Description}}</textarea></div>
+{{end}}
+
+{{define "teacher-report-detail"}}
+<section class="panel teacher-report-content">
+  <div class="table-heading"><div><h2>{{.TeacherReports.Record.KindLabel}} · {{.TeacherReports.Record.TeacherName}}</h2><p class="mt-2 text-sm text-gray-500">ID #{{.TeacherReports.Record.ID}} · Versi {{.TeacherReports.Record.Version}} · Dicatat {{.TeacherReports.Record.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p></div><a class="button-secondary" href="{{.TeacherReports.Base}}">Kembali</a></div>
+  <dl class="grid gap-4 sm:grid-cols-2">
+    <div><dt class="text-sm text-gray-500">Rentang tanggal</dt><dd>{{.TeacherReports.Record.StartsOn}} s.d. {{.TeacherReports.Record.EndsOn}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Status laporan</dt><dd><span class="status-badge {{if .TeacherReports.Record.Active}}status-badge--active{{else}}status-badge--inactive{{end}}">{{if .TeacherReports.Record.Active}}Aktif{{else}}Dibatalkan{{end}}</span></dd></div>
+    <div><dt class="text-sm text-gray-500">Kategori laporan</dt><dd>{{.TeacherReports.Record.CategoryLabel}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Keterangan</dt><dd class="whitespace-pre-wrap">{{.TeacherReports.Record.Description}}</dd></div>
+  </dl>
+  <p class="my-5 text-sm text-gray-500">Kategori ini adalah isi laporan. Bukti Masuk/Pulang tetap utuh; pengaruh terhadap kewajiban hadir dan status akhir akan mengikuti jadwal/tugas pada rekap.</p>
+  <div class="flex flex-wrap gap-3">
+    {{if and .TeacherReports.Own .TeacherReports.CanCreate}}<a class="button-secondary" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}?modal=request">Minta Koreksi</a>{{end}}
+    {{if and (not .TeacherReports.Own) .TeacherReports.Record.CanManage}}<a class="button-primary" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}?modal=correct">Koreksi Laporan</a><a class="button-secondary" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}?modal=cancel">Batalkan Laporan</a>{{end}}
+  </div>
+</section>
+<section class="panel mt-5 teacher-report-content">
+  <h2 class="text-lg font-semibold">Histori Laporan</h2>
+  {{range .TeacherReports.Record.History}}<article class="mt-4 rounded-xl border border-gray-200 p-4">
+    <p class="font-semibold">{{if eq .Action "recorded"}}Pencatatan awal{{else if eq .Action "cancelled"}}Pembatalan{{else}}Koreksi{{end}} · {{.Actor}}</p><p class="text-sm text-gray-500">{{.At.Format "02 Jan 2006 15:04"}} WIB</p>
+    {{with .Before}}<p class="mt-3 text-sm"><strong>Sebelum:</strong> {{.KindLabel}} · {{.StartsOn}} s.d. {{.EndsOn}} · {{if .Active}}Aktif{{else}}Dibatalkan{{end}} · {{.Description}}</p>{{end}}
+    <p class="mt-2 text-sm"><strong>Sesudah:</strong> {{.After.KindLabel}} · {{.After.StartsOn}} s.d. {{.After.EndsOn}} · {{if .After.Active}}Aktif{{else}}Dibatalkan{{end}} · {{.After.Description}}</p>
+    {{if .Reason}}<p class="mt-2 text-sm"><strong>Alasan:</strong> {{.Reason}}</p>{{end}}
+  </article>{{end}}
+  {{if or .TeacherReports.HistoryPrevious .TeacherReports.HistoryNext}}<nav class="table-pagination mt-4" aria-label="Halaman histori laporan">{{if .TeacherReports.HistoryPrevious}}<a href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}?history_page={{.TeacherReports.HistoryPrevious}}">← Sebelumnya</a>{{else}}<span></span>{{end}}<span>Halaman {{.TeacherReports.HistoryPage}}</span>{{if .TeacherReports.HistoryNext}}<a href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}?history_page={{.TeacherReports.HistoryNext}}">Berikutnya →</a>{{else}}<span></span>{{end}}</nav>{{end}}
+</section>
+{{if .TeacherReports.Modal}}
+<dialog class="form-modal" id="teacher-report-change" data-form-modal data-modal-open-on-load aria-labelledby="teacher-report-change-title">
+  <div class="form-modal-card teacher-report-content">
+    <div class="form-modal-heading"><h2 id="teacher-report-change-title">{{if eq .TeacherReports.Modal "request"}}Minta Koreksi{{else if eq .TeacherReports.Modal "cancel"}}Batalkan Laporan{{else}}Koreksi Laporan{{end}}</h2><a class="form-modal-close" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}" aria-label="Tutup dialog">×</a></div>
+    {{if .Error}}{{template "notification-error" .Error}}{{end}}
+    <p class="mb-4 text-sm text-gray-500">{{.TeacherReports.Record.TeacherName}} · {{.TeacherReports.Record.KindLabel}} · {{.TeacherReports.Record.StartsOn}} s.d. {{.TeacherReports.Record.EndsOn}}</p>
+    {{if eq .TeacherReports.Modal "request"}}
+    <p class="mb-4 text-sm">Permintaan dikirim ke TU dan tidak mengubah laporan.</p>
+    <form method="post" action="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}/permintaan" class="space-y-4">{{.CSRF}}
+      <div><label for="teacher-report-request">Keterangan permintaan</label><textarea id="teacher-report-request" name="request_text" maxlength="500" required>{{.TeacherReports.Form.RequestText}}</textarea></div>
+      <div class="form-modal-actions"><a class="button-secondary" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}">Batal</a><button class="button-primary" type="submit">Kirim Permintaan</button></div>
+    </form>
+    {{else}}
+    <form method="post" action="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}/{{if eq .TeacherReports.Modal "cancel"}}batalkan{{else}}koreksi{{end}}" class="space-y-4">{{.CSRF}}<input type="hidden" name="version" value="{{.TeacherReports.Form.Version}}">
+      {{if eq .TeacherReports.Modal "correct"}}{{template "teacher-report-fields" .}}{{else}}<p>Laporan dibatalkan tanpa menghapus catatan dan histori sebelumnya.</p>{{end}}
+      <div><label for="teacher-report-reason">Alasan {{if eq .TeacherReports.Modal "cancel"}}pembatalan{{else}}koreksi{{end}}</label><textarea id="teacher-report-reason" name="reason" maxlength="500" required>{{.TeacherReports.Form.Reason}}</textarea></div>
+      <div class="form-modal-actions"><a class="button-secondary" href="{{.TeacherReports.Base}}/{{.TeacherReports.Record.ID}}">Tutup / muat terbaru</a><button class="button-primary" type="submit">{{if eq .TeacherReports.Modal "cancel"}}Konfirmasi Pembatalan{{else}}Simpan Koreksi{{end}}</button></div>
+    </form>
+    {{end}}
+  </div>
+</dialog>
+{{end}}
+{{end}}

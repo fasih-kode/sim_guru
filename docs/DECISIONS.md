@@ -234,3 +234,8 @@ Pengelola TU boleh mencatat susulan dan mengoreksi catatan historis tanpa batas 
 Jam Masuk dinilai terhadap awal pelajaran pertama atau tugas wajib pertama; Jam Pulang terhadap akhir pelajaran terakhir atau tugas wajib terakhir. Tidak ada toleransi keterlambatan dan keterlambatan bukan otomatis Tidak Hadir. Pulang terlalu cepat berstatus Tidak Hadir, kecuali Dinas Luar. Izin dan Sakit adalah Tidak Hadir dengan kategori masing-masing, bukan Alpa. Dinas Luar dihitung Hadir (Dinas Luar). Hanya satu dari Masuk/Pulang berarti Kehadiran Belum Lengkap; tanpa keduanya Belum Dicatat, bukan Alpa. Tanpa jadwal atau tugas berarti Tidak Terjadwal. Guru boleh mencatat sukarela pada hari tidak terjadwal. Jadwal dan bukti historis dipertahankan.
 
 D-039 menggantikan bagian kewenangan pencatatan manual/koreksi, akses foto oleh Petugas Absensi, dan batas susulan tujuh hari pada D-038. Ketentuan D-038 lainnya tetap berlaku. Batas jumlah hari per laporan dan kewajiban lampiran tidak ditetapkan. Form laporan dan penghitungan status/rekap lengkap masih memerlukan tahap implementasi terpisah.
+
+
+### Implementasi laporan D-039 — DEV-03G2
+
+Laporan Izin/Sakit/Dinas Luar disimpan sebagai satu rentang tanggal kalender WIB yang inklusif, dengan keterangan 1–500 karakter dan tanpa batas durasi atau kewajiban lampiran baru. Laporan aktif tidak boleh bertumpuk, termasuk saat dua pengiriman berjalan bersamaan. Guru hanya mencatat dan meminta koreksi; TU berwenang mengoreksi atau membatalkan dengan alasan dan version. Pembatalan mempertahankan record/histori serta membebaskan rentang tanggal. Bukti Masuk/Pulang tetap terpisah. Status akhir berdasarkan jadwal/tugas dan rekap terpadu belum dihitung; itu merupakan DEV-03G3. Implementasi tidak mengubah keputusan bisnis D-039.

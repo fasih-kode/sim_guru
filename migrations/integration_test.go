@@ -55,7 +55,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 23 || target != 23 {
+	if err != nil || current != 25 || target != 25 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -68,6 +68,13 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.teacher_attendance_correction_requests') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing teacher attendance correction request table")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.teacher_attendance_reports') IS NOT NULL AND to_regclass('app.teacher_attendance_report_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		t.Fatal("missing teacher attendance report tables")
+	}
+	var overlap bool
+	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='teacher_attendance_reports_no_overlap' AND contype='x')`).Scan(&overlap); err != nil || !overlap {
+		t.Fatal("missing report overlap exclusion constraint")
 	}
 	// Verify transaction rollback using a deliberately failing migration. No existing data is dropped.
 	broken := fstest.MapFS{"00002_probe.sql": {Data: []byte("-- +goose Up\nCREATE TABLE app.foundation_rollback_probe(id integer);\nSELECT 1/0;\n-- +goose Down\nSELECT 1;\n")}}

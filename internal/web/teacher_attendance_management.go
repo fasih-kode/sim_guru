@@ -12,12 +12,14 @@ import (
 )
 
 type teacherAttendanceManagementView struct {
-	Date, Search, Message, BasePath string
-	Admin                           bool
-	Page, Previous, Next            int
-	Teachers                        []academic.TeacherAttendanceManagedTeacher
-	Requests                        []academic.TeacherAttendanceCorrectionRequest
-	Manual                          *teacherAttendanceManualForm
+	RequestPage, RequestPrevious, RequestNext int
+	RequestPreviousURL, RequestNextURL        string
+	Date, Search, Message, BasePath           string
+	Admin                                     bool
+	Page, Previous, Next                      int
+	Teachers                                  []academic.TeacherAttendanceManagedTeacher
+	Requests                                  []academic.TeacherAttendanceCorrectionRequest
+	Manual                                    *teacherAttendanceManualForm
 }
 
 type teacherAttendanceManualForm struct {
@@ -93,7 +95,7 @@ func (a *application) loadTeacherAttendanceManagement(r *http.Request, date, sea
 	} else {
 		teachers, err = a.options.Academics.TeacherAttendanceManaged(r.Context(), principal(r).ID, date, search, page)
 		if err == nil {
-			requests, err = a.options.Academics.TeacherAttendanceCorrectionRequests(r.Context(), principal(r).ID, 1)
+			requests, err = a.options.Academics.TeacherAttendanceCorrectionRequests(r.Context(), principal(r).ID, reportPage(r.URL.Query().Get("request_page")))
 		}
 	}
 	if err != nil {
@@ -107,8 +109,24 @@ func (a *application) loadTeacherAttendanceManagement(r *http.Request, date, sea
 		data.Next = page + 1
 		data.Teachers = teachers[:10]
 	}
+	data.RequestPage = reportPage(r.URL.Query().Get("request_page"))
+	if data.RequestPage > 1 {
+		data.RequestPrevious = data.RequestPage - 1
+	}
 	if len(requests) > 10 {
 		data.Requests = requests[:10]
+		data.RequestNext = data.RequestPage + 1
+	}
+	requestURL := func(page int) string {
+		q := r.URL.Query()
+		q.Set("request_page", strconv.Itoa(page))
+		return teacherAttendanceManagementBase(r) + "?" + q.Encode()
+	}
+	if data.RequestPrevious > 0 {
+		data.RequestPreviousURL = requestURL(data.RequestPrevious)
+	}
+	if data.RequestNext > 0 {
+		data.RequestNextURL = requestURL(data.RequestNext)
 	}
 	return data, nil
 }

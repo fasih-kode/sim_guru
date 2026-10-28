@@ -1,4 +1,5 @@
 {{define "teacher-attendance"}}
+<div class="mb-5 flex flex-wrap gap-3"><a class="button-primary" href="/kehadiran-saya/laporan?new=1">Buat Laporan</a><a class="button-secondary" href="/kehadiran-saya/laporan">Riwayat Laporan Saya</a></div>
 <section data-teacher-attendance data-response-error="{{.Error}}" data-response-message="{{.Message}}">
   <section class="panel mb-5" data-teacher-attendance-context>
     <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
@@ -86,4 +87,5 @@
   </dialog>
   {{end}}
 </section>
+{{if .TeacherReports}}{{template "teacher-report-list" .}}{{end}}
 {{end}}

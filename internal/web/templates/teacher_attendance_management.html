@@ -1,4 +1,5 @@
 {{define "teacher-attendance-management"}}
+<div class="mb-5"><a class="button-secondary" href="{{.TeacherAttendanceManagement.BasePath}}/laporan">Laporan Guru</a></div>
 <section class="panel">
   <div class="table-heading">
     <div>
@@ -47,8 +48,9 @@
   <h2 class="text-lg font-semibold">Permintaan pelengkapan / koreksi dari guru</h2>
   <p class="mt-2 text-sm text-gray-500">Permintaan hanya menjadi informasi bagi TU. Permintaan tidak mengubah catatan kehadiran.</p>
   <div class="table-surface mt-4"><table class="app-table teacher-attendance-request-table"><thead><tr><th>Tanggal</th><th>Guru</th><th>Tindakan</th><th>Jenis</th><th>Keterangan</th><th>Dikirim (WIB)</th></tr></thead><tbody>
-  {{range $index, $request := .TeacherAttendanceManagement.Requests}}{{if lt $index 10}}<tr><td>{{$request.OnDate}}</td><td>{{$request.Teacher}}</td><td>{{if eq $request.Action "check_in"}}Masuk{{else}}Pulang{{end}}</td><td>{{if eq $request.Kind "completion"}}Pelengkapan{{else}}Koreksi{{end}}</td><td>{{$request.Text}}</td><td>{{$request.CreatedAt.Format "02 Jan 2006 15:04"}}</td></tr>{{end}}{{else}}<tr><td colspan="6">Belum ada permintaan.</td></tr>{{end}}
+  {{range $index, $request := .TeacherAttendanceManagement.Requests}}{{if lt $index 10}}<tr><td>{{$request.OnDate}}</td><td>{{$request.Teacher}}</td><td>{{if $request.ReportID}}<a href="{{$.TeacherAttendanceManagement.BasePath}}/laporan/{{$request.ReportID}}">Laporan #{{$request.ReportID}}</a>{{else if eq $request.Action "check_in"}}Masuk{{else}}Pulang{{end}}</td><td>{{if eq $request.Kind "completion"}}Pelengkapan{{else}}Koreksi{{end}}</td><td>{{$request.Text}}</td><td>{{$request.CreatedAt.Format "02 Jan 2006 15:04"}}</td></tr>{{end}}{{else}}<tr><td colspan="6">Belum ada permintaan.</td></tr>{{end}}
   </tbody></table></div>
+  {{if or .TeacherAttendanceManagement.RequestPrevious .TeacherAttendanceManagement.RequestNext}}<nav class="table-pagination mt-4" aria-label="Halaman permintaan guru">{{if .TeacherAttendanceManagement.RequestPrevious}}<a href="{{.TeacherAttendanceManagement.RequestPreviousURL}}">← Sebelumnya</a>{{else}}<span></span>{{end}}<span>Halaman {{.TeacherAttendanceManagement.RequestPage}}</span>{{if .TeacherAttendanceManagement.RequestNext}}<a href="{{.TeacherAttendanceManagement.RequestNextURL}}">Berikutnya →</a>{{else}}<span></span>{{end}}</nav>{{end}}
 </section>
 {{end}}
 

@@ -42,6 +42,7 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
+	TeacherReports              *teacherReportsView
 	TeacherAttendance           *teacherAttendanceView
 	TeacherAttendanceManagement *teacherAttendanceManagementView
 	TeacherAttendanceRecord     *teacherAttendanceRecordView
@@ -99,7 +100,7 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		roleMenu = "admin"
 	}
 	switch {
-	case path == "/kehadiran-saya":
+	case strings.HasPrefix(path, "/kehadiran-saya"):
 		return "teacher-attendance", "teacher-attendance"
 	case strings.HasPrefix(path, "/tu/kehadiran-guru"):
 		return "teacher-attendance-management", "teacher-attendance-management"

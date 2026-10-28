@@ -33,6 +33,7 @@ type TeacherAttendanceCorrectionRequestInput struct {
 
 type TeacherAttendanceCorrectionRequest struct {
 	ID        int64
+	ReportID  int64
 	Teacher   string
 	OnDate    string
 	Action    TeacherAttendanceAction
@@ -215,7 +216,7 @@ func (s *Store) TeacherAttendanceCorrectionRequests(ctx context.Context, actorID
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT id,teacher_name,on_date::text,attendance_action,request_kind,request_text,created_at FROM app.teacher_attendance_correction_requests ORDER BY id DESC LIMIT 11 OFFSET $1`, (page-1)*10)
+	rows, err := tx.QueryContext(ctx, `SELECT id,coalesce(report_id,0),teacher_name,on_date::text,coalesce(attendance_action,''),request_kind,request_text,created_at FROM app.teacher_attendance_correction_requests ORDER BY id DESC LIMIT 11 OFFSET $1`, (page-1)*10)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +224,7 @@ func (s *Store) TeacherAttendanceCorrectionRequests(ctx context.Context, actorID
 	var requests []TeacherAttendanceCorrectionRequest
 	for rows.Next() {
 		var request TeacherAttendanceCorrectionRequest
-		if err = rows.Scan(&request.ID, &request.Teacher, &request.OnDate, &request.Action, &request.Kind, &request.Text, &request.CreatedAt); err != nil {
+		if err = rows.Scan(&request.ID, &request.ReportID, &request.Teacher, &request.OnDate, &request.Action, &request.Kind, &request.Text, &request.CreatedAt); err != nil {
 			return nil, err
 		}
 		request.CreatedAt = TeacherAttendanceWIBTime(request.CreatedAt)
