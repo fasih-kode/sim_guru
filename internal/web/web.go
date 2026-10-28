@@ -65,6 +65,8 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Write([]byte("ready\n"))
 	})
 	a := &application{templates: templates, options: options}
+	mux.HandleFunc("GET /kehadiran-saya/rekap", a.require("", a.teacherAttendanceRecap))
+	mux.HandleFunc("GET /tu/kehadiran-guru/rekap", a.require("pengelola_kehadiran_guru", a.teacherAttendanceRecap))
 	mux.HandleFunc("GET /kehadiran-saya/laporan", a.require("", a.teacherReports))
 	mux.HandleFunc("POST /kehadiran-saya/laporan", a.require("", a.createTeacherReport))
 	mux.HandleFunc("GET /kehadiran-saya/laporan/{id}", a.require("", a.teacherReportDetail))

@@ -257,6 +257,11 @@ func (a *application) renderTeacherAttendancePage(w http.ResponseWriter, r *http
 			f.CheckOut = event
 		}
 	}
+	f.Evaluation, err = a.teacherTodayEvaluation(r, day.Date)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
 	page := view{Page: "teacher-attendance", Title: "Kehadiran Saya", TeacherAttendance: &f, Error: message, Message: map[bool]string{true: "Permintaan Anda terkirim kepada TU. Catatan kehadiran tidak berubah.", false: ""}[r.URL.Query().Get("request_saved") == "1"]}
 	a.render(w, r, "page", status, page)
 }

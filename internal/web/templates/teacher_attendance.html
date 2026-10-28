@@ -4,6 +4,16 @@
   <section class="panel mb-5" data-teacher-attendance-context>
     <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
     <p class="text-sm text-gray-500">{{.TeacherAttendance.Day.Date}} · WIB</p>
+    {{with .TeacherAttendance.Evaluation}}
+    <div class="mt-5" aria-label="Ringkasan status hari ini">
+      <h2 class="text-lg font-semibold">Status hari ini</h2>
+      <p class="mt-3">{{template "teacher-recap-status" .}}</p>
+      {{if .Required}}<p class="mt-3">Kewajiban mengajar: {{.StartsAt.Format "15:04"}}–{{.EndsAt.Format "15:04"}} WIB</p>{{end}}
+      <p class="mt-3 text-sm text-gray-500">{{.Explanation}}</p>
+      {{if .NeedsReview}}<p class="mt-3">Perlu pemeriksaan administratif: bukti dan laporan tetap tersimpan.</p>{{end}}
+      <a class="button-secondary mt-4" href="/kehadiran-saya/rekap">Lihat rekap dan dasar penilaian</a>
+    </div>
+    {{end}}
     <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan TU Pengelola Kehadiran Guru.</p>
     {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi TU Pengelola Kehadiran Guru.</p>{{end}}
     <a class="button-secondary mt-4" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi</a>

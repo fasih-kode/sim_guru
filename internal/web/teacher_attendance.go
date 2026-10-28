@@ -16,6 +16,7 @@ import (
 const teacherSelfieRequestLimit = (5 << 20) + (64 << 10)
 
 type teacherAttendanceView struct {
+	Evaluation        *academic.TeacherAttendanceEvaluation
 	Day               academic.TeacherAttendanceDay
 	CheckIn, CheckOut *academic.TeacherAttendanceSummary
 	Available         bool
@@ -64,6 +65,11 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 		} else {
 			f.CheckOut = event
 		}
+	}
+	f.Evaluation, err = a.teacherTodayEvaluation(r, day.Date)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
 	}
 	v := view{Page: "teacher-attendance", Title: "Kehadiran Saya", TeacherAttendance: f, Error: message}
 	if r.URL.Query().Get("saved") == "1" {

@@ -36,7 +36,7 @@
 {{define "teacher-report-list"}}
 <section class="panel mt-5">
   <h2 class="text-lg font-semibold">{{if .TeacherReports.Own}}Riwayat Laporan Saya{{else}}Laporan Guru{{end}}</h2>
-  <p class="my-4 text-sm text-gray-500">Laporan dan bukti Masuk/Pulang disimpan terpisah. Status akhir berdasarkan jadwal dan tugas belum dihitung pada halaman ini.</p>
+  <p class="my-4 text-sm text-gray-500">Laporan dan bukti Masuk/Pulang disimpan terpisah. Tabel ini menampilkan status laporan. Penilaian kehadiran berdasarkan jadwal tersedia di menu Rekap Kehadiran sesuai kewenangan.</p>
   <div class="table-surface teacher-report-surface">
     <table class="app-table teacher-report-table">
       <caption class="sr-only">Daftar laporan kehadiran guru</caption>
@@ -44,7 +44,7 @@
       <tbody>
         {{range $i,$report := .TeacherReports.Reports}}
         <tr><td>{{rowNumber $.TeacherReports.Filter.Page $i}}</td>{{if not $.TeacherReports.Own}}<td>{{$report.TeacherName}}</td>{{end}}<td>{{$report.KindLabel}}</td><td>{{$report.StartsOn}}{{if ne $report.StartsOn $report.EndsOn}} s.d. {{$report.EndsOn}}{{end}}</td><td class="teacher-report-description">{{$report.Description}}</td><td><span class="status-badge {{if $report.Active}}status-badge--active{{else}}status-badge--inactive{{end}}">{{if $report.Active}}Aktif{{else}}Dibatalkan{{end}}</span></td><td>{{$report.RecordedAt.Format "02 Jan 2006 15:04"}}</td><td><a class="button-secondary" href="{{$.TeacherReports.Base}}/{{$report.ID}}">Detail / histori</a>{{if and $.TeacherReports.Own $.TeacherReports.CanCreate}}<a class="block mt-2" href="{{$.TeacherReports.Base}}/{{$report.ID}}?modal=request">Minta Koreksi</a>{{end}}</td></tr>
-        {{else}}<tr><td colspan="8">Belum ada laporan yang cocok.</td></tr>{{end}}
+        {{else}}<tr><td colspan="8">Tidak ada data yang cocok dengan pencarian.</td></tr>{{end}}
       </tbody>
     </table>
   </div>

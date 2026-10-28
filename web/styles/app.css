@@ -296,3 +296,10 @@ body:has(.form-modal[open]) { overflow:hidden; }
 .teacher-report-table { min-width:880px; }
 .teacher-report-description { max-width:280px; overflow-wrap:anywhere; }
 .teacher-report-content { overflow-wrap:anywhere; }
+
+/* Hasil daftar tetap terlihat saat loading; tombol submit tetap menjadi fallback tanpa JS. */
+.list-feedback { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; font-size:.875rem; color:#667085; }
+.list-feedback:has([data-list-message]:not(:empty)),.list-feedback:has(.htmx-request) { margin-bottom:1rem; }
+.list-feedback .htmx-indicator { display:none; }
+.list-feedback .htmx-indicator.htmx-request { display:inline; }
+.live-list-ready [data-list-filter] button[type="submit"] { display:none; }

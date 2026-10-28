@@ -203,13 +203,14 @@ func TestStudentDailyHTTPIntegration(t *testing.T) {
 	}
 	qvalues := url.Values{"student_ids": {ids[0][1], ids[1][1]}, "status_" + ids[0][1]: {"hadir"}, "status_" + ids[1][1]: {"sakit"}, "reason_kind": {"manual"}, "fingerprint": {fp[1]}, "gorilla.csrf.Token": {token(quickHTML)}}
 	post(oc, quickURL, qvalues, 422)
-	qvalues.Set("arrival_"+ids[0][1], "07:08")
+	// Tengah malam tanggal fixture selalu sudah berlalu, termasuk ketika suite dijalankan pagi dini hari.
+	qvalues.Set("arrival_"+ids[0][1], "00:00")
 	var expected int64
 	must(db.QueryRow(`SELECT max(id) FROM app.student_arrival_rules WHERE semester_id=$1`, sem).Scan(&expected))
 	_, e = s.SaveArrivalRule(ctx, kes.ID, expected, academic.ArrivalRule{SemesterID: sem, Weekday: day, EffectiveFrom: start, Deadline: "07:10", Reason: "Perubahan ketika form terbuka"})
 	must(e)
 	conflictHTML := post(oc, quickURL, qvalues, 409)
-	if !strings.Contains(conflictHTML, `value="07:08"`) || !strings.Contains(conflictHTML, "Isian Anda tetap ditampilkan") {
+	if !strings.Contains(conflictHTML, `value="00:00"`) || !strings.Contains(conflictHTML, "Isian Anda tetap ditampilkan") {
 		t.Fatal("draft lost on conflict")
 	}
 	newFP := fpRE.FindStringSubmatch(conflictHTML)

@@ -42,6 +42,8 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
+	LiveList                    bool
+	TeacherRecap                *teacherRecapView
 	TeacherReports              *teacherReportsView
 	TeacherAttendance           *teacherAttendanceView
 	TeacherAttendanceManagement *teacherAttendanceManagementView
@@ -82,6 +84,11 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.User = principal(r)
 	v.CSRF = csrf.TemplateField(r)
 	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
+	v.LiveList = liveListPage(v.Page)
+	if name == "page" && v.LiveList && r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-List-Request") == "true" {
+		name = "list-fragment"
+	}
+	w.Header().Add("Vary", "HX-List-Request")
 	var buf bytes.Buffer
 	if err := a.templates.ExecuteTemplate(&buf, name, v); err != nil {
 		slog.Error("template gagal", "template", name, "error", err)
@@ -100,6 +107,10 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		roleMenu = "admin"
 	}
 	switch {
+	case path == "/kehadiran-saya/rekap":
+		return "teacher-recap", "teacher-attendance"
+	case path == "/tu/kehadiran-guru/rekap":
+		return "teacher-recap", "teacher-attendance-management"
 	case strings.HasPrefix(path, "/kehadiran-saya"):
 		return "teacher-attendance", "teacher-attendance"
 	case strings.HasPrefix(path, "/tu/kehadiran-guru"):
