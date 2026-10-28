@@ -24,7 +24,7 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 	db := testutil.Database(t, "../../.env")
 	ctx := context.Background()
 	service := &academic.Store{DB: db}
-	petugas, _ := testutil.User(t, db, "petugas_absensi")
+	petugas, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	photos := newCapturePhotoStore(t)
 	var eventIDs []int64
 	var teacherIDs []int64
@@ -35,7 +35,7 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 	date := manualAttendanceToday(t, db)
 	input := manualAttendanceInput(t, 101, academic.TeacherCheckIn, date+"T00:00", "Kamera guru bermasalah")
 
-	// Petugas dapat mencatat guru aktif yang tidak mempunyai akun pengguna.
+	// Pengelola TU dapat mencatat guru aktif yang tidak mempunyai akun pengguna.
 	teacherID := createManualTeacher(t, db, "Guru manual tanpa akun")
 	teacherIDs = append(teacherIDs, teacherID)
 	first, err := service.RecordTeacherAttendanceManual(ctx, petugas.ID, inputForTeacher(input, teacherID))
@@ -80,8 +80,8 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 	}
 	assertManualRejectedWithoutWrites(t, db, service, teacherID, date, academic.TeacherCheckIn, newKey, academic.ErrConflict, petugas.ID)
 
-	// Retry atas bukti yang sah tetap mengembalikan event lama setelah jendela susulan lewat.
-	oldDate := manualAttendanceDateDaysBefore(t, date, 8)
+	// Retry atas bukti yang sah tetap mengembalikan event lama pada tanggal historis.
+	oldDate := manualAttendanceDateDaysBefore(t, date, 400)
 	oldOccurredAt := manualAttendanceTime(oldDate + "T00:00")
 	setManualEventDateForRetryTest(t, db, first.EventID, oldDate, oldOccurredAt, petugas.ID, teacherID, first.TeacherName, input.Action, input.Reason)
 	oldInput := inputForTeacher(input, teacherID)
@@ -98,21 +98,30 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertManualRejectedWithoutWrites(t, db, service, teacherID, oldDate, academic.TeacherCheckIn, oldNewKey, academic.ErrConflict, petugas.ID)
-	newTeacherOutsideWindow := createManualTeacher(t, db, "Guru tanggal lama")
+	newTeacherOutsideWindow := createManualTeacher(t, db, "Guru susulan lebih dari setahun")
 	teacherIDs = append(teacherIDs, newTeacherOutsideWindow)
 	newAttemptOutsideWindow := inputForTeacher(oldInput, newTeacherOutsideWindow)
-	assertManualRejectedWithoutWrites(t, db, service, newTeacherOutsideWindow, oldDate, academic.TeacherCheckIn, newAttemptOutsideWindow, nil, petugas.ID)
+	newAttemptOutsideWindow.IdempotencyKey, err = academic.NewTeacherAttendanceIdempotencyKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldProof, oldErr := service.RecordTeacherAttendanceManual(ctx, petugas.ID, newAttemptOutsideWindow)
+	if oldErr != nil {
+		t.Fatalf("manual attendance older than one year was denied: %v", oldErr)
+	}
+	eventIDs = append(eventIDs, oldProof.EventID)
+	assertManualCounts(t, db, newTeacherOutsideWindow, oldDate, academic.TeacherCheckIn, 1, 1)
 
 	// Pulang tanpa Masuk diizinkan; Masuk dan Pulang pada tanggal yang sama juga sah.
 	checkoutTeacherID := createManualTeacher(t, db, "Guru manual pulang")
 	teacherIDs = append(teacherIDs, checkoutTeacherID)
-	checkout := manualAttendanceInput(t, 102, academic.TeacherCheckOut, date+"T00:00", "Pulang dicatat oleh petugas")
+	checkout := manualAttendanceInput(t, 102, academic.TeacherCheckOut, date+"T00:00", "Pulang dicatat oleh TU")
 	checkoutProof, err := service.RecordTeacherAttendanceManual(ctx, petugas.ID, inputForTeacher(checkout, checkoutTeacherID))
 	if err != nil || checkoutProof.Action != academic.TeacherCheckOut {
 		t.Fatalf("checkout without check-in failed: proof=%+v err=%v", checkoutProof, err)
 	}
 	eventIDs = append(eventIDs, checkoutProof.EventID)
-	checkin := manualAttendanceInput(t, 103, academic.TeacherCheckIn, date+"T00:00", "Masuk dicatat oleh petugas")
+	checkin := manualAttendanceInput(t, 103, academic.TeacherCheckIn, date+"T00:00", "Masuk dicatat oleh TU")
 	checkinProof, err := service.RecordTeacherAttendanceManual(ctx, petugas.ID, inputForTeacher(checkin, checkoutTeacherID))
 	if err != nil {
 		t.Fatalf("check-in on the same date as checkout failed: %v", err)
@@ -121,28 +130,28 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 	assertManualCounts(t, db, checkoutTeacherID, date, academic.TeacherCheckIn, 1, 1)
 	assertManualCounts(t, db, checkoutTeacherID, date, academic.TeacherCheckOut, 1, 1)
 
-	// Role gabungan hanya berhasil melalui role Petugas Absensi.
-	combined, _ := testutil.User(t, db, "petugas_absensi", "guru_mapel")
-	combinedTeacher := createManualTeacher(t, db, "Guru untuk petugas role gabungan")
+	// Role guru tambahan tidak menggantikan kewenangan TU.
+	combined, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru", "guru_mapel")
+	combinedTeacher := createManualTeacher(t, db, "Guru untuk TU role gabungan")
 	teacherIDs = append(teacherIDs, combinedTeacher)
-	combinedInput := manualAttendanceInput(t, 104, academic.TeacherCheckIn, date+"T00:00", "Dicatat petugas role gabungan")
+	combinedInput := manualAttendanceInput(t, 104, academic.TeacherCheckIn, date+"T00:00", "Dicatat oleh TU role gabungan")
 	combinedProof, err := service.RecordTeacherAttendanceManual(ctx, combined.ID, inputForTeacher(combinedInput, combinedTeacher))
 	if err != nil {
-		t.Fatalf("active combined Petugas role was denied: %v", err)
+		t.Fatalf("active combined TU role was denied: %v", err)
 	}
 	eventIDs = append(eventIDs, combinedProof.EventID)
 
-	// Role lain dan akun Petugas nonaktif tidak boleh membuat catatan.
+	// Petugas Absensi Siswa dan role lain tidak boleh membuat catatan kehadiran guru.
 	deniedTeacher := createManualTeacher(t, db, "Guru untuk otorisasi")
 	teacherIDs = append(teacherIDs, deniedTeacher)
 	deniedInput := manualAttendanceInput(t, 105, academic.TeacherCheckIn, date+"T00:00", "Uji penolakan role")
-	for _, role := range []string{"admin", "kurikulum", "kesiswaan", "kepala_sekolah", "guru_mapel", "wali_kelas"} {
+	for _, role := range []string{"admin", "kurikulum", "kesiswaan", "kepala_sekolah", "guru_mapel", "wali_kelas", "petugas_absensi", "pegawai_tu"} {
 		user, _ := testutil.User(t, db, role)
 		assertManualRejectedWithoutWrites(t, db, service, deniedTeacher, date, academic.TeacherCheckIn, inputForTeacher(deniedInput, deniedTeacher), academic.ErrForbidden, user.ID)
 	}
-	inactivePetugas, _ := testutil.User(t, db, "petugas_absensi")
+	inactivePetugas, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	if _, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, inactivePetugas.ID); err != nil {
-		t.Fatal("deactivate synthetic Petugas account")
+		t.Fatal("deactivate synthetic TU manager account")
 	}
 	assertManualRejectedWithoutWrites(t, db, service, deniedTeacher, date, academic.TeacherCheckIn, inputForTeacher(deniedInput, deniedTeacher), academic.ErrForbidden, inactivePetugas.ID)
 
@@ -247,7 +256,7 @@ func TestRecordTeacherAttendanceManualIntegration(t *testing.T) {
 		}
 		eventIDs = append(eventIDs, gpsProof.EventID)
 		gpsDate := gpsProof.OnDate
-		manualInput := manualAttendanceInput(t, 110, academic.TeacherCheckIn, gpsProof.OccurredAt.In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02T15:04"), "Fallback petugas setelah GPS")
+		manualInput := manualAttendanceInput(t, 110, academic.TeacherCheckIn, gpsProof.OccurredAt.In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02T15:04"), "Fallback TU setelah GPS")
 		assertManualRejectedWithoutWrites(t, db, service, gpsTeacherID, gpsDate, academic.TeacherCheckIn, inputForTeacher(manualInput, gpsTeacherID), academic.ErrConflict, petugas.ID)
 	})
 
@@ -414,7 +423,7 @@ func assertManualRejectedWithoutWrites(t *testing.T, db *sql.DB, service *academ
 		t.Fatal(err)
 	}
 	if actorID == 0 {
-		user, _ := testutil.User(t, db, "petugas_absensi")
+		user, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 		actorID = user.ID
 	}
 	_, err := service.RecordTeacherAttendanceManual(context.Background(), actorID, input)
@@ -487,7 +496,7 @@ func TestCorrectTeacherAttendanceIntegration(t *testing.T) {
 	db := testutil.Database(t, "../../.env")
 	ctx := context.Background()
 	service := &academic.Store{DB: db}
-	petugas, _ := testutil.User(t, db, "petugas_absensi")
+	petugas, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	photos := newCapturePhotoStore(t)
 	var eventIDs, teacherIDs []int64
 	actorIDs := []int64{petugas.ID}
@@ -527,6 +536,20 @@ func TestCorrectTeacherAttendanceIntegration(t *testing.T) {
 			in.ManualReason = &manualReason
 		}
 		return in
+	}
+
+	oldTeacherID := createManualTeacher(t, db, "Guru koreksi lebih dari setahun")
+	teacherIDs = append(teacherIDs, oldTeacherID)
+	oldDate := manualAttendanceDateDaysBefore(t, manualAttendanceToday(t, db), 400)
+	oldInput := inputForTeacher(manualAttendanceInput(t, 300, academic.TeacherCheckIn, oldDate+"T08:00", "Catatan historis lebih dari setahun"), oldTeacherID)
+	oldProof, oldErr := service.RecordTeacherAttendanceManual(ctx, petugas.ID, oldInput)
+	if oldErr != nil {
+		t.Fatalf("manual record older than one year was denied: %v", oldErr)
+	}
+	eventIDs = append(eventIDs, oldProof.EventID)
+	oldCorrection, oldErr := service.CorrectTeacherAttendance(ctx, petugas.ID, academic.TeacherAttendanceCorrectionInput{EventID: oldProof.EventID, ExpectedVersion: 1, OccurredAt: oldDate + "T08:05", CorrectionReason: "Jam pada arsip sekolah diverifikasi"})
+	if oldErr != nil || oldCorrection.Version != 2 || oldCorrection.CorrectedBy != petugas.ID {
+		t.Fatalf("correction older than one year result=%+v err=%v", oldCorrection, oldErr)
 	}
 
 	trigger, function := "test_teacher_correction_"+testutil.Random(t)[:12], "test_teacher_correction_fn_"+testutil.Random(t)[:12]
@@ -574,14 +597,14 @@ func TestCorrectTeacherAttendanceIntegration(t *testing.T) {
 		t.Fatal("deactivate historical synthetic teacher:", err)
 	}
 	inactiveTeacherCorrectionTime := teacherAttendanceCorrectionTime(t, db, 6)
-	for _, role := range []string{"admin", "kurikulum", "kesiswaan", "guru_mapel", "wali_kelas", "kepala_sekolah"} {
+	for _, role := range []string{"admin", "kurikulum", "kesiswaan", "guru_mapel", "wali_kelas", "kepala_sekolah", "petugas_absensi", "pegawai_tu"} {
 		actor, _ := testutil.User(t, db, role)
 		actorIDs = append(actorIDs, actor.ID)
 		if _, denied := service.CorrectTeacherAttendance(ctx, actor.ID, correct(3, inactiveTeacherCorrectionTime, "", "Ditolak")); !errors.Is(denied, academic.ErrForbidden) {
 			t.Errorf("role %s correction error=%v, want forbidden", role, denied)
 		}
 	}
-	inactive, _ := testutil.User(t, db, "petugas_absensi")
+	inactive, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	actorIDs = append(actorIDs, inactive.ID)
 	if _, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, inactive.ID); err != nil {
 		t.Fatal(err)
@@ -645,10 +668,10 @@ func TestCorrectTeacherAttendanceIntegration(t *testing.T) {
 	if err != nil || !noop.Noop || noop.Version != 4 {
 		t.Fatalf("no-op=%+v err=%v", noop, err)
 	}
-	combinedOfficer, _ := testutil.User(t, db, "petugas_absensi", "admin")
+	combinedOfficer, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru", "admin")
 	actorIDs = append(actorIDs, combinedOfficer.ID)
 	if combinedNoop, combinedErr := service.CorrectTeacherAttendance(ctx, combinedOfficer.ID, correct(4, inactiveTeacherCorrectionTime, "", "Role gabungan")); combinedErr != nil || !combinedNoop.Noop {
-		t.Fatalf("active combined role with Petugas permission was not authorized: result=%+v err=%v", combinedNoop, combinedErr)
+		t.Fatalf("active combined Admin/TU role was not authorized: result=%+v err=%v", combinedNoop, combinedErr)
 	}
 	if _, err = service.CorrectTeacherAttendance(ctx, petugas.ID, correct(3, teacherAttendanceCorrectionTime(t, db, 5), "", "Versi lama")); !errors.Is(err, academic.ErrConflict) {
 		t.Fatalf("stale version error=%v", err)

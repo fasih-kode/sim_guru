@@ -67,13 +67,13 @@ type teacherAttendanceManualSnapshot struct {
 	EvidenceFingerprint string                  `json:"evidence_fingerprint"`
 }
 
-// RecordTeacherAttendanceManual mencatat Masuk/Pulang oleh Petugas Absensi.
+// RecordTeacherAttendanceManual melengkapi Masuk/Pulang yang terlewat oleh TU berwenang.
 func (s *Store) RecordTeacherAttendanceManual(ctx context.Context, actorID int64, input TeacherAttendanceManualInput) (TeacherAttendanceManualProof, error) {
 	validated, err := validateTeacherAttendanceManualInput(input)
 	if err != nil {
 		return TeacherAttendanceManualProof{}, err
 	}
-	tx, err := s.begin(ctx, actorID, "petugas_absensi")
+	tx, err := s.beginAny(ctx, actorID, "admin", "pengelola_kehadiran_guru")
 	if err != nil {
 		return TeacherAttendanceManualProof{}, err
 	}
@@ -84,6 +84,9 @@ func (s *Store) RecordTeacherAttendanceManual(ctx context.Context, actorID int64
 		return TeacherAttendanceManualProof{}, err
 	}
 	validated.OnDate = TeacherAttendanceWIBDate(validated.OccurredAt)
+	if err = teacherAttendanceManagerAccess(ctx, tx, actorID, validated.TeacherID); err != nil {
+		return TeacherAttendanceManualProof{}, err
+	}
 
 	teacherName, err := activeTeacherName(ctx, tx, validated.TeacherID)
 	if err != nil {
@@ -218,9 +221,6 @@ func parseTeacherAttendanceManualTime(value string) (time.Time, error) {
 func validateTeacherAttendanceManualWindow(occurredAt, recordedAt time.Time) error {
 	if occurredAt.After(recordedAt) {
 		return ValidationError("Waktu kejadian tidak boleh di masa depan.")
-	}
-	if !TeacherAttendanceMakeupAllowed(occurredAt, recordedAt) {
-		return ValidationError("Pencatatan manual hanya dapat dilakukan untuk tujuh hari kalender terakhir.")
 	}
 	return nil
 }

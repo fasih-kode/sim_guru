@@ -160,6 +160,10 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .table-filter-panel label { margin-bottom:5px; color:#475467; font-size:12px; }
 .table-filter-panel select { min-height:38px; padding-block:7px !important; }
 .table-surface { overflow-x:auto; border:1px solid #e4e7ec; border-radius:14px; background:#fff; }
+.teacher-attendance-management-filter { display:grid; grid-template-columns:minmax(190px,240px) minmax(260px,1fr) auto; align-items:end; gap:12px; margin-top:16px; }
+.teacher-attendance-management-table { min-width:760px; }
+.teacher-attendance-request-table { min-width:780px; }
+@media (max-width:640px) { .teacher-attendance-management-filter { grid-template-columns:1fr; } }
 .lesson-attendance-roster-surface { position:relative; }
 table.app-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
 .app-table thead tr { border-bottom:1px solid #eaecf0; }

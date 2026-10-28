@@ -43,6 +43,8 @@ type roleChoice struct {
 }
 type view struct {
 	TeacherAttendance           *teacherAttendanceView
+	TeacherAttendanceManagement *teacherAttendanceManagementView
+	TeacherAttendanceRecord     *teacherAttendanceRecordView
 	Arrival                     *arrivalView
 	Daily                       *dailyView
 	Foundation                  *foundationView
@@ -99,6 +101,10 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	switch {
 	case path == "/kehadiran-saya":
 		return "teacher-attendance", "teacher-attendance"
+	case strings.HasPrefix(path, "/tu/kehadiran-guru"):
+		return "teacher-attendance-management", "teacher-attendance-management"
+	case strings.HasPrefix(path, "/admin/kehadiran-tu"):
+		return "teacher-attendance-management", "teacher-attendance-management"
 	case path == "/kesiswaan/batas-kedatangan":
 		return "arrival-rules", "attendance"
 	case path == "/absensi/harian/cepat":

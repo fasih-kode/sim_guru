@@ -102,11 +102,9 @@ func loadTeacherAttendanceZone() *time.Location {
 	return time.FixedZone("WIB", 7*60*60)
 }
 
-// TeacherAttendanceMakeupAllowed menerima hari ini dan tujuh tanggal sebelumnya.
+// TeacherAttendanceMakeupAllowed menerima tanggal lampau tanpa batas dan menolak masa depan.
 func TeacherAttendanceMakeupAllowed(eventDate, today time.Time) bool {
-	eventDay, nowDay := civilDay(eventDate), civilDay(today)
-	days := int(nowDay.Sub(eventDay).Hours() / 24)
-	return days >= 0 && days <= 7
+	return !civilDay(eventDate).After(civilDay(today))
 }
 
 func civilDay(t time.Time) time.Time {

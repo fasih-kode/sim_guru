@@ -38,6 +38,8 @@ Penerimaan kembali siswa lama oleh Admin disetujui dan diterapkan sesuai D-032/m
 
 Fase 8 diperbarui melalui D-033 (24 Oktober 2026): guru GPS/selfie, harian siswa kartu QR, dan pelajaran terpisah. Ketentuan foto 100 KB/dua bulan dan kartu hilang ada di PRD utama bab 7.1–7.5. Pengguna mengotorisasi dokumentasi lengkap serta penerapan urutan pertama (kalender/tanggal penempatan/akses), bukan seluruh modul sekaligus.
 
+D-039 (28 Oktober 2026) memperbarui tata kelola kehadiran guru: role Pegawai TU dan TU Pengelola Kehadiran Guru memisahkan kewenangan; Admin mengelola role; Petugas Absensi Siswa tidak mendapat akses; guru hanya mengirim permintaan koreksi tanpa mengubah catatan. Kontrak status, laporan Izin/Sakit/Dinas Luar, dan kewenangan tercatat di [DECISIONS](DECISIONS.md#d-039--tata-kelola-kehadiran-guru-oleh-tu-28-oktober-2026) serta PRD utama §7.2. Form laporan dan mesin rekap otomatis belum termasuk implementasi ini.
+
 D-034 melengkapi fondasi Fase 8 dengan tanggal penempatan massal Admin: lihat pelengkap pada PRD utama, FE dan DECISIONS. Bukan implementasi modul pencatatan absensi.
 
 Fase 8 urutan 2 (D-035): harian siswa, kartu QR/cetak/ganti, manual, koreksi dan histori tersedia. Acuan PRD utama 7.3/pelengkap D-035, FE, DECISIONS dan HANDOVER; urutan 3–5 belum dianggap selesai.

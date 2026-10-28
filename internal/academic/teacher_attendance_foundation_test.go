@@ -66,7 +66,7 @@ func TestTeacherAttendanceDistanceRadiusBoundaries(t *testing.T) {
 	}
 }
 
-func TestTeacherAttendanceWIBDateAndMakeupWindow(t *testing.T) {
+func TestTeacherAttendanceWIBDateAndUnlimitedMakeup(t *testing.T) {
 	before := time.Date(2026, 10, 26, 16, 59, 0, 0, time.UTC)
 	after := before.Add(time.Minute)
 	if TeacherAttendanceWIBDate(before) != "2026-10-26" || TeacherAttendanceWIBDate(after) != "2026-10-27" {
@@ -76,7 +76,7 @@ func TestTeacherAttendanceWIBDateAndMakeupWindow(t *testing.T) {
 	for _, tc := range []struct {
 		days    int
 		allowed bool
-	}{{0, true}, {7, true}, {8, false}, {-1, false}} {
+	}{{0, true}, {7, true}, {8, true}, {30, true}, {365, true}, {-1, false}} {
 		date := today.AddDate(0, 0, -tc.days)
 		if got := TeacherAttendanceMakeupAllowed(date, today); got != tc.allowed {
 			t.Fatalf("days=%d allowed=%v, want %v", tc.days, got, tc.allowed)

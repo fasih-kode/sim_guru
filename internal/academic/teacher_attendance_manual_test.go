@@ -73,7 +73,10 @@ func TestValidateTeacherAttendanceManualWindow(t *testing.T) {
 	}{
 		{"hari ini", time.Date(2026, 10, 28, 0, 0, 0, 0, zone), true},
 		{"tepat tujuh hari sebelumnya", time.Date(2026, 10, 21, 23, 59, 0, 0, zone), true},
-		{"delapan hari sebelumnya", time.Date(2026, 10, 20, 23, 59, 0, 0, zone), false},
+		{"delapan hari sebelumnya", time.Date(2026, 10, 20, 23, 59, 0, 0, zone), true},
+		{"tiga puluh hari sebelumnya", time.Date(2026, 9, 28, 23, 59, 0, 0, zone), true},
+		{"tepat 365 hari sebelumnya", time.Date(2025, 10, 28, 23, 59, 0, 0, zone), true},
+		{"lebih dari setahun sebelumnya", time.Date(2025, 10, 27, 23, 59, 0, 0, zone), true},
 		{"masa depan", time.Date(2026, 10, 28, 0, 11, 0, 0, zone), false},
 	}
 	for _, test := range tests {
@@ -85,11 +88,10 @@ func TestValidateTeacherAttendanceManualWindow(t *testing.T) {
 		})
 	}
 
-	// Rentang dihitung berdasarkan tanggal kalender WIB, bukan selisih 24 jam.
-	nearMidnight := time.Date(2026, 10, 28, 16, 59, 0, 0, time.UTC)
-	justAfterMidnight := time.Date(2026, 10, 28, 17, 1, 0, 0, time.UTC)
-	if err := validateTeacherAttendanceManualWindow(nearMidnight, justAfterMidnight); err != nil {
-		t.Fatalf("previous WIB date should remain within window: %v", err)
+	// Waktu ekuivalen UTC dinilai terhadap waktu server dan tetap tanpa batas usia.
+	oldUTC := time.Date(2025, 10, 27, 16, 59, 0, 0, time.UTC)
+	if err := validateTeacherAttendanceManualWindow(oldUTC, now); err != nil {
+		t.Fatalf("old UTC timestamp should be allowed: %v", err)
 	}
 }
 

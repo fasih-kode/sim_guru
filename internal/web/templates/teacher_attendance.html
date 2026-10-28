@@ -3,8 +3,9 @@
   <section class="panel mb-5" data-teacher-attendance-context>
     <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
     <p class="text-sm text-gray-500">{{.TeacherAttendance.Day.Date}} · WIB</p>
-    <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan Petugas Absensi.</p>
-    {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi Petugas Absensi.</p>{{end}}
+    <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan TU Pengelola Kehadiran Guru.</p>
+    {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi TU Pengelola Kehadiran Guru.</p>{{end}}
+    <a class="button-secondary mt-4" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi</a>
   </section>
   <p class="mb-4 text-sm" role="status" data-attendance-result hidden></p>
   <div class="mb-5 grid gap-5 sm:grid-cols-2" data-teacher-attendance-status tabindex="-1" aria-label="Status kehadiran terbaru">
@@ -13,7 +14,7 @@
       {{with .TeacherAttendance.CheckIn}}
         <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
         <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
-        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat Petugas{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat TU{{else}}GPS dan selfie{{end}}</p>
         <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
       {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
       <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_in" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckIn}}disabled{{end}}>Catat Masuk</button>
@@ -23,14 +24,14 @@
       {{with .TeacherAttendance.CheckOut}}
         <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
         <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
-        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat Petugas{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat TU{{else}}GPS dan selfie{{end}}</p>
         <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
       {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
       <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_out" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckOut}}disabled{{end}}>Catat Pulang</button>
     </section>
   </div>
   <p class="mb-5 text-sm text-gray-500">Pulang tetap dapat dicatat meskipun Masuk belum dicatat. Waktu mengikuti server dan ditampilkan dalam WIB.</p>
-  <noscript><p role="alert">Aktifkan JavaScript untuk menggunakan GPS dan kamera, atau hubungi Petugas Absensi.</p></noscript>
+  <noscript><p role="alert">Aktifkan JavaScript untuk menggunakan GPS dan kamera, atau hubungi TU Pengelola Kehadiran Guru.</p></noscript>
   <dialog class="form-modal" id="teacher-attendance-modal" aria-labelledby="teacher-attendance-heading" data-teacher-attendance-modal>
     <div class="form-modal-card">
       <div class="form-modal-heading">
@@ -69,5 +70,20 @@
       </form>
     </div>
   </dialog>
+  {{if .TeacherAttendance.RequestOpen}}
+  <dialog class="form-modal" id="teacher-attendance-request-modal" data-form-modal data-modal-open-on-load aria-labelledby="teacher-attendance-request-title">
+    <div class="form-modal-card"><div class="form-modal-heading"><h2 id="teacher-attendance-request-title">Permintaan pelengkapan / koreksi</h2><a class="form-modal-close" href="/kehadiran-saya" aria-label="Tutup dialog">×</a></div>
+      {{if .Error}}{{template "notification-error" .Error}}{{end}}
+      <p class="mb-4 text-sm text-gray-500">Permintaan hanya dikirim kepada TU. Catatan kehadiran tidak berubah sampai TU melakukan tindakan yang berwenang.</p>
+      <form method="post" action="/kehadiran-saya/permintaan" class="space-y-4">{{.CSRF}}
+        <div><label for="attendance-request-date">Tanggal kejadian</label><input id="attendance-request-date" type="date" name="on_date" value="{{.TeacherAttendance.RequestDate}}" required></div>
+        <div><label for="attendance-request-action">Bagian kehadiran</label><select id="attendance-request-action" name="action" required><option value="check_in" {{if eq .TeacherAttendance.RequestAction "check_in"}}selected{{end}}>Masuk</option><option value="check_out" {{if eq .TeacherAttendance.RequestAction "check_out"}}selected{{end}}>Pulang</option></select></div>
+        <div><label for="attendance-request-kind">Jenis permintaan</label><select id="attendance-request-kind" name="kind" required><option value="completion" {{if eq .TeacherAttendance.RequestKind "completion"}}selected{{end}}>Pelengkapan catatan</option><option value="correction" {{if eq .TeacherAttendance.RequestKind "correction"}}selected{{end}}>Koreksi catatan</option></select></div>
+        <div><label for="attendance-request-text">Keterangan</label><textarea id="attendance-request-text" name="request_text" maxlength="500" required>{{.TeacherAttendance.RequestText}}</textarea></div>
+        <div class="form-modal-actions"><a class="button-secondary" href="/kehadiran-saya">Batal</a><button class="button-primary" type="submit">Kirim permintaan</button></div>
+      </form>
+    </div>
+  </dialog>
+  {{end}}
 </section>
 {{end}}

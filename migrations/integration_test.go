@@ -55,12 +55,19 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 22 || target != 22 {
+	if err != nil || current != 23 || target != 23 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
 	if err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='app')").Scan(&exists); err != nil || !exists {
 		t.Fatal("missing application schema")
+	}
+	var roleCount int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM app.roles WHERE code IN('pegawai_tu','pengelola_kehadiran_guru')`).Scan(&roleCount); err != nil || roleCount != 2 {
+		t.Fatal("missing TU attendance roles")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.teacher_attendance_correction_requests') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		t.Fatal("missing teacher attendance correction request table")
 	}
 	// Verify transaction rollback using a deliberately failing migration. No existing data is dropped.
 	broken := fstest.MapFS{"00002_probe.sql": {Data: []byte("-- +goose Up\nCREATE TABLE app.foundation_rollback_probe(id integer);\nSELECT 1/0;\n-- +goose Down\nSELECT 1;\n")}}

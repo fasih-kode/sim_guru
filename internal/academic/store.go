@@ -30,6 +30,10 @@ func (s *Store) authorize(ctx context.Context, tx *sql.Tx, actor int64, roles ..
 }
 
 func (s *Store) begin(ctx context.Context, actor int64, role string) (*sql.Tx, error) {
+	return s.beginAny(ctx, actor, role)
+}
+
+func (s *Store) beginAny(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -38,9 +42,27 @@ func (s *Store) begin(ctx context.Context, actor int64, role string) (*sql.Tx, e
 		tx.Rollback()
 		return nil, err
 	}
-	if err = s.authorize(ctx, tx, actor, role); err != nil {
+	if err = s.authorize(ctx, tx, actor, roles...); err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+	return tx, nil
+}
+
+func (s *Store) beginAll(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, auth.MutationLock); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	for _, role := range roles {
+		if err = s.authorize(ctx, tx, actor, role); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 	return tx, nil
 }
@@ -55,6 +77,52 @@ func (s *Store) reader(ctx context.Context, actor int64, roles ...string) (*sql.
 		return nil, err
 	}
 	return tx, nil
+}
+
+func (s *Store) readerAll(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	for _, role := range roles {
+		if err = s.authorize(ctx, tx, actor, role); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+	return tx, nil
+}
+
+func teacherAttendanceManagerAccess(ctx context.Context, tx *sql.Tx, actorID, teacherID int64) error {
+	var manager, admin bool
+	err := tx.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='pegawai_tu'),
+		EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='admin')`, actorID).Scan(&manager, &admin)
+	if err != nil {
+		return err
+	}
+	var targetUser sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT t.user_id FROM app.teachers t WHERE t.id=$1`, teacherID).Scan(&targetUser)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var roleManager bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='pengelola_kehadiran_guru')`, actorID).Scan(&roleManager); err != nil {
+		return err
+	}
+	if targetUser.Valid && targetUser.Int64 == actorID {
+		if admin {
+			return nil
+		}
+		return ErrForbidden
+	}
+	if roleManager && manager {
+		return nil
+	}
+	return ErrForbidden
 }
 
 func scanYear(row rowScanner) (Year, error) {

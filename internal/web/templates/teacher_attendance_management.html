@@ -1,0 +1,70 @@
+{{define "teacher-attendance-management"}}
+<section class="panel">
+  <div class="table-heading">
+    <div>
+      <h2>Kehadiran guru · {{.TeacherAttendanceManagement.Date}}</h2>
+      <p class="mt-2 text-sm text-gray-500">TU Pengelola Kehadiran Guru dapat melengkapi atau mengoreksi catatan dengan alasan. Bukti awal dan histori tetap tersimpan.</p>
+    </div>
+  </div>
+  <form method="get" action="{{.TeacherAttendanceManagement.BasePath}}" class="teacher-attendance-management-filter">
+    <div><label for="attendance-date">Tanggal kejadian</label><input type="date" id="attendance-date" name="date" value="{{.TeacherAttendanceManagement.Date}}" required></div>
+    <div><label for="attendance-search">Cari guru</label><input type="search" id="attendance-search" name="q" value="{{.TeacherAttendanceManagement.Search}}" maxlength="120" placeholder="Nama guru"></div>
+    <button type="submit" class="button-primary">Tampilkan</button>
+  </form>
+  <div class="table-surface mt-5">
+    <table class="app-table teacher-attendance-management-table">
+      <caption class="sr-only">Kehadiran guru pada {{.TeacherAttendanceManagement.Date}}</caption>
+      <thead><tr><th>No.</th><th>Guru</th><th>Masuk</th><th>Pulang</th><th>Tindakan</th></tr></thead>
+      <tbody>
+      {{range $index, $teacher := .TeacherAttendanceManagement.Teachers}}
+        {{if lt $index 10}}
+        <tr>
+          <td data-row-number>{{rowNumber $.TeacherAttendanceManagement.Page $index}}</td>
+          <td>{{$teacher.Name}}{{if not $teacher.Active}} <span class="status-badge status-badge--inactive">Nonaktif</span>{{end}}{{if $teacher.IsActor}} <span class="status-badge">Akun Anda</span>{{end}}</td>
+          <td>{{if $teacher.CheckIn}}<span>{{ $teacher.CheckIn.OccurredAt.Format "15:04" }} WIB</span><a class="block text-sm" href="{{$.TeacherAttendanceManagement.BasePath}}/catatan/{{$teacher.CheckIn.ID}}">Detail / histori</a>{{else}}<span class="status-badge status-badge--inactive">Belum dicatat</span>{{end}}</td>
+          <td>{{if $teacher.CheckOut}}<span>{{ $teacher.CheckOut.OccurredAt.Format "15:04" }} WIB</span><a class="block text-sm" href="{{$.TeacherAttendanceManagement.BasePath}}/catatan/{{$teacher.CheckOut.ID}}">Detail / histori</a>{{else}}<span class="status-badge status-badge--inactive">Belum dicatat</span>{{end}}</td>
+          <td>
+            {{if and $teacher.Active $teacher.CanManage}}
+              {{if not $teacher.CheckIn}}<a class="button-secondary mb-2" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{$.TeacherAttendanceManagement.Date}}&amp;q={{urlquery $.TeacherAttendanceManagement.Search}}&amp;page={{$.TeacherAttendanceManagement.Page}}&amp;teacher_id={{$teacher.ID}}&amp;action=check_in">Lengkapi Masuk</a>{{end}}
+              {{if not $teacher.CheckOut}}<a class="button-secondary" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{$.TeacherAttendanceManagement.Date}}&amp;q={{urlquery $.TeacherAttendanceManagement.Search}}&amp;page={{$.TeacherAttendanceManagement.Page}}&amp;teacher_id={{$teacher.ID}}&amp;action=check_out">Lengkapi Pulang</a>{{end}}
+            {{else if not $teacher.CanManage}}<span class="text-sm text-gray-500">Penanganan diri sendiri dilakukan Admin.</span>{{else}}<span class="text-sm text-gray-500">Tidak ada tindakan baru.</span>{{end}}
+          </td>
+        </tr>
+        {{end}}
+      {{else}}<tr><td colspan="5">Tidak ada guru yang cocok.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  {{if or .TeacherAttendanceManagement.Previous .TeacherAttendanceManagement.Next}}
+  <nav class="form-modal-actions mt-4" aria-label="Halaman kehadiran guru">
+    {{if .TeacherAttendanceManagement.Previous}}<a class="button-secondary" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{.TeacherAttendanceManagement.Date}}&amp;q={{urlquery .TeacherAttendanceManagement.Search}}&amp;page={{.TeacherAttendanceManagement.Previous}}">Sebelumnya</a>{{end}}
+    {{if .TeacherAttendanceManagement.Next}}<a class="button-secondary" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{.TeacherAttendanceManagement.Date}}&amp;q={{urlquery .TeacherAttendanceManagement.Search}}&amp;page={{.TeacherAttendanceManagement.Next}}">Berikutnya</a>{{end}}
+  </nav>{{end}}
+</section>
+
+{{if not .TeacherAttendanceManagement.Admin}}
+<section class="panel mt-5">
+  <h2 class="text-lg font-semibold">Permintaan pelengkapan / koreksi dari guru</h2>
+  <p class="mt-2 text-sm text-gray-500">Permintaan hanya menjadi informasi bagi TU. Permintaan tidak mengubah catatan kehadiran.</p>
+  <div class="table-surface mt-4"><table class="app-table teacher-attendance-request-table"><thead><tr><th>Tanggal</th><th>Guru</th><th>Tindakan</th><th>Jenis</th><th>Keterangan</th><th>Dikirim (WIB)</th></tr></thead><tbody>
+  {{range $index, $request := .TeacherAttendanceManagement.Requests}}{{if lt $index 10}}<tr><td>{{$request.OnDate}}</td><td>{{$request.Teacher}}</td><td>{{if eq $request.Action "check_in"}}Masuk{{else}}Pulang{{end}}</td><td>{{if eq $request.Kind "completion"}}Pelengkapan{{else}}Koreksi{{end}}</td><td>{{$request.Text}}</td><td>{{$request.CreatedAt.Format "02 Jan 2006 15:04"}}</td></tr>{{end}}{{else}}<tr><td colspan="6">Belum ada permintaan.</td></tr>{{end}}
+  </tbody></table></div>
+</section>
+{{end}}
+
+{{with .TeacherAttendanceManagement.Manual}}
+<dialog class="form-modal" id="teacher-attendance-manual-modal" data-form-modal data-modal-open-on-load aria-labelledby="teacher-attendance-manual-title">
+ <div class="form-modal-card">
+  <div class="form-modal-heading"><h2 id="teacher-attendance-manual-title">Lengkapi {{if eq .Action "check_in"}}Masuk{{else}}Pulang{{end}} · {{.TeacherName}}</h2><a class="form-modal-close" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{$.TeacherAttendanceManagement.Date}}" aria-label="Tutup dialog">×</a></div>
+  {{if $.Error}}{{template "notification-error" $.Error}}{{end}}
+  <p class="mb-4 text-sm text-gray-500">Waktu kejadian tidak boleh di masa depan. Alasan wajib; waktu rekam menggunakan jam server.</p>
+  <form method="post" action="{{$.TeacherAttendanceManagement.BasePath}}/manual" class="space-y-4">
+   {{$.CSRF}}<input type="hidden" name="teacher_id" value="{{.TeacherID}}"><input type="hidden" name="teacher_name" value="{{.TeacherName}}"><input type="hidden" name="action" value="{{.Action}}"><input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}"><input type="hidden" name="return_date" value="{{$.TeacherAttendanceManagement.Date}}"><input type="hidden" name="return_q" value="{{$.TeacherAttendanceManagement.Search}}"><input type="hidden" name="return_page" value="{{$.TeacherAttendanceManagement.Page}}">
+   <div><label for="manual-occurred-at">Waktu kejadian (WIB)</label><input id="manual-occurred-at" type="datetime-local" name="occurred_at" value="{{.OccurredAt}}" required></div>
+   <div><label for="manual-reason">Alasan pencatatan</label><textarea id="manual-reason" name="reason" minlength="1" maxlength="500" required>{{.Reason}}</textarea></div>
+   <div class="form-modal-actions"><a class="button-secondary" href="{{$.TeacherAttendanceManagement.BasePath}}?date={{$.TeacherAttendanceManagement.Date}}">Batal</a><button type="submit" class="button-primary">Simpan catatan</button></div>
+  </form>
+ </div>
+</dialog>
+{{end}}
+{{end}}

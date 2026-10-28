@@ -1,0 +1,23 @@
+{{define "teacher-attendance-record"}}
+<section class="panel">
+ <div class="table-heading"><div><h2>{{.TeacherAttendanceRecord.Record.TeacherName}} · {{if eq .TeacherAttendanceRecord.Record.Action "check_in"}}Masuk{{else}}Pulang{{end}}</h2><p class="mt-2 text-sm text-gray-500">{{.TeacherAttendanceRecord.Record.OnDate}} · Catatan awal oleh {{.TeacherAttendanceRecord.Record.RecordedByName}} pada {{.TeacherAttendanceRecord.Record.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p></div><a class="button-secondary" href="{{.TeacherAttendanceRecord.BasePath}}?date={{.TeacherAttendanceRecord.Record.OnDate}}">Kembali</a></div>
+ <dl class="mt-5 grid gap-4 sm:grid-cols-2"><div><dt class="text-sm text-gray-500">Waktu kejadian saat ini</dt><dd class="font-medium">{{.TeacherAttendanceRecord.Record.OccurredAt.Format "02 Jan 2006 15:04"}} WIB</dd></div><div><dt class="text-sm text-gray-500">Sumber</dt><dd class="font-medium">{{if eq .TeacherAttendanceRecord.Record.Source "manual"}}Dicatat TU{{else}}GPS dan selfie · bukti asli tetap dipertahankan{{end}}</dd></div>{{if .TeacherAttendanceRecord.Record.ManualReason}}<div><dt class="text-sm text-gray-500">Alasan pencatatan manual</dt><dd>{{.TeacherAttendanceRecord.Record.ManualReason}}</dd></div>{{end}}</dl>
+ {{if .TeacherAttendanceRecord.Record.CanCorrect}}
+ <button class="button-primary mt-5" type="button" data-modal-open="teacher-attendance-correction-modal">Koreksi dengan alasan</button>
+ {{else}}<p class="mt-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">TU tidak dapat mengoreksi kehadirannya sendiri. Minta Admin menangani koreksi administratif.</p>{{end}}
+</section>
+<section class="panel mt-5"><h2 class="text-lg font-semibold">Histori kehadiran</h2>
+ {{range .TeacherAttendanceRecord.Record.History}}<article class="mt-4 border-t border-gray-200 pt-4"><p class="font-medium">{{if eq .Action "recorded"}}Pencatatan awal{{else}}Koreksi{{end}} · {{.Actor}} · {{.At.Format "02 Jan 2006 15:04"}} WIB</p>{{if .Reason}}<p class="mt-1 text-sm">Alasan: {{.Reason}}</p>{{end}}{{if .BeforeAt}}<p class="mt-2 text-sm">Sebelum: {{.BeforeAt.Format "02 Jan 2006 15:04"}} WIB{{if .BeforeReason}} · {{.BeforeReason}}{{end}}</p>{{end}}{{if .AfterAt}}<p class="mt-1 text-sm">Sesudah: {{.AfterAt.Format "02 Jan 2006 15:04"}} WIB{{if .AfterReason}} · {{.AfterReason}}{{end}}</p>{{end}}</article>{{else}}<p class="mt-3 text-sm text-gray-500">Belum ada histori.</p>{{end}}
+</section>
+{{if .TeacherAttendanceRecord.Record.CanCorrect}}
+<dialog class="form-modal" id="teacher-attendance-correction-modal" data-form-modal aria-labelledby="teacher-attendance-correction-title">
+ <div class="form-modal-card"><div class="form-modal-heading"><h2 id="teacher-attendance-correction-title">Koreksi kehadiran · {{.TeacherAttendanceRecord.Record.TeacherName}}</h2><button type="button" class="form-modal-close" data-modal-close aria-label="Tutup dialog">×</button></div>
+ {{if .Error}}{{template "notification-error" .Error}}{{end}}
+ <p class="mb-4 text-sm text-gray-500">Waktu kejadian harus tetap pada tanggal yang sama dan tidak boleh di masa depan. Koreksi tersimpan sebagai histori baru.</p>
+ <form method="post" action="{{.TeacherAttendanceRecord.BasePath}}/catatan/{{.TeacherAttendanceRecord.Record.ID}}/koreksi" class="space-y-4">{{.CSRF}}<input type="hidden" name="version" value="{{.TeacherAttendanceRecord.Version}}"><input type="hidden" name="return_date" value="{{.TeacherAttendanceRecord.Record.OnDate}}"><input type="hidden" name="return_q" value="{{.TeacherAttendanceRecord.ReturnSearch}}">
+ <div><label for="corrected-occurred-at">Waktu kejadian baru (WIB)</label><input id="corrected-occurred-at" type="datetime-local" name="occurred_at" value="{{.TeacherAttendanceRecord.OccurredAt}}" required></div>
+ {{if eq .TeacherAttendanceRecord.Record.Source "manual"}}<div><label for="corrected-manual-reason">Alasan pencatatan manual</label><textarea id="corrected-manual-reason" name="manual_reason" maxlength="500" required>{{.TeacherAttendanceRecord.ManualReason}}</textarea></div>{{end}}
+ <div><label for="teacher-correction-reason">Alasan koreksi</label><textarea id="teacher-correction-reason" name="correction_reason" maxlength="500" required>{{.TeacherAttendanceRecord.CorrectionReason}}</textarea></div>
+ <div class="form-modal-actions"><button class="button-secondary" type="button" data-modal-close>Batal</button><button class="button-primary" type="submit">Simpan koreksi</button></div></form></div>
+</dialog>{{end}}
+{{end}}

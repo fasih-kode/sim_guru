@@ -19,6 +19,11 @@ type teacherAttendanceView struct {
 	Day               academic.TeacherAttendanceDay
 	CheckIn, CheckOut *academic.TeacherAttendanceSummary
 	Available         bool
+	RequestOpen       bool
+	RequestDate       string
+	RequestKind       string
+	RequestAction     academic.TeacherAttendanceAction
+	RequestText       string
 }
 
 func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +35,7 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 	status, message := http.StatusOK, ""
 	if r.Method == http.MethodPost {
 		if a.options.Academics.Photos == nil {
-			status, message = http.StatusServiceUnavailable, "Kehadiran mandiri belum tersedia. Hubungi Petugas Absensi."
+			status, message = http.StatusServiceUnavailable, "Kehadiran mandiri belum tersedia. Hubungi TU Pengelola Kehadiran Guru."
 		} else {
 			var input academic.TeacherAttendanceCaptureInput
 			input, err = teacherAttendanceUpload(w, r)
@@ -51,7 +56,7 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	f := &teacherAttendanceView{Day: day, Available: a.options.Academics.Photos != nil}
+	f := &teacherAttendanceView{Day: day, Available: a.options.Academics.Photos != nil, RequestDate: day.Date, RequestKind: "correction", RequestAction: academic.TeacherCheckIn, RequestOpen: r.URL.Query().Get("request") == "1"}
 	for i := range day.Events {
 		event := &day.Events[i]
 		if event.Action == academic.TeacherCheckIn {
@@ -63,6 +68,9 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 	v := view{Page: "teacher-attendance", Title: "Kehadiran Saya", TeacherAttendance: f, Error: message}
 	if r.URL.Query().Get("saved") == "1" {
 		v.Message = teacherAttendanceSavedMessage(day.Date, r.URL.Query().Get("recorded_date"))
+	}
+	if r.URL.Query().Get("request_saved") == "1" {
+		v.Message = "Permintaan terkirim kepada TU. Catatan kehadiran tidak berubah."
 	}
 	a.render(w, r, "page", status, v)
 }
@@ -135,7 +143,7 @@ func teacherAttendanceHTTPError(err error) (int, string) {
 	case errors.Is(err, teacherphoto.ErrInvalidImage), errors.Is(err, teacherphoto.ErrUnsupportedMediaType), errors.Is(err, teacherphoto.ErrInputTooLarge), errors.Is(err, teacherphoto.ErrPhotoTooLarge), errors.Is(err, teacherphoto.ErrImageDimensions):
 		return http.StatusUnprocessableEntity, "Selfie tidak valid. Ambil ulang foto melalui kamera."
 	default:
-		return http.StatusServiceUnavailable, "Hasil pencatatan belum dapat dipastikan. Coba kirim ulang dengan bukti yang sama atau hubungi Petugas Absensi."
+		return http.StatusServiceUnavailable, "Hasil pencatatan belum dapat dipastikan. Coba kirim ulang dengan bukti yang sama atau hubungi TU Pengelola Kehadiran Guru."
 	}
 }
 

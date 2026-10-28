@@ -389,7 +389,7 @@ func TestCaptureTeacherAttendanceIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT to_jsonb(p)::text FROM app.teacher_attendance_photos p WHERE p.id=$1`, originalPhotoID).Scan(&originalPhotoState); err != nil {
 		t.Fatal("read original GPS photo metadata:", err)
 	}
-	correctionOfficer, _ := testutil.User(t, db, "petugas_absensi")
+	correctionOfficer, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	gpsCorrection, err := service.CorrectTeacherAttendance(ctx, correctionOfficer.ID, academic.TeacherAttendanceCorrectionInput{
 		EventID: first.EventID, ExpectedVersion: 1, OccurredAt: previousDate + "T00:01", CorrectionReason: "Waktu selfie disesuaikan dengan register piket",
 	})

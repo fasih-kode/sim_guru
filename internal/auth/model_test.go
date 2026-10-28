@@ -20,6 +20,8 @@ func TestValidation(t *testing.T) {
 		valid bool
 	}{
 		{"normalizes", Input{Username: "  Guru.A ", DisplayName: " Guru A ", Password: password, Roles: []string{"kurikulum", "guru_mapel"}}, true},
+		{"manager requires TU role", Input{Username: "guru", DisplayName: "A", Password: password, Roles: []string{"pengelola_kehadiran_guru"}}, false},
+		{"manager assigned to TU", Input{Username: "guru", DisplayName: "A", Password: password, Roles: []string{"pegawai_tu", "pengelola_kehadiran_guru"}}, true},
 		{"injection username", Input{Username: "' OR 1=1--", DisplayName: "A", Password: password, Roles: []string{"admin"}}, false},
 		{"empty role", Input{Username: "guru", DisplayName: "A", Password: password}, false},
 		{"invented role", Input{Username: "guru", DisplayName: "A", Password: password, Roles: []string{"pengganti"}}, false},

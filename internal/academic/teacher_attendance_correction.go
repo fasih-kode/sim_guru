@@ -52,6 +52,7 @@ type teacherAttendanceCorrectionSnapshot struct {
 	PhotoDeletedAt  *time.Time              `json:"photo_deleted_at,omitempty"`
 	CleanupAttempts *int                    `json:"photo_cleanup_attempts,omitempty"`
 	ManualReason    *string                 `json:"manual_reason,omitempty"`
+	Reason          string                  `json:"reason,omitempty"`
 }
 
 type teacherAttendanceCorrectionEvent struct {
@@ -76,13 +77,13 @@ type teacherAttendanceCorrectionValidatedInput struct {
 	CorrectionReason         string
 }
 
-// CorrectTeacherAttendance mengoreksi waktu kejadian dan alasan manual tanpa mengubah bukti awal.
+// CorrectTeacherAttendance mengoreksi catatan dengan histori tanpa mengubah bukti awal.
 func (s *Store) CorrectTeacherAttendance(ctx context.Context, actorID int64, input TeacherAttendanceCorrectionInput) (TeacherAttendanceCorrectionResult, error) {
 	validated, err := validateTeacherAttendanceCorrectionInput(input)
 	if err != nil {
 		return TeacherAttendanceCorrectionResult{}, err
 	}
-	tx, err := s.begin(ctx, actorID, "petugas_absensi")
+	tx, err := s.beginAny(ctx, actorID, "admin", "pengelola_kehadiran_guru")
 	if err != nil {
 		return TeacherAttendanceCorrectionResult{}, err
 	}
@@ -93,6 +94,9 @@ func (s *Store) CorrectTeacherAttendance(ctx context.Context, actorID int64, inp
 		return TeacherAttendanceCorrectionResult{}, ErrNotFound
 	}
 	if err != nil {
+		return TeacherAttendanceCorrectionResult{}, err
+	}
+	if err = teacherAttendanceManagerAccess(ctx, tx, actorID, current.TeacherID); err != nil {
 		return TeacherAttendanceCorrectionResult{}, err
 	}
 	if current.Version != validated.ExpectedVersion {

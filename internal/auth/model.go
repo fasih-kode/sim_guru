@@ -25,7 +25,7 @@ func (e ValidationError) Error() string { return string(e) }
 
 type Role struct{ Code, Name string }
 
-var Roles = []Role{{"admin", "Admin"}, {"kurikulum", "Kurikulum"}, {"guru_mapel", "Guru Mapel"}, {"wali_kelas", "Wali Kelas"}, {"kepala_sekolah", "Kepala Sekolah"}, {"bk", "BK"}, {"kesiswaan", "Kesiswaan"}, {"petugas_absensi", "Petugas Absensi"}}
+var Roles = []Role{{"admin", "Admin"}, {"kurikulum", "Kurikulum"}, {"guru_mapel", "Guru Mapel"}, {"wali_kelas", "Wali Kelas"}, {"kepala_sekolah", "Kepala Sekolah"}, {"bk", "BK"}, {"kesiswaan", "Kesiswaan"}, {"petugas_absensi", "Petugas Absensi Siswa"}, {"pegawai_tu", "Pegawai TU"}, {"pengelola_kehadiran_guru", "TU Pengelola Kehadiran Guru"}}
 
 type User struct {
 	ID          int64    `json:"id"`
@@ -86,6 +86,9 @@ func (in *Input) Validate(creating bool) error {
 			return ValidationError("Pilihan role tidak valid.")
 		}
 		seen[code] = true
+	}
+	if seen["pengelola_kehadiran_guru"] && !seen["pegawai_tu"] {
+		return ValidationError("Role TU Pengelola Kehadiran Guru harus disertai role Pegawai TU.")
 	}
 	slices.Sort(in.Roles)
 	return nil

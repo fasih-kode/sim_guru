@@ -48,7 +48,9 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 | Kepala Sekolah | Lihat ringkasan/laporan sekolah dan baca catatan Kesiswaan/BK seluruh sekolah; menangani keputusan akademik khusus | Hak baca catatan tidak memberi hak edit; tidak menjadi antrean persetujuan pekerjaan harian |
 | BK | Lihat siswa yang ditangani; catat bimbingan/konseling dan tindak lanjutnya | Terbatas pada siswa/kasus yang ditangani; tidak otomatis mengubah identitas, penempatan, jadwal, atau nilai |
 | Kesiswaan | Lihat seluruh siswa dan rekap kehadiran sekolah; atur batas kedatangan/toleransi siswa (D-036); catat pelanggaran serta pembinaan yang dilakukan | Tidak otomatis membuka catatan BK atau mengubah identitas, sumber absensi, penempatan, jadwal, atau nilai |
-| Petugas Absensi | Catat/koreksi kehadiran sesuai cakupan tugas | Tidak otomatis mengubah jurnal atau nilai |
+| Petugas Absensi Siswa | Kelola absensi harian dan kartu QR siswa | Tidak memiliki akses kehadiran guru |
+| Pegawai TU | Role pegawai administratif | Tidak otomatis mengelola kehadiran guru |
+| TU Pengelola Kehadiran Guru | Catat manual, lengkapi, dan koreksi histori kehadiran guru; melihat permintaan guru | Harus merangkap Pegawai TU; tidak boleh mengubah kehadirannya sendiri |
 
 **Role Kurikulum langsung memberi akses ke menu dan fungsi Kurikulum.** Role dapat rangkap; penugasan Guru Mapel dan Wali Kelas tetap membatasi kelas/mapel. Admin boleh mengubah role berdasarkan keputusan sekolah, dengan audit sederhana. Pengelolaan penugasan oleh Kurikulum dalam modul akademik dapat berupa data operasional, tetapi **Admin tetap pengelola akun dan role; Kurikulum mengelola penugasan akademik**; tidak perlu approval silang. Bila Kurikulum menyusun pengampu/jadwal, sistem harus menyelaraskan dengan penugasan yang telah ditetapkan tanpa memberikan hak baru diam-diam.
 
@@ -261,16 +263,16 @@ Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka peng
 - Kalender dan tanggal penempatan memakai transaksi serta optimistic version. Riwayat mencatat pelaku/waktu/alasan/sebelum/sesudah.
 - Roster untuk absensi dibaca sesuai tanggal WIB, meliputi pindah kelas, keluar, dan kembali. Data tanpa tanggal yang dapat memengaruhi roster menahan pembacaan absensi sampai dilengkapi; daftar operasional lama tetap kompatibel. Tanggal sebelum mulai penempatan tidak masuk roster. Siswa baru tidak dinyatakan absen pada masa sebelum mulai.
 - Jadwal menggunakan versi **published** terbaru dengan tanggal berlaku <= tanggal pertemuan; draf tidak digunakan. Hari libur tidak menghasilkan pertemuan pembelajaran. Tidak menimpa snapshot jadwal lama.
-- Hak baca fondasi: Petugas Absensi/Kesiswaan/Kepala Sekolah seluruh sekolah, Wali Kelas hanya kelas penugasan saat ini, Guru Mapel hanya kelas dan pelajaran sesuai penugasan efektif pada tanggal yang dipilih. Admin tanpa role operasional tidak memperoleh akses absensi; Kurikulum mengelola kalender/jadwal, bukan input kehadiran. Hak baca bukan hak tulis.
+- Hak baca fondasi siswa: Petugas Absensi Siswa/Kesiswaan/Kepala Sekolah seluruh sekolah, Wali Kelas hanya kelas penugasan saat ini, Guru Mapel hanya kelas dan pelajaran sesuai penugasan efektif pada tanggal yang dipilih. Kehadiran guru dikelola melalui kewenangan D-039. Admin tanpa role operasional tidak memperoleh akses absensi; Kurikulum mengelola kalender/jadwal, bukan input kehadiran. Hak baca bukan hak tulis.
 - Menu pengaturan kalender/tanggal dan helper konteks tanggal merupakan fondasi, bukan formulir pencatatan absensi. Modul pencatatan, pembekuan konteks yang sudah digunakan absensi, dan tampilan operasional dilanjutkan pada urutan berikutnya.
 
 ### 7.2 Kehadiran guru GPS dan selfie
-- **D-038 (27 Oktober 2026):** Admin mengatur titik sekolah; radius awal 100 m, rentang 25–500 m. Akurasi browser maksimal 50 m dan diperiksa terpisah dari jarak terhadap radius. Server menghitung jarak Haversine. Bukti menyimpan jarak, akurasi, serta snapshot koordinat/radius sekolah, bukan koordinat perangkat mentah.
+- **D-038 dan D-039 (27–28 Oktober 2026):** Admin mengatur titik sekolah; radius awal 100 m, rentang 25–500 m. Akurasi browser maksimal 50 m dan diperiksa terpisah dari jarak terhadap radius. Server menghitung jarak Haversine. Bukti menyimpan jarak, akurasi, serta snapshot koordinat/radius sekolah, bukan koordinat perangkat mentah. Tata kelola TU dan kontrak status kehadiran mengikuti [D-039](docs/DECISIONS.md#d-039--tata-kelola-kehadiran-guru-oleh-tu-28-oktober-2026).
 - Guru login dengan akun sendiri → pilih Masuk/Pulang → ambil GPS → selfie kamera langsung → kirim → bukti waktu server/WIB. Satu identitas guru berlaku untuk semua role; satu Masuk dan satu Pulang per tanggal WIB. Pulang tanpa Masuk diperbolehkan dan Masuk tetap Belum Dicatat. Guru Mapel/Wali Kelas aktif dengan akun dan profil tertaut boleh absen mandiri; guru tanpa akun tidak. Replay identik mempertahankan bukti/histori, request berbeda untuk event sama konflik.
 - Foto bukan pilihan unggah dari galeri; GPS/selfie adalah bukti pendukung, tanpa klaim menjamin pencegahan titip absen atau pengenalan wajah.
-- Selfie wajib masuk dan pulang. Perkecil di perangkat; server memvalidasi format dan ukuran **maksimal 100 KB per foto**. Foto privat; guru membaca bukti sendiri dan petugas yang berwenang memeriksa sesuai tugas.
+- Selfie wajib masuk dan pulang. Perkecil di perangkat; server memvalidasi format dan ukuran **maksimal 100 KB per foto**. Foto privat; guru membaca bukti sendiri dan TU Pengelola Kehadiran Guru memeriksa sesuai kewenangan. Petugas Absensi Siswa tidak mendapat akses kehadiran guru/foto.
 - Foto disimpan **dua bulan kalender sejak pencatatan**, lalu berkasnya dihapus otomatis. Metadata kehadiran dan histori tetap ada; detail menampilkan masa penyimpanan foto berakhir. Penghapusan mencakup berkas asli/turunan yang dikelola aplikasi; kebijakan backup foto harus selaras dengan retensi ini sebelum deployment.
-- Waktu dari server, pengiriman berulang idempoten. Lokasi di luar radius, akurasi buruk, kamera/GPS/internet gagal menampilkan kendala; Petugas Absensi mencatat manual dengan alasan dan cara pencatatan terlihat dalam histori. Petugas dapat mencatat susulan sampai tujuh hari kalender (hari ketujuh lalu sampai hari ini secara inklusif), tidak untuk waktu kejadian masa depan; waktu kejadian dan waktu rekam server terpisah. Koreksi memakai version dan histori, tanpa approval Kepala Sekolah. Tanpa approval berlapis.
+- Waktu dari server, pengiriman berulang idempoten. Lokasi di luar radius, akurasi buruk, kamera/GPS/internet gagal menampilkan kendala; TU Pengelola Kehadiran Guru mencatat manual dengan alasan. Pencatatan susulan dan koreksi historis tidak dibatasi usia tanggal, tetapi waktu kejadian tidak boleh di masa depan. Waktu kejadian dan waktu rekam server terpisah. Koreksi memakai version, alasan wajib dan histori append-only; bukti GPS/selfie asli dipertahankan. Guru dapat mengirim permintaan pelengkapan/koreksi yang tidak memutasi kehadiran. Izin/Sakit/Dinas Luar dilaporkan guru untuk tanggal lampau/hari ini/mendatang dan langsung berlaku tanpa persetujuan; form laporan dan mesin rekap lengkap merupakan tahap berikutnya. Tidak ada approval Kepala Sekolah.
 
 ### 7.3 Absensi harian siswa dan siklus kartu QR
 - Petugas Absensi menangani seluruh sekolah: login → pemindai → scan kartu → nama/kelas/waktu/hasil. Tahap awal hanya kedatangan siswa.
@@ -339,7 +341,8 @@ FE mengikuti TailAdmin/pola aplikasi: filter bertahan, tabel bernomor/pagination
 5. **Kepala Sekolah:** lihat dashboard dan laporan → keputusan khusus di luar alur rutin.
 6. **Kesiswaan:** lihat siswa/rekap kehadiran sekolah → catat pelanggaran dan pembinaan → tandai Perlu tindak lanjut atau Selesai.
 7. **BK:** buka siswa/kasus yang ditangani → catat bimbingan dan tindak lanjut → tandai Perlu tindak lanjut atau Selesai. Wali Kelas/Kepala Sekolah membaca sesuai cakupan bab 3B.
-8. **Petugas Absensi:** buka data yang relevan → catat/koreksi kehadiran sesuai cakupan tugas.
+8. **Petugas Absensi Siswa:** kelola QR dan absensi harian siswa sesuai cakupan tugas; tidak mengelola kehadiran guru.
+9. **TU Pengelola Kehadiran Guru:** melengkapi atau mengoreksi kejadian guru sesuai D-039.
 
 ## 13. Acceptance criteria lintas modul
 

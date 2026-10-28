@@ -55,7 +55,7 @@ func TestPurgeExpiredTeacherAttendancePhotosIntegration(t *testing.T) {
 	photos := newCapturePhotoStore(t)
 	storage := &retentionPhotoStorage{TeacherAttendancePhotoStorage: photos}
 	service := &academic.Store{DB: db, Photos: storage}
-	officer, _ := testutil.User(t, db, "petugas_absensi")
+	officer, _ := testutil.User(t, db, "pegawai_tu", "pengelola_kehadiran_guru")
 	t.Cleanup(func() {
 		if _, err := db.Exec(`DELETE FROM app.user_roles WHERE user_id=$1`, officer.ID); err != nil {
 			t.Error(err)
