@@ -40,7 +40,16 @@
       <form method="post" action="/kehadiran-saya" enctype="multipart/form-data" data-attendance-form>
         {{.CSRF}}
         <p class="mb-4 text-sm text-gray-500">Pastikan Anda berada di sekolah. Foto diambil sekarang dan dikirim setelah Anda menekan Konfirmasi.</p>
-        <p class="mb-3 text-sm text-error-600" role="alert" data-attendance-error hidden></p>
+        <div class="mb-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-red-900" role="alert" aria-live="assertive" data-attendance-error hidden>
+          <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-red-100 text-red-700" aria-hidden="true">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v5m0 3h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div class="min-w-0">
+            <p class="font-semibold" data-attendance-error-title>Absensi belum dapat dicatat</p>
+            <p class="mt-1 text-sm" data-attendance-error-message></p>
+            <p class="mt-2 text-sm" data-attendance-error-guidance hidden></p>
+          </div>
+        </div>
         <div class="mb-4 flex flex-wrap gap-3">
           <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-location>Ambil lokasi</button>
           <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-camera>Buka kamera</button>

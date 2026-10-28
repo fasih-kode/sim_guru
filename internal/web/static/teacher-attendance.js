@@ -6,6 +6,9 @@
   const video = root.querySelector('[data-attendance-video]');
   const canvas = root.querySelector('[data-attendance-preview]');
   const error = root.querySelector('[data-attendance-error]');
+  const errorTitle = root.querySelector('[data-attendance-error-title]');
+  const errorMessage = root.querySelector('[data-attendance-error-message]');
+  const errorGuidance = root.querySelector('[data-attendance-error-guidance]');
   const progress = root.querySelector('[data-attendance-progress]');
   const locationStatus = root.querySelector('[data-attendance-location-status]');
   const confirm = root.querySelector('[data-attendance-confirm]');
@@ -26,6 +29,7 @@
   let photoPending = false;
   let generation = 0;
   let requestController = null;
+  const outsideRadiusMessage = 'Lokasi berada di luar radius kehadiran sekolah.';
 
   function stopCamera() {
     cameraAttempt += 1;
@@ -37,8 +41,24 @@
     takeButton.disabled = true;
   }
   function showError(message) {
-    error.textContent = message;
     error.hidden = !message;
+    if (!message) {
+      errorMessage.textContent = '';
+      errorGuidance.textContent = '';
+      errorGuidance.hidden = true;
+      return;
+    }
+    if (message === outsideRadiusMessage) {
+      errorTitle.textContent = 'Di luar radius sekolah';
+      errorMessage.textContent = 'Absensi tidak dapat dicatat karena lokasi Anda berada di luar area kehadiran sekolah.';
+      errorGuidance.textContent = 'Perbarui lokasi atau hubungi Petugas Absensi.';
+      errorGuidance.hidden = false;
+      return;
+    }
+    errorTitle.textContent = 'Absensi belum dapat dicatat';
+    errorMessage.textContent = message;
+    errorGuidance.textContent = 'Ikuti petunjuk di atas atau hubungi Petugas Absensi.';
+    errorGuidance.hidden = false;
   }
   function controls() {
     const frozen = Boolean(submission);

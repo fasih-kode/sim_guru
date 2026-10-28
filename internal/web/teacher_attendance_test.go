@@ -114,6 +114,11 @@ func TestTeacherAttendanceTemplate(t *testing.T) {
 		if !available && !strings.Contains(text, "Kehadiran mandiri belum tersedia") {
 			t.Fatal("missing safe disabled state")
 		}
+		if !strings.Contains(text, `role="alert" aria-live="assertive" data-attendance-error`) ||
+			!strings.Contains(text, `data-attendance-error-title`) ||
+			!strings.Contains(text, `data-attendance-error-guidance`) {
+			t.Fatal("missing accessible attendance error alert")
+		}
 	}
 }
 
