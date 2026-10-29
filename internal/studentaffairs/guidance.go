@@ -143,7 +143,7 @@ func CanManageStudentGuidance(roles []string) bool {
 	return hasGuidanceRole(roles, GuidanceRoleKesiswaan)
 }
 
-// CanReadStudentGuidance memodelkan D-041 memakai penempatan dan penugasan
+// CanReadStudentGuidance memodelkan D-042 memakai penempatan dan penugasan
 // aktif dari sumber resmi. Ketiadaan/ketidakjelasan salah satunya menolak
 // Wali; helper ini bukan pengganti otorisasi service.
 func CanReadStudentGuidance(roles []string, scope GuidanceReadScope) bool {
@@ -232,7 +232,7 @@ type GuidanceList struct {
 // version optimistis, dan menulis record serta histori dalam transaksi yang
 // sama. Hanya Kesiswaan boleh membuat/mengubah; Kesiswaan dan Kepala Sekolah
 // membaca seluruh sekolah. Rancangan Wali Kelas memeriksa penempatan/penugasan
-// aktif saat baca dan menolak cakupan tidak pasti sesuai D-041. Implementasi
+// aktif saat baca dan menolak cakupan tidak pasti sesuai D-042. Implementasi
 // service tetap wajib memeriksa penempatan dan penugasan resmi di database.
 // Role lain tidak mendapat akses tambahan.
 // Domain BK tidak boleh bergabung atau memakai otorisasi package ini. Kontrak
