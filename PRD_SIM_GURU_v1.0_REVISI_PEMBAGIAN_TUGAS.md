@@ -82,20 +82,21 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 
 **Revisi disetujui pemilik proyek 21 Oktober 2026:** pembuatan/koreksi kelas dan penempatan awal beralih ke Admin; kalender dan seluruh tugas Kurikulum yang disebut di atas tetap Kurikulum. ID kelas dan histori sebelum perubahan kebijakan dipertahankan. Rujukan keputusan: [D-015](docs/DECISIONS.md#d-015--pemisahan-kelasadmin-dan-kalenderkurikulum-disetujui-21-oktober-2026).
 
-## 3B. Kesiswaan dan BK — FINAL (22 Oktober 2026)
+## 3B. Kesiswaan dan BK — FINAL (D-018, diperbarui D-041 pada 29 Oktober 2026)
 
 **Status:** masuk rencana v1 berdasarkan persetujuan pemilik proyek; belum diimplementasikan. Rujukan keputusan: [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026).
 
 - **Kesiswaan:** melihat seluruh siswa dan rekap kehadiran sekolah, serta mencatat pelanggaran dan pembinaan yang dilakukan.
 - **BK:** melihat siswa yang menjadi tanggung jawabnya, serta mencatat bimbingan/konseling dan tindak lanjut pada siswa/kasus yang ditangani.
-- **Wali Kelas:** membaca catatan Kesiswaan dan BK siswa di kelas penugasannya; tidak memperoleh hak mengubah catatan dari role Wali Kelas.
+- **Wali Kelas:** membaca catatan Kesiswaan siswa berdasarkan penempatan kelas aktif siswa dan penugasan Wali Kelas yang berlaku saat pembacaan; membaca catatan BK sesuai cakupan yang berlaku untuk catatan BK. Perpindahan siswa mengalihkan hak baca catatan Kesiswaan kepada Wali Kelas baru, dan mantan Wali Kelas tidak mempertahankan akses melalui penugasan historis. Jika penempatan atau penugasan aktif tidak dapat dipastikan, akses catatan Kesiswaan ditolak. Wali Kelas tidak memperoleh hak mengubah catatan.
 - **Kepala Sekolah:** membaca catatan dan ringkasan Kesiswaan/BK seluruh sekolah; tidak menjadi pemberi persetujuan rutin atau pengubah catatan dari role Kepala Sekolah.
 - Setiap catatan cukup memuat **siswa, tanggal, kejadian/keperluan, tindakan, petugas, dan status**. Status hanya **Perlu tindak lanjut** atau **Selesai**. Petugas pencatat tetap tercatat sesuai akun yang melakukan tindakan.
 - Siswa mengacu pada ID master yang dikelola Admin. Identitas, kelas/penempatan, jadwal, nilai, dan pencatatan/koreksi sumber absensi tetap mengikuti kewenangan modul masing-masing.
 - **Tidak ada poin pelanggaran, sanksi otomatis, atau alur persetujuan pada v1 ini.** Pengembangan lebih lanjut dilakukan bila ada kebutuhan dan persetujuan baru; usulan audit yang lebih luas tidak otomatis masuk cakupan.
-- Akses baca catatan mengikuti ketentuan di atas; role Admin atau Kesiswaan tidak otomatis memberi akses ke catatan BK. Role gabungan hanya memperoleh hak tambahan dari role/cakupan yang memang dimiliki.
+- Identitas dan kelas siswa pada saat kejadian disimpan sebagai snapshot historis dan tidak menentukan hak baca saat ini. BK, Guru Mapel, Admin, dan role lain tidak otomatis mendapat akses baca catatan Kesiswaan. Role gabungan hanya memperoleh hak dalam cakupan masing-masing role yang sah; role lain tidak memperluas cakupan.
+- Akses baca catatan BK tetap mengikuti D-018: Kesiswaan tidak otomatis mendapat akses ke catatan BK dan cakupan BK hanya mencakup siswa/kasus yang ditangani. D-041 hanya menetapkan cakupan baca catatan Kesiswaan.
 
-**Acceptance criteria rencana:** Kesiswaan dapat mencatat pembinaan siswa seluruh sekolah; BK dibatasi pada siswa/kasus yang ditangani; Wali Kelas hanya membaca catatan siswa di kelasnya; Kepala Sekolah membaca seluruh sekolah. Catatan menggunakan field dan dua status di atas, pemeriksaan akses dilakukan di server, serta tidak ada poin/sanksi otomatis/approval rutin. Perubahan catatan penting mengikuti audit sederhana bab 11. Cara mencatat penanggung jawab siswa/kasus BK perlu ditetapkan saat fase implementasi agar cakupan dapat diperiksa, tanpa menambahkan workflow persetujuan.
+**Acceptance criteria rencana:** Kesiswaan mengelola catatan pembinaan seluruh sekolah; BK dibatasi pada siswa/kasus yang ditangani; Wali Kelas membaca catatan Kesiswaan hanya untuk penempatan aktif yang cocok dengan penugasan aktif saat baca dan akses ditolak jika cakupan tidak jelas; Kepala Sekolah membaca seluruh sekolah. Identitas/kelas saat kejadian disimpan sebagai snapshot historis. Catatan menggunakan field dan dua status di atas, pemeriksaan akses dilakukan di server, serta tidak ada poin/sanksi otomatis/approval rutin. Perubahan catatan penting mengikuti audit sederhana bab 11. Cara mencatat penanggung jawab siswa/kasus BK perlu ditetapkan saat fase implementasi agar cakupan dapat diperiksa, tanpa menambahkan workflow persetujuan. Cakupan Wali Kelas untuk catatan Kesiswaan ditetapkan FINAL melalui D-041; keputusan tersebut belum menetapkan detail cakupan BK.
 
 ## 4. Master Data — FINAL inti
 

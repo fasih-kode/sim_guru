@@ -18,6 +18,13 @@ SIM-GURU adalah modular monolith Go dengan SSR. Fondasi aplikasi, autentikasi/ad
 | migrations | SQL embed, namespace app, Goose dengan advisory lock PostgreSQL |
 | web/styles | Sumber Tailwind; template Go menjadi sumber pemindaian kelas |
 | scripts | Lifecycle cluster lokal dan penyalinan aset htmx |
+| internal/studentaffairs | Model dan validasi domain pembinaan Kesiswaan; package ini tidak mencakup catatan BK |
+
+## Fondasi pembinaan Kesiswaan — Fase 8A-01
+
+`internal/studentaffairs` memuat model, validasi tanggal/teks/status, perubahan status beralasan dengan snapshot before/after, serta predikat cakupan role murni untuk unit test. Menurut keputusan FINAL D-041, Kesiswaan mengelola seluruh catatan dan Kepala Sekolah membaca seluruh sekolah. Wali Kelas membaca berdasarkan penempatan kelas aktif dan penugasan Wali Kelas yang berlaku saat pembacaan; perpindahan mengikuti wali baru, sedangkan penugasan historis tidak memberi akses. BK, Guru Mapel, Admin, dan role lain tidak memperoleh hak otomatis; role gabungan hanya memakai cakupan tiap role sah. Predikat unit test menerima konteks penempatan/penugasan sebagai input dan bukan otorisasi produksi. Service PostgreSQL wajib membaca sumber resmi secara konsisten dan gagal tertutup saat placement/assignment ambigu atau tidak tersedia.
+
+Model menyimpan `StudentID` resmi beserta nama dan ID/nama kelas yang disnapshot untuk tanggal kejadian sebagai konteks historis; snapshot tidak menentukan otorisasi baca saat ini. Detail cara menentukan kelas pada tanggal kejadian harus memakai data penempatan/perpindahan bertanggal. Status dapat berpindah dua arah dengan alasan dan histori; tidak ada approval. Catatan BK tetap berada di domain lain sesuai cakupan D-018.
 
 Alur: browser → middleware keamanan → router → template lengkap atau fragmen HTML. GET / menghasilkan halaman; HX-Request: true menghasilkan section overview dengan Vary: HX-Request. Aset dilayani lokal dari binary. /health/live memeriksa proses; /health/ready memeriksa DB dan kesesuaian versi migrasi tanpa menampilkan detail koneksi. Server bind loopback secara default, memiliki timeout HTTP dan shutdown 10 detik.
 
