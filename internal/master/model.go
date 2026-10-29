@@ -15,16 +15,19 @@ type Kind string
 const (
 	Students Kind = "students"
 	Teachers Kind = "teachers"
+	Staff    Kind = "staff"
 	Subjects Kind = "subjects"
 )
 
-func (k Kind) Valid() bool { return k == Students || k == Teachers || k == Subjects }
+func (k Kind) Valid() bool { return k == Students || k == Teachers || k == Staff || k == Subjects }
 func (k Kind) Label() string {
 	switch k {
 	case Students:
 		return "Siswa"
 	case Teachers:
 		return "Guru"
+	case Staff:
+		return "Pegawai"
 	case Subjects:
 		return "Mata Pelajaran"
 	}
@@ -42,6 +45,8 @@ func (k Kind) HistoryTable() string {
 		return "app.student_history"
 	case Teachers:
 		return "app.teacher_history"
+	case Staff:
+		return "app.staff_member_history"
 	case Subjects:
 		return "app.subject_history"
 	}
@@ -59,23 +64,24 @@ type ValidationError string
 func (e ValidationError) Error() string { return string(e) }
 
 type Record struct {
-	ReturnDate  string `json:"return_date,omitempty"`
-	ExitDate    string `json:"exit_date,omitempty"`
-	Transferred bool   `json:"transferred,omitempty"`
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	BirthDate   string `json:"birth_date,omitempty"`
-	Gender      string `json:"gender,omitempty"`
-	NIS         string `json:"nis,omitempty"`
-	NISN        string `json:"nisn,omitempty"`
-	NIP         string `json:"nip,omitempty"`
-	NUPTK       string `json:"nuptk,omitempty"`
-	Email       string `json:"email,omitempty"`
-	Phone       string `json:"phone,omitempty"`
-	UserID      int64  `json:"user_id,omitempty"`
-	Code        string `json:"code,omitempty"`
-	Active      bool   `json:"active"`
-	Version     int64  `json:"version"`
+	ReturnDate     string `json:"return_date,omitempty"`
+	ExitDate       string `json:"exit_date,omitempty"`
+	Transferred    bool   `json:"transferred,omitempty"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	BirthDate      string `json:"birth_date,omitempty"`
+	Gender         string `json:"gender,omitempty"`
+	NIS            string `json:"nis,omitempty"`
+	NISN           string `json:"nisn,omitempty"`
+	NIP            string `json:"nip,omitempty"`
+	NUPTK          string `json:"nuptk,omitempty"`
+	EmployeeNumber string `json:"employee_number,omitempty"`
+	Email          string `json:"email,omitempty"`
+	Phone          string `json:"phone,omitempty"`
+	UserID         int64  `json:"user_id,omitempty"`
+	Code           string `json:"code,omitempty"`
+	Active         bool   `json:"active"`
+	Version        int64  `json:"version"`
 }
 type Input struct {
 	Record
@@ -94,6 +100,7 @@ func (in *Input) Validate(kind Kind, creating bool) error {
 	in.NISN = strings.TrimSpace(in.NISN)
 	in.NIP = strings.TrimSpace(in.NIP)
 	in.NUPTK = strings.TrimSpace(in.NUPTK)
+	in.EmployeeNumber = strings.TrimSpace(in.EmployeeNumber)
 	in.Email = strings.TrimSpace(in.Email)
 	in.Phone = strings.TrimSpace(in.Phone)
 	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
@@ -135,6 +142,16 @@ func (in *Input) Validate(kind Kind, creating bool) error {
 		}
 		if in.UserID < 0 {
 			return ValidationError("Akun terkait tidak valid.")
+		}
+	case Staff:
+		if !bounded(in.EmployeeNumber, 64) || in.UserID < 0 || !bounded(in.Email, 254) {
+			return ValidationError("Nomor pegawai maksimal 64 karakter; kontak atau akun terkait tidak valid.")
+		}
+		if in.Email != "" {
+			address, err := mail.ParseAddress(in.Email)
+			if err != nil || address.Address != in.Email {
+				return ValidationError("Format email tidak valid.")
+			}
 		}
 	case Subjects:
 		if in.Code == "" || !bounded(in.Code, 64) || strings.IndexFunc(in.Code, unicode.IsControl) >= 0 {

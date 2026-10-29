@@ -790,3 +790,23 @@ Verifikasi aktual final:
 Development: sim_guru_dev versi 25/target 25, tanpa migration baru atau tertunda. Snapshot hash/jumlah 57 tabel app (di luar sesi/audit login) sebelum/sesudah UX identik: 18 akun, 13 guru, 29 role assignment. Tidak ada akun demo, fixture, role otomatis, reset atau data sekolah yang diubah agen. Worker startup memeriksa/menghapus 0 foto. Server lama diidentifikasi executable/PID sebelum diganti oleh binary terbaru di loopback 18743; database/storage privat existing dan .env tetap. Preview UAT menggunakan sim_guru_dev, berbeda dari semua tes DB. Tidak mengakses production/EC2 atau merge/deploy.
 
 Batas: belum ada sumber tugas wajib nonmengajar, persentase final, load test skala besar atau ponsel fisik. Tidak mengubah batas bisnis tersebut. Setelah final gate/push berhasil, DEV-03G3 dan DEV-03G3-UX-01 berstatus PASS/CLOSED; jangan mulai pekerjaan baru secara otomatis.
+
+## SIM-GURU-DOC-SYNC-01 — sinkronisasi status dokumentasi (29 Oktober 2026)
+
+Audit terhadap HEAD `80aff01` membandingkan DEVELOPMENT, PRD, HANDOVER, ARCHITECTURE, TESTING, migration, kode rekap guru dan keputusan D-039/D-040. DEVELOPMENT diperbarui ke migration 25 dan prosedur pemeriksaan status sebelum migration; ringkasan status PRD dan ARCHITECTURE diselaraskan dengan implementasi serta UAT DEV-03G3/UX-01; PRD utama menghapus klaim menunggu UAT. Catatan tahapan lama di HANDOVER dan TESTING dipertahankan sebagai histori. Rekap tetap terbatas pada sumber jadwal yang tersedia, sesuai implementasi dan D-039.
+
+Tidak menjalankan tes atau migration; audit ini hanya mengubah dokumentasi. Tidak ada perubahan source, database, konfigurasi privat, commit atau push. Keputusan Product Owner yang masih diperlukan: sumber/aturan tugas wajib nonmengajar dan apakah/atas dasar apa persentase final kelak dihitung. Ponsel fisik, load test skala besar, serta evaluasi kapasitas retensi foto juga belum dibuktikan/dituntaskan.
+
+## DEV-03G4-A — master pegawai non-guru (29 Oktober 2026)
+
+Migration aditif 00026 menambah `app.staff_members` dan `app.staff_member_history`, terpisah dari master guru. Nama wajib; nomor pegawai, kontak, dan tautan akun opsional. Nomor unik hanya bila tidak kosong; `user_id` unik/FK memastikan satu tautan per akun. Master mengikuti service master existing: hanya Admin dapat daftar/ubah/baca histori, form memakai version optimistis dan advisory mutation lock, perubahan serta snapshot histori tersimpan atomik. Tautan akun tidak membuat atau mengubah role. Nonaktif mempertahankan identitas dan histori.
+
+Menu Admin → Pegawai memakai route `/master/staff`, SSR, modal master, pagination server 10 baris, serta Instant Search/filter bersama. Form mendukung buat, koreksi, aktivasi/nonaktivasi, nomor, kontak, dan tautan/lepas tautan akun. Tidak ada impor pegawai, akun otomatis, atau fitur presensi pada tahap ini.
+
+Verifikasi: migration integration test pada `sim_guru_test` lulus untuk versi/struktur 26. `TestStaffMasterIntegration` memeriksa CRUD, nomor kosong dan duplikat, uniqueness akun, penolakan role non-Admin, histori setelah nonaktif. `TestMasterHTTPIntegration` memeriksa akses Admin/TU, pembuatan melalui UI HTTP, histori, dan tidak adanya perubahan role saat tautan akun. Regresi terarah serial/race pada `sim_guru_test` lulus: master HTTP, kehadiran mandiri guru, absensi harian siswa, dan konteks absensi pelajaran. `go test ./...`, `go vet ./...`, `make check`, build, Node syntax checks, dan 7 tes Instant Search lulus. `make check` pertama gagal karena format file tes baru; file diformat dan pemeriksaan ulang lulus.
+
+Sebelum development migration, `make migrate-status` mengonfirmasi database `sim_guru_dev` versi 25/target 26. Backup custom `.local/backups/pre-staff-master-20261029.dump` (325266 byte, mode 0600) lolos `pg_restore --list`. `make migrate-up` menerapkan satu migration; status akhir development 26/26. Tidak ada fixture/akun/role/data contoh development. Binary dibangun dan dijalankan pada `127.0.0.1:18743`; readiness dan liveness HTTP 200. Halaman pegawai tanpa login mengarahkan ke login (303). Product Owner menyatakan UAT Admin DEV-03G4-A PASS (8/8). Agen tidak melakukan visual QA berakun.
+
+Final gate source sebelum publikasi PASS: `git diff --check`, `go test -count=1 ./...`, `go vet ./...`, `make check`, `npm run build`, `make build`, migration/master integration pada `sim_guru_test`, dan regresi HTTP terpilih dengan race detector. Seluruh tes database diarahkan ke `sim_guru_test`; tidak menyentuh development.
+
+Perubahan DOC-SYNC-01 pada lima file tetap dipertahankan. Belum commit/push/merge/deploy. G4-B (presensi mandiri Pegawai TU) belum dimulai. Tidak mengubah perilaku presensi guru atau siswa.

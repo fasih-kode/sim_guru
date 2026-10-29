@@ -55,7 +55,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 25 || target != 25 {
+	if err != nil || current != 26 || target != 26 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -71,6 +71,9 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.teacher_attendance_reports') IS NOT NULL AND to_regclass('app.teacher_attendance_report_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing teacher attendance report tables")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.staff_members') IS NOT NULL AND to_regclass('app.staff_member_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		t.Fatal("missing staff master tables")
 	}
 	var overlap bool
 	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='teacher_attendance_reports_no_overlap' AND contype='x')`).Scan(&overlap); err != nil || !overlap {

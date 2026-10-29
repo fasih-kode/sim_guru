@@ -26,6 +26,7 @@ func TestMasterHTTPIntegration(t *testing.T) {
 	admin, adminPassword := testutil.User(t, db, "admin")
 	curriculum, curriculumPassword := testutil.User(t, db, "kurikulum")
 	teacher, teacherPassword := testutil.User(t, db, "guru_mapel")
+	tu, tuPassword := testutil.User(t, db, "pegawai_tu")
 	accounts, err := auth.New(db)
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +90,7 @@ func TestMasterHTTPIntegration(t *testing.T) {
 	ac := login(admin, adminPassword)
 	kc := login(curriculum, curriculumPassword)
 	tc := login(teacher, teacherPassword)
+	tuc := login(tu, tuPassword)
 	get(newClient(), "/master/students", 303)
 	token := csrfToken(get(ac, "/master/students/new", 200))
 	post(ac, "/master/students/new", url.Values{"name": {"Missing CSRF"}}, 403)
@@ -166,6 +168,20 @@ func TestMasterHTTPIntegration(t *testing.T) {
 		t.Fatal("subject creation/list failed")
 	}
 	get(tc, "/master/subjects", 403)
+	get(tuc, "/master/staff", 403)
+	get(tuc, "/master/staff/new", 403)
+	staffToken := csrfToken(get(ac, "/master/staff/new", 200))
+	staffName := "Pegawai " + suffix
+	post(ac, "/master/staff/new", url.Values{"gorilla.csrf.Token": {staffToken}, "name": {staffName}, "employee_number": {"PGW-" + suffix}, "user_id": {strconv.FormatInt(tu.ID, 10)}, "active": {"true"}}, 303)
+	var staffID int64
+	if err = db.QueryRow(`SELECT id FROM app.staff_members WHERE name=$1`, staffName).Scan(&staffID); err != nil {
+		t.Fatal(err)
+	}
+	var roleCount int
+	if err = db.QueryRow(`SELECT count(*) FROM app.user_roles WHERE user_id=$1`, tu.ID).Scan(&roleCount); err != nil || roleCount != 1 {
+		t.Fatal("staff account linkage changed roles")
+	}
+	get(ac, "/master/staff/"+strconv.FormatInt(staffID, 10)+"/history", 200)
 	get(ac, "/master/invalid", 404)
 	// Unsupported PATCH cannot bypass the form-only write surface.
 	req, _ := http.NewRequest("PATCH", server.URL+base, strings.NewReader(values.Encode()))

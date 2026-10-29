@@ -44,7 +44,7 @@ func (a *application) masterAccess(w http.ResponseWriter, r *http.Request, write
 	}
 	u := principal(r)
 	allowed := u.HasRole(kind.WriterRole())
-	if !write && kind != master.Subjects {
+	if !write && kind != master.Subjects && kind != master.Staff {
 		allowed = allowed || u.HasRole("kurikulum")
 	}
 	if !allowed {
@@ -115,7 +115,7 @@ func (a *application) masterForm(w http.ResponseWriter, r *http.Request) {
 		}
 		mv.Input.Record = record
 	}
-	if kind == master.Teachers {
+	if kind == master.Teachers || kind == master.Staff {
 		accounts, err := a.options.Masters.Accounts(r.Context(), principal(r).ID)
 		if err != nil {
 			a.failure(w, err)
@@ -149,7 +149,7 @@ func (a *application) masterForm(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Akun terkait tidak valid.", 422)
 			return
 		}
-		mv.Input = master.Input{Record: master.Record{ID: id, Name: r.PostForm.Get("name"), BirthDate: r.PostForm.Get("birth_date"), Gender: r.PostForm.Get("gender"), NIS: r.PostForm.Get("nis"), NISN: r.PostForm.Get("nisn"), NIP: r.PostForm.Get("nip"), NUPTK: r.PostForm.Get("nuptk"), Email: r.PostForm.Get("email"), Phone: r.PostForm.Get("phone"), UserID: userID, Code: r.PostForm.Get("code"), Active: r.PostForm.Get("active") == "true", Version: version}, Reason: r.PostForm.Get("reason")}
+		mv.Input = master.Input{Record: master.Record{ID: id, Name: r.PostForm.Get("name"), BirthDate: r.PostForm.Get("birth_date"), Gender: r.PostForm.Get("gender"), NIS: r.PostForm.Get("nis"), NISN: r.PostForm.Get("nisn"), NIP: r.PostForm.Get("nip"), NUPTK: r.PostForm.Get("nuptk"), EmployeeNumber: r.PostForm.Get("employee_number"), Email: r.PostForm.Get("email"), Phone: r.PostForm.Get("phone"), UserID: userID, Code: r.PostForm.Get("code"), Active: r.PostForm.Get("active") == "true", Version: version}, Reason: r.PostForm.Get("reason")}
 		_, err = a.options.Masters.Save(r.Context(), principal(r).ID, kind, id, mv.Input)
 		if err == nil {
 			http.Redirect(w, r, "/master/"+string(kind)+"?saved=1", 303)

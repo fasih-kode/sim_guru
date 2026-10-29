@@ -212,7 +212,7 @@ Unit test tidak menjalankan file `*_integration_test.go`; gunakan hanya `sim_gur
 
 `TestTeacherAttendanceReportsHTTPIntegration` memeriksa autentikasi/CSRF, autoescaping, penolakan akses guru lain, tidak tersedianya jalur edit/hapus guru, validasi 422 sekali di modal dengan input tetap, 303 sah, konflik 409 tanpa mengganti version tersembunyi, request tanpa mutasi, pembatalan/histori, filter tanggal/jenis/status, 10 laporan per halaman, pagination histori dan inbox. Regression `TestTeacherAttendanceHTTPIntegration` memakai TU berwenang untuk fixture pencatatan manual; Petugas Absensi Siswa tetap diuji ditolak sesuai D-039.
 
-Migration test menargetkan versi 25: tabel laporan/histori, constraint exclusion overlap, relasi request, dan kompatibilitas snapshot nama. Migration 00024 dan 00025 hanya aditif; development dimigrasikan melalui perintah resmi setelah tes PASS. UAT Product Owner memakai akun development existing, bukan fixture otomatis. Pemeriksaan perangkat Android fisik serta status/rekap terpadu DEV-03G3 tidak dibuktikan oleh tes HTTP.
+Migration test menargetkan versi 26: tabel laporan/histori, constraint exclusion overlap, relasi request, kompatibilitas snapshot nama, serta master pegawai dan histori. Migration 00024–00026 aditif; development dimigrasikan melalui perintah resmi setelah tes PASS. UAT Product Owner memakai akun development existing, bukan fixture otomatis. Pemeriksaan perangkat Android fisik serta status/rekap terpadu DEV-03G3 tidak dibuktikan oleh tes HTTP.
 
 ## DEV-03G3 — status dan rekap guru (29 Oktober 2026)
 

@@ -151,6 +151,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 			return "students", "curriculum-students"
 		}
 		return "students", roleMenu
+	case strings.HasPrefix(path, "/master/staff"):
+		return "staff", roleMenu
 	case strings.HasPrefix(path, "/master/teachers"):
 		if roleMenu == "curriculum" {
 			return "teachers", "curriculum-students"
