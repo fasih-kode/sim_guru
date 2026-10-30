@@ -1,5 +1,33 @@
 # Handover
 
+## Fase 8A-03 — UAT final dan publikasi (30 Oktober 2026)
+
+Product Owner menyatakan UAT FINAL PASS: alur fungsional 8/8, UX-FIX-01 4/4, dan D-046 handoff Wali Kelas 5/5. Pada worktree fitur `feature/fase8a-03-kasus-siswa`, migration 00029–00030, service, HTTP/UI, arsip Pembinaan, alur Wali Kelas → Guru BK → Kesiswaan, batas kerahasiaan, dan handoff eksplisit Wali baru telah melalui final gate sumber. Tes tercatat mencakup `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, migration integration, kasus academic, HTTP/BK, arsip, dan regression relevan dengan race detector pada `sim_guru_test`. Full integration lintas seluruh paket dengan target make tidak dinyatakan PASS; riwayat suite sebelumnya mengalami timeout paket academic. Perubahan masih belum dipublikasikan saat pemeriksaan ini.
+
+Keputusan D-043–D-046 tercantum pada DECISIONS; D-041 tetap presensi TU dan D-042 tetap cakupan arsip Pembinaan. Delapan dokumen keputusan lokal dari D-043–D-045 pada worktree utama dipertahankan dan disinkronkan dengan D-046 serta hasil UAT sebelum commit dokumentasi terpisah. `sim_guru_dev` tetap migration 28/30 dan tidak dimigrasikan dalam publikasi Git ini; database UAT Fase 8A-03 tetap 30/30. Tidak ada database atau server yang diubah untuk final gate. Server 18743 tidak boleh dijalankan ulang dengan source migration 30 sebelum migrasi development terkontrol; preview 18744/18745 dipertahankan.
+
+Setelah publikasi, migrasi development 28→30 harus dijadwalkan terpisah dengan backup tervalidasi, penghentian normal hanya pada server 18743, verifikasi baseline data, aplikasi migration resmi, perbandingan data, lalu startup dan health check. Jangan menjalankan migration 29/30 pada development dalam tugas Git ini.
+
+## Fase 8A-03 — finalisasi D-045 (30 Oktober 2026)
+
+Product Owner menetapkan lima aturan D-045 FINAL: (1) Wali Kelas aktif membaca ringkasan/perkembangan sesuai penempatan dan penugasan aktif; mantan wali tidak mewarisi akses dan tidak membaca isi konseling; (2) Wali memilih Guru BK aktif saat rujukan dan hanya BK penanggung jawab aktif membaca catatan konseling pribadi; (3) penanggung jawab aktif dapat menutup atau membuka kembali kasus dengan alasan dan histori, tanpa approval; (4) Kepala Sekolah membaca ringkasan, Kesiswaan hanya informasi koordinasi yang diperlukan; (5) Admin/role lain tidak memperoleh akses konseling otomatis dan isi privat tidak boleh muncul pada daftar, pencarian, error, atau log.
+
+Catatan konseling pribadi dipisahkan dari entri koordinasi dan `student_guidance_records` existing. D-045 melengkapi alur D-044, menjaga D-042 untuk modul Pembinaan Kesiswaan yang berjalan, serta membatasi interpretasi D-018: akses Kepala Sekolah ke ringkasan BK tidak mencakup rincian konseling. Belum ada migration 00029 atau implementasi di worktree utama; pengembangan dilanjutkan pada worktree fitur terpisah. Format pencatatan intake BK langsung/darurat, penugasan BK di luar alur normal, dan pemantauan Wali saat penempatan siswa berubah masih perlu dirancang.
+
+## Fase 8A-03 — revisi alur kasus D-044 (30 Oktober 2026)
+
+Product Owner menetapkan D-044 sebagai koreksi FINAL atas alur konseptual D-043: alur formal normal wajib Wali Kelas → Guru BK → Kesiswaan. Wali Kelas mencatat pembinaan awal dan mengevaluasi; BK menangani konseling dan hanya meneruskan ke Kesiswaan bila belum ada perbaikan serta perlu penegakan disiplin. Kesiswaan memutuskan penanganan disiplin menurut tata tertib/kewenangan sekolah, tanpa sanksi otomatis. Kasus memiliki satu penanggung jawab aktif; Wali Kelas tetap menjadi pemantau/koordinator dan menerima informasi perkembangan yang diperlukan setelah penanggung jawab berganti. Fungsi pemantauan dan penanganan aktif harus terpisah.
+
+Siswa yang datang langsung ke BK tetap dibantu; Wali Kelas menerima informasi koordinasi tanpa rincian konseling pribadi. Intake ini tidak menjadi bypass rutin tahap formal. Prosedur darurat sekolah didahulukan dan aplikasi tidak boleh menunda pertolongan. Rancangan service/UI harus membatasi transisi rutin secara berurutan, memvalidasi aktor dan tahap di server, serta menyimpan histori append-only. Pembinaan awal Wali Kelas ditempatkan sebagai entri kasus baru, bukan mutasi otomatis pada `student_guidance_records` existing. Modul Catatan Pembinaan existing dan batas D-042 tetap dipertahankan.
+
+Belum ada migration, service, UI, atau perubahan database untuk kasus. D-045 kemudian menetapkan cakupan baca ringkasan, akses konseling BK aktif, kewenangan tutup/buka kembali, serta membatasi klausul ringkasan Kepala Sekolah dalam D-018. Format koordinasi minimum, Wali pemantau jika siswa berpindah kelas, penugasan ulang di luar alur, dan pencatatan formal intake BK langsung/darurat masih perlu dirancang. Tidak ada pengujian implementasi yang dijalankan untuk revisi dokumentasi D-044.
+
+## Fase 8A-03 — konsep koordinasi kasus siswa (30 Oktober 2026)
+
+Product Owner menyetujui konsep domain melalui D-043; alur tanggung jawabnya kemudian dikoreksi secara FINAL oleh D-044 pada bagian terbaru di atas. Ketentuan D-043 tentang ID permanen, status Perlu tindak lanjut/Selesai, banyak entri, dan histori append-only tetap dipertahankan. Rancangan relasi teknis berada di PRD §3B dan ARCHITECTURE; belum ada migration, service, atau UI kasus.
+
+Integrasi dengan domain existing direncanakan aditif: catatan `student_guidance_records` tetap utuh dan dapat memiliki tautan nullable ke kasus; record lama tidak digabung atau dihubungkan otomatis. D-044 menetapkan alur normal Wali Kelas → Guru BK → Kesiswaan, namun tidak mengubah akses D-042 atau membuka isi konseling pribadi. Rincian akses dan kewenangan yang masih OPEN dicatat pada bagian revisi D-044. Jangan mulai migration atau UI koordinasi kasus sebelum aturan tersebut ditetapkan. Tidak ada database yang diubah.
+
 ## UX-FIX-01 — perbaikan UAT pembinaan (30 Oktober 2026)
 
 UAT menemukan tiga masalah dan semuanya ditelusuri ke implementasi. Tabel daftar sebelumnya tidak memiliki padding/proporsi kolom yang cukup; sekarang tabel desktop memiliki padding TailAdmin, lebar kolom eksplisit, pembungkusan teks, dan scroll lokal, sementara daftar ponsel memakai kartu. Verifikasi pada viewport 1440 px menunjukkan tabel 1180 px di dalam scroll surface tanpa memperlebar halaman. Pada 390 px, kartu dengan uraian panjang tetap berada dalam viewport dan halaman tidak overflow.

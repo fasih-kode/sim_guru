@@ -268,3 +268,50 @@ Event, histori, metadata dan storage foto TU terpisah dari domain guru; foto dih
 BK, Guru Mapel, Admin, dan role lain tidak otomatis memperoleh hak baca catatan Kesiswaan. Akun dengan beberapa role hanya memperoleh cakupan yang memang diberikan oleh tiap role sah; role lain tidak memperluas cakupan. Keputusan ini khusus untuk catatan pembinaan Kesiswaan dan tidak menetapkan ulang cakupan kerahasiaan/catatan BK yang tetap mengikuti D-018.
 
 Alasan: akses saat ini mengikuti penempatan dan penugasan yang berlaku, sementara snapshot menjaga konteks historis tanpa mewariskan akses kepada mantan wali. Service harus memeriksa sumber penempatan dan penugasan resmi secara konsisten di server dan gagal tertutup bila hasilnya tidak tunggal/jelas. Unit test atas model akses bukan pengganti pemeriksaan otorisasi PostgreSQL. Ketentuan otoritatif disinkronkan pada [PRD utama §3B](../PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md#3b-kesiswaan-dan-bk--final-22-oktober-2026), [arsitektur](ARCHITECTURE.md), dan [HANDOVER](HANDOVER.md). Keputusan ini tidak mengubah aturan tanpa poin/sanksi otomatis atau approval pada D-018.
+
+
+## D-043 — Konsep koordinasi penanganan kasus siswa (30 Oktober 2026)
+
+**FINAL untuk konsep domain, disetujui Product Owner pada Fase 8A-03.** Setiap kasus memiliki ID permanen, penanggung jawab yang jelas, dan dapat memuat banyak catatan tindakan/tindak lanjut. Kasus dapat dirujuk kepada petugas lain sesuai kewenangannya. Rujukan dan setiap perubahan tanggung jawab dicatat dalam histori; perubahan penanggung jawab tidak menghapus atau menimpa riwayat lama. Status kasus hanya **Perlu tindak lanjut** dan **Selesai**. Tidak ada sistem poin, sanksi otomatis, atau persetujuan digital berlapis.
+
+Konsep ini mempertahankan domain Pembinaan Kesiswaan yang sudah ada dan hanya mengintegrasikannya secara aditif. Persetujuan konsep tidak memperluas hak baca catatan pembinaan menurut D-042 dan tidak memberikan akses ke isi konseling pribadi. Rincian siapa yang dapat menetapkan/mengalihkan Guru BK, siapa yang berwenang menutup kasus, serta pembatasan akses terhadap isi konseling masih **OPEN** dan harus diputuskan Product Owner tersendiri sebelum migration atau UI operasional dibuat. Tidak ada perubahan pada keputusan D-018 atau D-042.
+
+
+## D-044 — Alur berjenjang koordinasi kasus siswa (30 Oktober 2026)
+
+**FINAL, koreksi eksplisit Product Owner atas konsep D-043.** Alur formal normal adalah **Wali Kelas → Guru BK → Kesiswaan**. Wali Kelas adalah tahap pertama: mencatat pembinaan awal dan mengevaluasi perkembangan. Jika belum berhasil atau membutuhkan konseling lanjutan, Wali Kelas merujuk kepada Guru BK. Guru BK mencatat layanan konseling, tindak lanjut, dan perkembangan. Jika belum ada perbaikan dan perlu penegakan disiplin, Guru BK meneruskan kasus kepada Kesiswaan. Kesiswaan memutuskan penanganan disiplin menurut tata tertib dan kewenangan sekolah; sanksi tidak otomatis.
+
+Setiap kasus mempunyai ID permanen, histori berkesinambungan, satu penanggung jawab aktif, dan hanya berstatus **Perlu tindak lanjut** atau **Selesai**. Tanggung jawab aktif berpindah mengikuti tahap, tetapi Wali Kelas siswa tetap menerima informasi koordinasi dan perkembangan yang diperlukan meskipun bukan penanggung jawab aktif. Dengan demikian, Wali Kelas adalah pemantau/koordinator sepanjang kasus; penanggung jawab aktif adalah pihak yang sedang menangani tahap berjalan. Perubahan tahap, rujukan, dan pemilik aktif dicatat tanpa menimpa histori. Tidak ada approval digital berlapis.
+
+Siswa yang datang langsung ke BK tetap mendapat bantuan awal. Wali Kelas diberi informasi yang diperlukan untuk koordinasi tanpa membuka rincian konseling pribadi. Prosedur darurat sekolah untuk perlindungan/keselamatan didahulukan; alur administrasi atau aplikasi tidak boleh menunda pertolongan. Ketentuan ini tidak menetapkan skema kerahasiaan lengkap isi konseling.
+
+Untuk mencegah bypass rutin, implementasi harus memvalidasi transisi tahap berurutan di service dalam transaksi dan hanya menampilkan tindakan berikut yang sah di UI; histori transisi harus append-only. Intake langsung BK dan keadaan darurat tidak boleh dijadikan jalur rutin untuk melewati tahap Wali Kelas, dan penanganan keselamatan tidak boleh menunggu pencatatan atau persetujuan aplikasi. Rincian pencatatan intake langsung, cakupan tepat informasi koordinasi untuk Wali Kelas, batas akses isi konseling, penentuan Guru BK tertentu, siapa yang tetap/mulai menjadi Wali pemantau setelah perpindahan penempatan, dan siapa yang berwenang mengubah status menjadi Selesai masih **OPEN** untuk keputusan produk/desain tersendiri.
+
+**Batas D-018 yang perlu diklarifikasi:** D-018 menyebut Kepala Sekolah membaca catatan dan ringkasan BK seluruh sekolah, sedangkan perlindungan isi konseling pribadi menurut D-044 belum merinci kategori catatan atau cakupan role. Pertahankan D-018, tetapi jangan menafsirkan redaksi tersebut sebagai akses ke rincian konseling pribadi sebelum Product Owner menetapkan batas kerahasiaan secara eksplisit.
+
+D-044 memperjelas D-043 untuk alur dan tanggung jawab kasus, tanpa mengubah prinsip ID permanen, histori, dua status, atau tanpa sanksi otomatis/approval berlapis. Modul Catatan Pembinaan Kesiswaan existing tetap dipertahankan sesuai D-042. Entri pembinaan awal Wali Kelas merupakan entri pada domain kasus baru; entri itu tidak otomatis memberi hak mutasi terhadap `student_guidance_records` existing. Aturan akses D-042 untuk record existing tetap berlaku. D-044 juga tidak memberi akses otomatis kepada Wali Kelas atau petugas rujukan ke isi konseling pribadi.
+
+
+## D-045 — Otorisasi pemantauan kasus dan kerahasiaan konseling (30 Oktober 2026)
+
+**FINAL, disetujui Product Owner untuk Fase 8A-03.** Keputusan ini melengkapi alur D-044 dan menjaga batas domain D-042 melalui lima aturan:
+
+1. Wali Kelas aktif membaca ringkasan koordinasi dan perkembangan kasus siswa yang berada pada penempatan/penugasan aktifnya saat pembacaan. Mantan Wali Kelas tidak mempertahankan akses dari penugasan historis. Hak pemantauan ini tidak mencakup isi konseling pribadi.
+2. Pada rujukan tahap Wali Kelas → BK, Wali Kelas memilih Guru BK aktif. Hanya Guru BK yang menjadi penanggung jawab aktif dapat membaca catatan konseling pribadi kasus tersebut. BK lain atau BK yang tidak lagi menjadi penanggung jawab aktif tidak mendapat akses hanya karena role atau rujukan historis.
+3. Penanggung jawab aktif dapat menyelesaikan atau membuka kembali kasus dengan alasan dan histori. Status tetap hanya Perlu tindak lanjut/Selesai; tidak diperlukan approval.
+4. Kepala Sekolah membaca informasi kasus dan ringkasan koordinasi seluruh sekolah, bukan isi konseling pribadi. Kesiswaan hanya membaca informasi koordinasi yang diperlukan untuk penanganan disiplin sesuai tahap dan kewenangannya; peran tersebut tidak membuka catatan konseling pribadi.
+5. Admin dan role lain tidak memperoleh akses isi konseling secara otomatis. Catatan konseling dipisahkan dan tidak boleh bocor melalui daftar, pencarian, fragment HTML, pesan error, maupun log aplikasi.
+
+Catatan konseling pribadi disimpan terpisah dari entri koordinasi kasus dan dari `student_guidance_records` existing. Ringkasan koordinasi yang dibaca Wali Kelas/Kepala Sekolah/Kesiswaan harus dipisahkan dan dibatasi sesuai ketentuan di atas. D-045 tidak mengubah hak akses record Pembinaan Kesiswaan existing yang tetap mengikuti D-042, tidak mengubah alur formal D-044, dan tidak menambah poin atau sanksi otomatis.
+
+## D-046 — Pengambilalihan penanganan kasus akibat perubahan Wali Kelas (30 Oktober 2026)
+
+**FINAL, disetujui Product Owner untuk Fase 8A-03.** Untuk mencegah kasus aktif tertahan ketika siswa berpindah kelas atau Wali Kelas berubah:
+
+1. Pengambilalihan hanya berlaku bagi kasus **Perlu tindak lanjut** pada tahap Wali Kelas, dengan satu penempatan siswa aktif yang sah dan satu penugasan Wali Kelas aktif yang dapat diverifikasi.
+2. Wali Kelas baru yang saat ini ditugaskan dapat mengambil alih secara eksplisit melalui aksi **Ambil Alih Penanganan**, hanya jika owner lama bukan lagi Wali Kelas aktif siswa tersebut.
+3. Pengambilalihan tidak memerlukan persetujuan digital. Transaksi mencatat owner lama, owner baru, pelaku, waktu, alasan, dan histori append-only. Setelah berhasil, Wali baru dapat melanjutkan tindak lanjut, merujuk ke BK, atau menyelesaikan kasus.
+4. Mantan Wali tidak mendapat akses dari penugasan historis. Perpindahan kelas tidak mengubah owner kasus yang telah berada pada tahap BK atau Kesiswaan. Kasus Selesai tidak dapat diambil alih.
+5. GET tidak mengubah owner, status, atau histori. Penempatan/penugasan yang tidak jelas, stale version, dan pengambilalihan berulang ditolak tanpa mutasi. Tidak ada status baru, pengalihan otomatis, atau penimpaan histori.
+
+D-046 melengkapi D-043–D-045 tanpa mengubah batas kerahasiaan konseling D-045, akses Catatan Pembinaan existing D-042, urutan formal D-044, ataupun status kasus yang sudah ditetapkan.
