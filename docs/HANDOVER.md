@@ -12,6 +12,10 @@ Database UAT terpisah `database UAT Fase 8A-03` diverifikasi 30/30. Backup custo
 
 Pengujian UAT dilakukan pada lingkungan terisolasi. Product Owner menyelesaikan alur kasus, perpindahan penempatan, handoff, dan tindak lanjut. Data UAT serta kredensial tetap berada di lingkungan privat terpisah dan tidak disertakan dalam dokumentasi atau Git. Preview UAT tetap terpisah dari development. Perubahan belum dipublikasikan; final gate dan UAT telah lulus.
 
+### Status publikasi Git setelah final gate
+
+Commit dokumentasi lokal `5bcb22e31b186c16e9466812a4484d51008355b2`, commit fitur `ffafdccff7773e91ad7904a0c4f11e71da6a3415`, dan merge lokal `99103a6bb8660511f4d1e73c8cdce10fb4c9adce` telah dibuat. Pembacaan branch GitHub melalui API pada 30 Oktober 2026 masih menunjukkan baseline `0a3b799ff4b8e837cf74b9393f8b299ea8378161`. Push normal tidak selesai karena SSH menolak autentikasi key (`Permission denied (publickey)`); percobaan noninteraktif juga ditolak. Tidak ada force push atau perubahan remote. Setelah akses SSH dipulihkan, tinjau ulang remote, lalu dorong branch review secara normal.
+
 Alur UAT yang lulus: Wali lama membuat kasus → Kurikulum memindahkan penempatan dengan alasan → akses Wali lama ditolak → Wali baru mengambil alih dengan alasan → tindak lanjut dan histori diverifikasi. Tidak ada perubahan pada data development selama UAT ini. Catatan pemeriksaan database UAT, bila dibutuhkan, harus baca-saja dan tanpa menampilkan isi konseling pribadi.
 
 ## Final readiness check Fase 8A-03 sebelum D-046 (catatan historis, 30 Oktober 2026)
