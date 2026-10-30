@@ -244,7 +244,8 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	get(teacherClient, "/akademik", 200)
-	if !strings.Contains(get(teacherClient, "/", 200), "/akademik") {
+	curriculumDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(curriculumDashboard, "/akademik") || !strings.Contains(curriculumDashboard, "Ringkasan akademik") || !strings.Contains(curriculumDashboard, "Semester aktif") || !strings.Contains(curriculumDashboard, "/akademik/jadwal") || strings.Contains(curriculumDashboard, "Ringkasan sekolah") {
 		t.Fatal("new role did not appear in existing session")
 	}
 	// Optimistic version prevents silently overwriting a newer role assignment.

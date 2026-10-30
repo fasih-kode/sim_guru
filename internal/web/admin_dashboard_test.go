@@ -21,7 +21,7 @@ func TestAdminDashboardOverviewAndQuickLinks(t *testing.T) {
 		HasActiveYear:  true,
 		ActiveClasses:  18,
 	}
-	body := adminDashboardPageForTest(t, admin, stats)
+	body := dashboardPageForTest(t, admin, adminDashboardPresentation(*stats))
 	for _, want := range []string{
 		"Siswa aktif", "1234", "Guru aktif", "45", "Pegawai aktif", "12",
 		"Kelas pada tahun aktif", "18", "Tahun ajaran aktif: 2026/2027", "Akses cepat",
@@ -39,7 +39,7 @@ func TestAdminDashboardOverviewAndQuickLinks(t *testing.T) {
 		t.Fatal("bagian akses cepat tidak dirender")
 	}
 	quickAccess := body[start:]
-	if strings.Contains(quickAccess, `icon-view`) || strings.Count(quickAccess, `class="size-4`) != 8 || !strings.Contains(quickAccess, `bg-gray-50`) {
+	if strings.Contains(quickAccess, `icon-view`) || strings.Count(quickAccess, `class="size-4"`) != 4 || strings.Count(quickAccess, `class="size-4 shrink-0`) != 4 || !strings.Contains(quickAccess, `bg-gray-50`) {
 		t.Fatal("kartu akses cepat harus memakai ikon aksen kecil, bukan ikon mata, dan tampilan terpisah dari statistik")
 	}
 	icons := map[string]string{
@@ -64,7 +64,7 @@ func TestAdminDashboardOverviewAndQuickLinks(t *testing.T) {
 func TestAdminDashboardExplainsMissingActiveYear(t *testing.T) {
 	admin := &auth.User{ID: 1, Active: true, Roles: []string{"admin"}}
 	stats := &master.AdminDashboardStats{ActiveStudents: 4, ActiveTeachers: 2, ActiveStaff: 1}
-	body := adminDashboardPageForTest(t, admin, stats)
+	body := dashboardPageForTest(t, admin, adminDashboardPresentation(*stats))
 	if !strings.Contains(body, "Belum ada tahun ajaran aktif, jadi total kelas belum dapat dihitung.") || !strings.Contains(body, "Kelas pada tahun aktif") || !strings.Contains(body, "—") {
 		t.Fatal("ketiadaan tahun aktif harus dijelaskan dan jumlah kelas tidak boleh tampak sebagai angka pasti")
 	}
@@ -72,13 +72,13 @@ func TestAdminDashboardExplainsMissingActiveYear(t *testing.T) {
 
 func TestNonAdminHomeKeepsExistingOverview(t *testing.T) {
 	user := &auth.User{ID: 2, Active: true, DisplayName: "Guru Uji", Username: "guru-uji", Roles: []string{"guru_mapel"}}
-	body := adminDashboardPageForTest(t, user, nil)
+	body := dashboardPageForTest(t, user, nil)
 	if !strings.Contains(body, "Selamat datang, Guru Uji") || !strings.Contains(body, "Muat ulang") || strings.Contains(body, "Ringkasan sekolah") || strings.Contains(body, "Akses cepat") {
 		t.Fatal("Beranda role selain Admin harus mempertahankan tampilan existing")
 	}
 }
 
-func adminDashboardPageForTest(t *testing.T, user *auth.User, stats *master.AdminDashboardStats) string {
+func dashboardPageForTest(t *testing.T, user *auth.User, dashboard *dashboardPresentation) string {
 	t.Helper()
 	templates, err := template.New("web").Funcs(template.FuncMap{
 		"rowNumber":   func(int, int) int { return 1 },
@@ -91,7 +91,7 @@ func adminDashboardPageForTest(t *testing.T, user *auth.User, stats *master.Admi
 	r := httptest.NewRequest("GET", "/", nil)
 	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, user))
 	w := httptest.NewRecorder()
-	app.render(w, r, "page", 200, view{Page: "home", Title: "Beranda", AdminDashboard: stats})
+	app.render(w, r, "page", 200, view{Page: "home", Title: "Beranda", Dashboard: dashboard})
 	if w.Code != 200 {
 		t.Fatalf("render status=%d: %s", w.Code, w.Body.String())
 	}
