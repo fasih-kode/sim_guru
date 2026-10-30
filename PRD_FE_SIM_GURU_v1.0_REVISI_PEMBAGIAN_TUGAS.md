@@ -128,7 +128,7 @@ Modal konfirmasi hanya aktif setelah pemeriksaan berhasil, menampilkan jumlah pe
 
 ### 3.9 Kesiswaan dan BK sederhana — rencana v1 disetujui 22 Oktober 2026
 
-Rujukan kebutuhan otoritatif: [PRD utama bab 3B](PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md#3b-kesiswaan-dan-bk--final-22-oktober-2026). Catatan Pembinaan Kesiswaan tersedia pada 8A-02, sedangkan koordinasi kasus tersedia lokal pada worktree fitur 8A-03 melalui migration 00029–00030, service, dan UI. UAT FINAL Product Owner PASS (8/8 fungsional, 4/4 UX-FIX-01, 5/5 handoff D-046); publikasi menunggu final gate Git. Modul BK mandiri tidak termasuk tahap ini.
+Rujukan kebutuhan otoritatif: [PRD utama bab 3B](PRD_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md#3b-kesiswaan-dan-bk--final-22-oktober-2026). Catatan Pembinaan Kesiswaan tersedia pada 8A-02, sedangkan koordinasi kasus telah terintegrasi lokal ke branch review melalui migration 00029–00030, service, dan UI. UAT FINAL Product Owner PASS (8/8 fungsional, 4/4 UX-FIX-01, 5/5 handoff D-046); push tertahan karena autentikasi SSH ditolak. Modul BK mandiri tidak termasuk tahap ini.
 
 - Kesiswaan melihat siswa/rekap kehadiran sekolah dan mengelola catatan pembinaan; BK mengelola catatan bimbingan untuk siswa/kasus yang ditangani.
 - Gunakan daftar catatan dan form sederhana berisi field yang ditetapkan bab 3B. Form entri mengikuti Form in Modal; tabel, pencarian, filter, badge status, dan pagination mengikuti komponen TailAdmin bersama yang sudah digunakan.
