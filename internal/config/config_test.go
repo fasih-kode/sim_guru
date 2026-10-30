@@ -28,6 +28,8 @@ func TestParse(t *testing.T) {
 		{"production verified", map[string]string{"APP_ENV": "production", "DATABASE_URL": "postgres://localhost/db?sslmode=verify-full"}, true},
 		{"photo storage disabled", map[string]string{"TEACHER_PHOTO_DIR": ""}, true},
 		{"absolute photo storage", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, true},
+		{"absolute staff photo storage", map[string]string{"STAFF_PHOTO_DIR": "/private/staff-selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, true},
+		{"relative staff photo directory", map[string]string{"STAFF_PHOTO_DIR": "private/staff-selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, false},
 		{"relative photo directory", map[string]string{"TEACHER_PHOTO_DIR": "private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, false},
 		{"missing repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies"}, false},
 		{"relative repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "sim_guru"}, false},

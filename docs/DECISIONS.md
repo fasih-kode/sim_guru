@@ -253,6 +253,14 @@ Batas implementasi: belum ditemukan tabel/layanan penugasan piket, rapat wajib a
 
 **FINAL, keputusan UI Product Owner DEV-03G3-UX-01.** Pencarian dan filter daftar wajib langsung memperbarui hasil tanpa submit manual atau reload halaman penuh saat JavaScript tersedia. Debounce server default 350 ms dengan GET HTMX, URL yang dapat dibuka ulang, fokus/filter tetap, pagination kembali ke halaman pertama saat filter berubah, serta penolakan respons basi. Pencarian lokal hanya atas data lengkap dalam cakupan browser. Data paginasi SQL harus dicari di server sebelum LIMIT/OFFSET. Modal/isian mutasi yang belum disimpan tidak boleh hilang. Loading/error/retry/hasil kosong serta aksesibilitas memakai pola TailAdmin bersama. Tidak memaksa search box baru pada halaman tanpa kebutuhan. Tidak ada perubahan kebijakan role atau bisnis kehadiran. Instruksi permanen ada di AGENTS dan PRD FE; peta halaman pada INSTANT_SEARCH_AUDIT. Product Owner menyatakan UAT ulang PASS dan publikasi mengikuti final gate yang sudah diotorisasi.
 
+
+## D-041 — Kehadiran mandiri Pegawai TU (29 Oktober 2026)
+
+**FINAL, disetujui Product Owner untuk DEV-03G4-B.** Pegawai TU mencatat Masuk/Pulang untuk dirinya sendiri hanya jika identitas master pegawai aktif ditautkan ke akun aktif dengan role `pegawai_tu`. Capture menggunakan GPS, geofence, batas akurasi, selfie, waktu server dan tanggal WIB; satu Masuk dan satu Pulang diperbolehkan per tanggal WIB. Pulang tanpa Masuk tetap sah. Pegawai membaca riwayat dan bukti miliknya, tetapi tidak dapat mengubah atau membatalkan catatannya. Role TU biasa tidak mendapat kewenangan mengelola kehadiran guru. Aturan perangkapan `pengelola_kehadiran_guru` dan larangan koreksi diri sendiri tetap mengikuti D-039.
+
+Event, histori, metadata dan storage foto TU terpisah dari domain guru; foto dihapus setelah dua bulan kalender sementara identitas, metadata, catatan dan histori dipertahankan. Kehadiran TU tidak masuk rekap kewajiban mengajar guru. Belum ada aturan jam kerja, keterlambatan berbasis jadwal, Alpa otomatis, persentase atau kewajiban nonmengajar untuk TU. D-041 tidak mengubah master guru, role otomatis, maupun perilaku kehadiran guru/siswa.
+
+
 ## D-042 — Cakupan baca catatan pembinaan Kesiswaan (29 Oktober 2026)
 
 **FINAL, disetujui eksplisit Product Owner pada Fase 8A.** Kesiswaan mengelola seluruh catatan pembinaan siswa dan Kepala Sekolah membaca catatan seluruh sekolah. Wali Kelas membaca catatan siswa hanya jika penempatan kelas siswa aktif dan penugasan Wali Kelas yang sesuai berlaku pada saat pembacaan. Perpindahan siswa mengalihkan cakupan kepada Wali Kelas baru; mantan Wali Kelas tidak mempertahankan akses karena penugasan historis. Jika penempatan atau penugasan aktif tidak dapat dipastikan, akses Wali Kelas ditolak. Identitas dan kelas siswa pada saat kejadian tetap disimpan sebagai snapshot historis.

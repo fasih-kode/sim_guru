@@ -82,6 +82,9 @@ func New(check Check, options Options) (http.Handler, error) {
 
 	mux.HandleFunc("GET /kehadiran-saya", a.require("", a.teacherAttendance))
 	mux.HandleFunc("POST /kehadiran-saya", a.require("", a.teacherAttendance))
+	mux.HandleFunc("GET /pegawai/kehadiran-saya", a.require("", a.staffAttendance))
+	mux.HandleFunc("POST /pegawai/kehadiran-saya", a.require("", a.staffAttendance))
+	mux.HandleFunc("GET /pegawai/kehadiran-saya/foto/{id}", a.require("", a.staffAttendancePhoto))
 	mux.HandleFunc("POST /kehadiran-saya/permintaan", a.require("", a.teacherAttendanceRequest))
 	mux.HandleFunc("GET /tu/kehadiran-guru", a.require("pengelola_kehadiran_guru", a.teacherAttendanceManagement))
 	mux.HandleFunc("POST /tu/kehadiran-guru/manual", a.require("pengelola_kehadiran_guru", a.recordTeacherAttendanceManual))
@@ -261,7 +264,7 @@ func New(check Check, options Options) (http.Handler, error) {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-		if r.URL.Path == "/absensi/pemindai" || r.URL.Path == "/kehadiran-saya" {
+		if r.URL.Path == "/absensi/pemindai" || r.URL.Path == "/kehadiran-saya" || r.URL.Path == "/pegawai/kehadiran-saya" {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		}
 		protected.ServeHTTP(w, r)

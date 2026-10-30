@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func serve(ctx context.Context, server *http.Server, purger teacherPhotoPurger, logger *slog.Logger) error {
+func serve(ctx context.Context, server *http.Server, purger any, logger *slog.Logger) error {
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -25,10 +25,10 @@ func serve(ctx context.Context, server *http.Server, purger teacherPhotoPurger, 
 	go func() { errs <- server.Serve(listener) }()
 	logger.Info("server dimulai", "address", server.Addr)
 	if purger == nil {
-		logger.Info("worker retensi foto guru nonaktif")
+		logger.Info("worker retensi foto kehadiran nonaktif")
 		close(workerDone)
 	} else {
-		logger.Info("worker retensi foto guru aktif")
+		logger.Info("worker retensi foto kehadiran aktif")
 		ticker := time.NewTicker(teacherPhotoRetentionInterval)
 		go func() {
 			defer close(workerDone)

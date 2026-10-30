@@ -1,6 +1,7 @@
 (() => {
   const root = document.querySelector('[data-teacher-attendance]');
   if (!root) return;
+  const support = root.hasAttribute('data-staff-attendance') ? 'Admin sekolah' : 'TU Pengelola Kehadiran Guru';
   const dialog = root.querySelector('[data-teacher-attendance-modal]');
   const form = root.querySelector('[data-attendance-form]');
   const video = root.querySelector('[data-attendance-video]');
@@ -51,13 +52,13 @@
     if (message === outsideRadiusMessage) {
       errorTitle.textContent = 'Di luar radius sekolah';
       errorMessage.textContent = 'Absensi tidak dapat dicatat karena lokasi Anda berada di luar area kehadiran sekolah.';
-      errorGuidance.textContent = 'Perbarui lokasi atau hubungi TU Pengelola Kehadiran Guru.';
+      errorGuidance.textContent = `Perbarui lokasi atau hubungi ${support}.`;
       errorGuidance.hidden = false;
       return;
     }
     errorTitle.textContent = 'Absensi belum dapat dicatat';
     errorMessage.textContent = message;
-    errorGuidance.textContent = 'Ikuti petunjuk di atas atau hubungi TU Pengelola Kehadiran Guru.';
+    errorGuidance.textContent = `Ikuti petunjuk di atas atau hubungi ${support}.`;
     errorGuidance.hidden = false;
   }
   function controls() {
@@ -97,7 +98,7 @@
     if (!button || button.disabled || busy) return;
     reset();
     if (!window.isSecureContext || !window.crypto?.getRandomValues) {
-      window.alert('GPS dan kamera memerlukan HTTPS atau localhost pada perangkat yang sama. Hubungi TU Pengelola Kehadiran Guru.');
+      window.alert(`GPS dan kamera memerlukan HTTPS atau localhost pada perangkat yang sama. Hubungi ${support}.`);
       return;
     }
     action = button.dataset.attendanceAction;
@@ -114,7 +115,7 @@
     position = null;
     showError('');
     controls();
-    if (!navigator.geolocation) { showError('Lokasi tidak tersedia. Hubungi TU Pengelola Kehadiran Guru.'); return; }
+    if (!navigator.geolocation) { showError(`Lokasi tidak tersedia. Hubungi ${support}.`); return; }
     locationPending = true;
     locationButton.disabled = true;
     locationStatus.textContent = 'Mengambil lokasi…';
@@ -124,7 +125,7 @@
       const { latitude, longitude, accuracy } = result.coords;
       if (![latitude, longitude, accuracy].every(Number.isFinite) || accuracy < 0 || accuracy > 50) {
         locationStatus.textContent = 'Lokasi belum cukup akurat.';
-        showError('Coba di tempat dengan sinyal lebih baik atau minta bantuan TU Pengelola Kehadiran Guru.');
+        showError(`Coba di tempat dengan sinyal lebih baik atau minta bantuan ${support}.`);
       } else {
         position = { latitude, longitude, accuracy };
         locationStatus.textContent = `Lokasi siap · akurasi ${Math.ceil(accuracy)} meter.`;
@@ -135,7 +136,7 @@
       stopCamera();
       locationPending = false;
       locationStatus.textContent = 'Lokasi gagal diambil.';
-      showError('Izin lokasi ditolak atau sinyal belum tersedia. Coba kembali atau hubungi TU Pengelola Kehadiran Guru.');
+      showError(`Izin lokasi ditolak atau sinyal belum tersedia. Coba kembali atau hubungi ${support}.`);
       controls();
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
   });
@@ -149,7 +150,7 @@
     canvas.hidden = true;
     showError('');
     controls();
-    if (!navigator.mediaDevices?.getUserMedia) { showError('Kamera tidak tersedia. Gunakan HTTPS atau localhost, atau hubungi TU Pengelola Kehadiran Guru.'); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { showError(`Kamera tidak tersedia. Gunakan HTTPS atau localhost, atau hubungi ${support}.`); return; }
     cameraPending = true;
     cameraButton.disabled = true;
     progress.textContent = 'Membuka kamera…';
@@ -169,7 +170,7 @@
       stopCamera();
       cameraPending = false;
       progress.textContent = 'Kamera gagal dibuka.';
-      showError('Izin kamera ditolak atau kamera sedang digunakan. Coba kembali atau hubungi TU Pengelola Kehadiran Guru.');
+      showError(`Izin kamera ditolak atau kamera sedang digunakan. Coba kembali atau hubungi ${support}.`);
       controls();
     }
   }
@@ -239,7 +240,7 @@
       const page = new DOMParser().parseFromString(body, 'text/html');
       const next = page.querySelector('[data-teacher-attendance]');
       if (!next) {
-        showError('Sesi atau formulir tidak berlaku. Muat ulang halaman dan periksa status, atau hubungi TU Pengelola Kehadiran Guru.');
+        showError(`Sesi atau formulir tidak berlaku. Muat ulang halaman dan periksa status, atau hubungi ${support}.`);
       } else if (response.ok && response.redirected) {
         refreshStatus(page);
         const result = root.querySelector('[data-attendance-result]');
@@ -250,7 +251,7 @@
         root.querySelector('[data-teacher-attendance-status]').focus?.();
       } else {
         refreshStatus(page);
-        showError(next.dataset.responseError || 'Pencatatan belum berhasil. Coba kirim ulang atau hubungi TU Pengelola Kehadiran Guru.');
+        showError(next.dataset.responseError || `Pencatatan belum berhasil. Coba kirim ulang atau hubungi ${support}.`);
         if (response.status === 409 || response.status === 422 || response.status === 413) {
           progress.textContent = 'Periksa status terbaru. Tutup dialog untuk memulai tindakan baru.';
           // Respons definitif ditolak; retry bukti ini tidak diperlukan.
@@ -258,7 +259,7 @@
         }
       }
     } catch (_) {
-      if (current(token)) showError('Respons belum diterima. Coba kirim lagi dengan foto dan lokasi yang sama, atau hubungi TU Pengelola Kehadiran Guru.');
+      if (current(token)) showError(`Respons belum diterima. Coba kirim lagi dengan foto dan lokasi yang sama, atau hubungi ${support}.`);
     } finally {
       clearTimeout(timeout);
       if (token === generation) {

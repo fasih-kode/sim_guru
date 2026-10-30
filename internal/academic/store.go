@@ -11,8 +11,9 @@ import (
 )
 
 type Store struct {
-	DB     *sql.DB
-	Photos TeacherAttendancePhotoStorage
+	DB          *sql.DB
+	Photos      TeacherAttendancePhotoStorage
+	StaffPhotos StaffAttendancePhotoStorage
 }
 
 type rowScanner interface{ Scan(...any) error }
