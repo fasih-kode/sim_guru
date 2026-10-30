@@ -94,19 +94,30 @@ func TestSidebarKeepsActiveRoleMenuExpanded(t *testing.T) {
 		name, path, active, group string
 		roles                     []string
 	}{
-		{name: "admin siswa", path: "/master/students", active: "students", group: "admin", roles: []string{"admin"}},
+		{name: "admin siswa", path: "/master/students", active: "students", group: "admin-master", roles: []string{"admin"}},
 		{name: "kurikulum siswa", path: "/master/students", active: "students", group: "curriculum-students", roles: []string{"kurikulum"}},
 		{name: "kurikulum guru", path: "/master/teachers", active: "teachers", group: "curriculum-students", roles: []string{"kurikulum"}},
-		{name: "admin guru", path: "/master/teachers", active: "teachers", group: "admin", roles: []string{"admin"}},
+		{name: "admin guru", path: "/master/teachers", active: "teachers", group: "admin-master", roles: []string{"admin"}},
 		{name: "kurikulum kelas", path: "/akademik/kelas/4/wali", active: "classes", group: "curriculum-students", roles: []string{"kurikulum"}},
-		{name: "admin penempatan", path: "/admin/placements", active: "placements", group: "admin", roles: []string{"admin"}},
+		{name: "admin penempatan", path: "/admin/placements", active: "placements", group: "admin-master", roles: []string{"admin"}},
+		{name: "admin pengguna dan role", path: "/admin/users", active: "users", group: "admin-access", roles: []string{"admin"}},
+		{name: "admin riwayat akses", path: "/admin/audit", active: "audit", group: "admin-access", roles: []string{"admin"}},
+		{name: "admin penanganan kehadiran TU", path: "/admin/kehadiran-tu", active: "teacher-attendance-management", group: "admin-attendance", roles: []string{"admin"}},
+		{name: "admin lokasi kehadiran guru", path: "/admin/attendance/location", active: "teacher-attendance-location", group: "admin-attendance", roles: []string{"admin"}},
+		{name: "guru mapel kehadiran pribadi", path: "/kehadiran-saya", active: "teacher-attendance", group: "teacher-attendance", roles: []string{"guru_mapel"}},
+		{name: "wali kelas rekap pribadi", path: "/kehadiran-saya/rekap", active: "teacher-recap", group: "teacher-attendance", roles: []string{"wali_kelas"}},
+		{name: "guru mapel jadwal", path: "/jadwal-saya", active: "my-schedule", group: "guru-mapel", roles: []string{"guru_mapel"}},
+		{name: "guru mapel detail absensi", path: "/jadwal-saya/absensi/catatan/3", active: "lesson-attendance", group: "guru-mapel", roles: []string{"guru_mapel"}},
+		{name: "kurikulum mengoreksi absensi", path: "/jadwal-saya/absensi", active: "lesson-attendance", group: "curriculum-schedule", roles: []string{"kurikulum"}},
+		{name: "kurikulum guru mapel route bersama", path: "/jadwal-saya/absensi", active: "lesson-attendance", group: "guru-mapel", roles: []string{"kurikulum", "guru_mapel"}},
+		{name: "pengelola recap terpisah dari recap pribadi", path: "/tu/kehadiran-guru/rekap", active: "managed-teacher-recap", group: "teacher-attendance-management", roles: []string{"guru_mapel", "pegawai_tu", "pengelola_kehadiran_guru"}},
 		{name: "kurikulum penempatan", path: "/admin/placements", active: "placements", group: "curriculum-students", roles: []string{"kurikulum"}},
 		{name: "kalender akademik", path: "/akademik/tahun-ajaran", active: "years", group: "curriculum-calendar", roles: []string{"kurikulum"}},
 		{name: "struktur kurikulum", path: "/akademik/struktur-kurikulum", active: "curriculum-structure", group: "curriculum-subjects", roles: []string{"kurikulum"}},
 		{name: "jadwal mingguan", path: "/akademik/jadwal", active: "weekly-timetable", group: "curriculum-schedule", roles: []string{"kurikulum"}},
 		{name: "impor jadwal", path: "/akademik/jadwal/impor", active: "weekly-timetable", group: "curriculum-schedule", roles: []string{"kurikulum"}},
 		{name: "transisi siswa", path: "/akademik/transisi", active: "transitions", group: "curriculum-students", roles: []string{"kurikulum"}},
-		{name: "gabungan memilih menu admin yang terlihat", path: "/master/students", active: "students", group: "admin", roles: []string{"admin", "kurikulum"}},
+		{name: "gabungan memilih menu admin yang terlihat", path: "/master/students", active: "students", group: "admin-master", roles: []string{"admin", "kurikulum"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

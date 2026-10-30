@@ -45,7 +45,7 @@ func TestInstantSearchBrowserHarness(t *testing.T) {
 			http.FileServer(http.FS(content)).ServeHTTP(w, r)
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: 1, Active: true, DisplayName: "Fixture UI tanpa akun DB", Roles: []string{"admin", "kurikulum", "pegawai_tu", "pengelola_kehadiran_guru", "kesiswaan"}}))
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: 1, Active: true, DisplayName: "Fixture UI tanpa akun DB", Roles: []string{"admin", "kurikulum", "guru_mapel", "wali_kelas", "pegawai_tu", "pengelola_kehadiran_guru", "kesiswaan"}}))
 		if r.Method == "POST" {
 			if r.URL.Path != "/kesiswaan/pembinaan/1/status" {
 				http.Error(w, "Fixture tidak menyimpan data", 405)

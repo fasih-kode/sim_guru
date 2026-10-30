@@ -315,3 +315,12 @@ Catatan konseling pribadi disimpan terpisah dari entri koordinasi kasus dan dari
 5. GET tidak mengubah owner, status, atau histori. Penempatan/penugasan yang tidak jelas, stale version, dan pengambilalihan berulang ditolak tanpa mutasi. Tidak ada status baru, pengalihan otomatis, atau penimpaan histori.
 
 D-046 melengkapi D-043–D-045 tanpa mengubah batas kerahasiaan konseling D-045, akses Catatan Pembinaan existing D-042, urutan formal D-044, ataupun status kasus yang sudah ditetapkan.
+
+
+## D-047 — Standar navigasi frontend global (30 Oktober 2026)
+
+**FINAL, disetujui Product Owner.** Semua halaman dan role SIM-GURU yang memiliki beberapa halaman dalam satu kelompok navigasi menggunakan horizontal navigation links bergaya tabs TailAdmin Free: setiap link memiliki ikon, link aktif berteks biru dengan underline biru, dan hanya satu link aktif dalam kelompok. Sidebar menampilkan kelompok/menu utama tanpa dropdown submenu; link kelompok membuka halaman pertama yang memang diizinkan pengguna.
+
+Navigasi tetap berbasis URL dan link HTML biasa, bukan SPA atau widget ARIA tab. Link aktif memakai `aria-current="page"`; parent sidebar tetap aktif pada halaman anak, termasuk detail/tambah/edit. Tab yang tidak diizinkan tidak ditampilkan, role gabungan tidak menggandakan menu, dan otorisasi server tetap menjadi sumber kebenaran. Tampilan ponsel mendukung geser horizontal tanpa memperlebar halaman.
+
+Kelompok satu halaman tidak memerlukan tab. Form, dialog, dan wizard bukan tab navigasi. Kelompok dengan banyak halaman ditata berdasarkan pekerjaan yang logis tanpa tab bertingkat. Implementasi memakai komponen bersama yang dirinci dalam [UI Standards](UI_STANDARDS.md) dan PRD frontend. Keputusan ini menetapkan gaya navigasi tanpa menambah permission atau mengubah aturan bisnis.

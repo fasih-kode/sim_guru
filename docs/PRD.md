@@ -47,3 +47,5 @@ D-034 melengkapi fondasi Fase 8 dengan tanggal penempatan massal Admin: lihat pe
 Fase 8 urutan 2 (D-035): harian siswa, kartu QR/cetak/ganti, manual, koreksi dan histori tersedia. Acuan PRD utama 7.3/pelengkap D-035, FE, DECISIONS dan HANDOVER; urutan 3–5 belum dianggap selesai.
 
 D-036 (24 Oktober 2026) mengganti penundaan keterlambatan dan jam Hadir opsional: Kesiswaan mengatur batas/toleransi bertanggal/rombel, penilaian tersimpan sebagai snapshot, Petugas memakai jam Hadir wajib dan Isi cepat per kelas. Lihat PRD utama 7.6, FE dan DECISIONS; status verifikasi/pemasangan pada HANDOVER.
+
+Standar navigasi frontend global D-047: [UI Standards](UI_STANDARDS.md), dengan panduan implementasi pada [PRD Frontend](../PRD_FE_SIM_GURU_v1.0_REVISI_PEMBAGIAN_TUGAS.md).

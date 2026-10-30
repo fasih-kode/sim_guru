@@ -5,6 +5,8 @@
 
 ## 0. Stack dan aturan UI
 
+**Navigasi global — D-047 (FINAL):** semua kelompok dengan beberapa halaman memakai horizontal navigation links bergaya tabs TailAdmin Free, dengan ikon, teks/underline biru aktif, satu tab aktif, link native dan `aria-current="page"`. Sidebar hanya menampilkan kelompok utama; parent menuju halaman awal yang diizinkan dan tetap aktif pada halaman anak. Role/permission memfilter kelompok dan tab tanpa mengganti otorisasi server atau menggandakan navigasi pada role gabungan. Pada ponsel bar dapat digeser horizontal tanpa overflow halaman. Gunakan implementasi bersama di `internal/web/section_navigation.go`, partial `section-navigation-tabs`, dan stylesheet `.navigation-*`; jangan membuat sistem tab baru. Halaman tunggal tidak perlu tab, sedangkan form/dialog/wizard bukan tab navigasi. Kelompok panjang dibagi secara logis tanpa tab bertingkat. Rincian implementasi dan aksesibilitas: [UI Standards](docs/UI_STANDARDS.md).
+
 - Ubuntu 26.04 LTS untuk pengembangan; Go `html/template` merender layout dan fragmen; htmx menangani pembaruan sebagian halaman.
 - TailAdmin Free HTML + Tailwind CSS sebagai basis visual: https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template
 - Adaptasi sidebar, header, card, tabel, formulir, modal, dan state dari TailAdmin; Alpine.js boleh untuk interaksi visual lokal. Jangan membangun SPA React/Next/Vue.

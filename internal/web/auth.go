@@ -42,41 +42,43 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
-	LiveList                    bool
-	TeacherRecap                *teacherRecapView
-	TeacherReports              *teacherReportsView
-	TeacherAttendance           *teacherAttendanceView
-	StaffAttendance             *staffAttendanceView
-	StudentGuidance             *studentGuidanceView
-	StudentCases                *studentCasesView
-	TeacherAttendanceManagement *teacherAttendanceManagementView
-	TeacherAttendanceRecord     *teacherAttendanceRecordView
-	Arrival                     *arrivalView
-	Daily                       *dailyView
-	Foundation                  *foundationView
-	TeacherLocation             *teacherLocationView
-	Movement                    *movementView
-	ASCImport                   *ascImportView
-	User                        *auth.User
-	CSRF                        template.HTML
-	Page, Title, Error, Message string
-	NavActive, NavGroup         string
-	ModalOpen                   bool
-	ModalID                     string
-	Users                       []auth.User
-	Input                       auth.Input
-	Editing                     int64
-	RoleChoices                 []roleChoice
-	Audits                      []auth.Audit
-	Filter                      auth.Filter
-	Previous, Next              int
-	Master                      *masterView
-	Import                      *importView
-	Academic                    *academicView
-	Placement                   *placementView
-	PlacementHistory            []academic.PlacementHistory
-	Transition                  *transitionView
-	LessonAttendance            *lessonAttendanceView
+	LiveList                            bool
+	TeacherRecap                        *teacherRecapView
+	TeacherReports                      *teacherReportsView
+	TeacherAttendance                   *teacherAttendanceView
+	StaffAttendance                     *staffAttendanceView
+	StudentGuidance                     *studentGuidanceView
+	StudentCases                        *studentCasesView
+	TeacherAttendanceManagement         *teacherAttendanceManagementView
+	TeacherAttendanceRecord             *teacherAttendanceRecordView
+	Arrival                             *arrivalView
+	Daily                               *dailyView
+	Foundation                          *foundationView
+	TeacherLocation                     *teacherLocationView
+	Movement                            *movementView
+	ASCImport                           *ascImportView
+	User                                *auth.User
+	CSRF                                template.HTML
+	Page, Title, Error, Message         string
+	NavActive, NavGroup                 string
+	NavigationSection, NavigationActive string
+	NavigationTabs                      []navigationTab
+	ModalOpen                           bool
+	ModalID                             string
+	Users                               []auth.User
+	Input                               auth.Input
+	Editing                             int64
+	RoleChoices                         []roleChoice
+	Audits                              []auth.Audit
+	Filter                              auth.Filter
+	Previous, Next                      int
+	Master                              *masterView
+	Import                              *importView
+	Academic                            *academicView
+	Placement                           *placementView
+	PlacementHistory                    []academic.PlacementHistory
+	Transition                          *transitionView
+	LessonAttendance                    *lessonAttendanceView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -87,6 +89,8 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.User = principal(r)
 	v.CSRF = csrf.TemplateField(r)
 	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
+	v.NavigationSection, v.NavigationActive = sectionNavigationState(r.URL.Path, v.User)
+	v.NavigationTabs = sectionNavigationTabs(v.NavigationSection, v.NavigationActive, v.User)
 	v.LiveList = liveListPage(v.Page)
 	if name == "page" && v.LiveList && r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-List-Request") == "true" {
 		name = "list-fragment"
@@ -117,13 +121,13 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/kehadiran-saya/rekap":
 		return "teacher-recap", "teacher-attendance"
 	case path == "/tu/kehadiran-guru/rekap":
-		return "teacher-recap", "teacher-attendance-management"
+		return "managed-teacher-recap", "teacher-attendance-management"
 	case strings.HasPrefix(path, "/kehadiran-saya"):
 		return "teacher-attendance", "teacher-attendance"
 	case strings.HasPrefix(path, "/tu/kehadiran-guru"):
 		return "teacher-attendance-management", "teacher-attendance-management"
 	case strings.HasPrefix(path, "/admin/kehadiran-tu"):
-		return "teacher-attendance-management", "teacher-attendance-management"
+		return "teacher-attendance-management", "admin-attendance"
 	case path == "/kesiswaan/batas-kedatangan":
 		return "arrival-rules", "attendance"
 	case path == "/absensi/harian/cepat":
@@ -138,29 +142,47 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		if user != nil && user.HasRole("kurikulum") && !user.HasRole("guru_mapel") {
 			return "lesson-attendance", "curriculum-schedule"
 		}
-		return "lesson-attendance", "schedule"
+		if user != nil && user.HasRole("guru_mapel") {
+			return "lesson-attendance", "guru-mapel"
+		}
+		return "", ""
 	case strings.HasPrefix(path, "/jadwal-saya/"):
-		return "my-schedule", "schedule"
+		if user != nil && user.HasRole("guru_mapel") {
+			return "my-schedule", "guru-mapel"
+		}
+		return "", ""
 	case path == "/":
 		return "home", "menu"
 	case strings.HasPrefix(path, "/akademik/penempatan/"):
+		if adminMenu {
+			return "placements", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "placements", "curriculum-students"
 		}
 		return "placements", roleMenu
 	case strings.HasPrefix(path, "/students/"):
+		if adminMenu {
+			return "students", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "students", "curriculum-students"
 		}
 		return "students", roleMenu
 	case strings.HasPrefix(path, "/master/students"):
+		if adminMenu {
+			return "students", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "students", "curriculum-students"
 		}
 		return "students", roleMenu
 	case strings.HasPrefix(path, "/master/staff"):
-		return "staff", roleMenu
+		return "staff", "admin-master"
 	case strings.HasPrefix(path, "/master/teachers"):
+		if adminMenu {
+			return "teachers", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "teachers", "curriculum-students"
 		}
@@ -168,6 +190,9 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case strings.HasPrefix(path, "/master/subjects"):
 		return "subjects", "curriculum-subjects"
 	case strings.HasPrefix(path, "/admin/placements"), strings.HasPrefix(path, "/akademik/histori/penempatan/"):
+		if adminMenu {
+			return "placements", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "placements", "curriculum-students"
 		}
@@ -175,11 +200,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case strings.HasPrefix(path, "/akademik/transisi"):
 		return "transitions", "curriculum-students"
 	case strings.HasPrefix(path, "/admin/users"):
-		return "users", "admin"
+		return "users", "admin-access"
 	case path == "/admin/attendance/location":
-		return "teacher-attendance-location", "admin"
+		return "teacher-attendance-location", "admin-attendance"
 	case strings.HasPrefix(path, "/admin/audit"):
-		return "audit", "admin"
+		return "audit", "admin-access"
 	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):
 		return "years", "curriculum-calendar"
 	case path == "/akademik/kalender-sekolah":
@@ -199,10 +224,16 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/akademik/jadwal" || path == "/akademik/jadwal/impor":
 		return "weekly-timetable", "curriculum-schedule"
 	case path == "/jadwal-saya":
-		return "my-schedule", "schedule"
+		if user != nil && user.HasRole("guru_mapel") {
+			return "my-schedule", "guru-mapel"
+		}
+		return "", ""
 	case strings.HasPrefix(path, "/wali-kelas"):
 		return "my-classes", "wali"
 	case path == "/akademik/kelas" || strings.HasPrefix(path, "/akademik/kelas/") || strings.HasPrefix(path, "/akademik/histori/class/"):
+		if adminMenu {
+			return "classes", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "classes", "curriculum-students"
 		}

@@ -133,6 +133,17 @@ if (sidebar && sidebarToggle && sidebarBackdrop) {
   setSidebarOpen(desktopSidebar.matches);
 }
 
+// Deep link pada ponsel harus langsung menampilkan tab aktif di dalam strip geser.
+const navigationTabsViewport = document.querySelector('[data-navigation-tabs]');
+const activeNavigationTab = navigationTabsViewport?.querySelector('[aria-current="page"]');
+if (navigationTabsViewport && activeNavigationTab && navigationTabsViewport.scrollWidth > navigationTabsViewport.clientWidth) {
+  const tabRect = activeNavigationTab.getBoundingClientRect();
+  const viewportRect = navigationTabsViewport.getBoundingClientRect();
+  const centerOffset = tabRect.left + tabRect.width / 2 - (viewportRect.left + navigationTabsViewport.clientWidth / 2);
+  const maxScroll = navigationTabsViewport.scrollWidth - navigationTabsViewport.clientWidth;
+  navigationTabsViewport.scrollLeft = Math.max(0, Math.min(maxScroll, navigationTabsViewport.scrollLeft + centerOffset));
+}
+
 // Inisialisasi per elemen mencegah listener ganda setelah hasil HTMX diganti.
 const contentCleanup = new WeakMap();
 function registerPageCleanup(element, cleanup) { contentCleanup.set(element, cleanup); }

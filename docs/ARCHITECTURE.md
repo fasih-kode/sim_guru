@@ -20,6 +20,8 @@ SIM-GURU adalah modular monolith Go dengan SSR. Fondasi aplikasi, autentikasi/ad
 | scripts | Lifecycle cluster lokal dan penyalinan aset htmx |
 | internal/studentaffairs | Model dan validasi domain pembinaan Kesiswaan; package ini tidak mencakup catatan BK |
 
+Navigasi multi-halaman lintas role mengikuti D-047. `internal/web/section_navigation.go` memetakan route, role, kelompok, tab yang terlihat, dan item aktif ke view model bersama; `templates/page.html` merender partial `section-navigation-tabs`, sedangkan `web/styles/app.css`/aset embed menyediakan gaya responsif. Link tetap navigasi SSR biasa; otorisasi handler/service tidak bergantung pada visibilitas tab dan tidak berubah oleh komponen ini. Rincian UI ada di [UI Standards](UI_STANDARDS.md).
+
 ## Pembinaan Kesiswaan — Fase 8A
 
 `internal/studentaffairs` memuat model, validasi tanggal/teks/status, perubahan status beralasan dengan snapshot before/after, dan predikat cakupan role untuk unit test. `internal/academic/student_guidance.go` memeriksa role aktif dan data penempatan/penugasan langsung di PostgreSQL. Kesiswaan membuat, membaca, dan mengubah seluruh sekolah; Kepala Sekolah membaca; Wali Kelas membaca menurut penempatan aktif serta penugasan saat baca, dan akses ditolak saat cakupan ambigu. Perpindahan mengikuti Wali Kelas baru; histori penugasan tidak memberi akses lama. BK, Guru Mapel, Admin dan role lain tidak memperoleh akses otomatis.
