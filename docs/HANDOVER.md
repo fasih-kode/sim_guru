@@ -1033,3 +1033,25 @@ Kelompok multi-halaman Admin, Kurikulum, Kehadiran Guru, Guru Mapel, Penanganan 
 `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Tes role guard memastikan role Guru Mapel+Kesiswaan tetap menerima 403 pada route Admin. Smoke HTTP tanpa sesi ke halaman Admin/Kasus diarahkan ke login. Tidak ada pengujian yang mengubah database.
 
 Render sidebar role gabungan Guru Mapel+Kesiswaan diperiksa visual di browser desktop 1280×720: Kasus Siswa tampil sebagai menu langsung, Kehadiran Siswa terpisah, tidak ada heading ekstra, dan active state Kasus Siswa jelas. Browser tidak menyediakan viewport mobile pada sesi ini; stylesheet breakpoint/drawer tidak diubah, tetapi pemeriksaan visual ponsel perlu dilengkapi Product Owner saat UAT. Preview development dijalankan ulang pada `127.0.0.1:18743`; live, ready, login HTTP 200. Log startup mengonfirmasi storage foto guru dan Pegawai TU aktif. Server UAT 18745 tetap berjalan dan tidak disentuh. UAT Product Owner belum dilakukan; perubahan belum di-commit/push.
+
+## FE-REFINE-05 — Beranda Admin (31 Oktober 2026)
+
+Beranda khusus akun ber-role Admin mengganti kartu sambutan dengan empat ringkasan baca-saja: siswa aktif (mengikuti syarat aktif dan pengecualian keluar sekolah efektif yang sama dengan master), guru aktif, pegawai aktif, dan jumlah kelas pada tahun ajaran aktif. Query memakai satu agregasi untuk jumlah, setelah pemeriksaan role Admin di service. Jika belum ada tahun ajaran aktif, angka kelas ditampilkan sebagai tanda pisah dengan penjelasan bahwa jumlah belum dapat dihitung. Akses cepat menuju Data Siswa, Data Guru, Pengguna & Role, dan Penempatan Siswa. Beranda role lain tetap menggunakan tampilan sebelumnya; tidak ada route, role, izin, migration, atau perubahan data.
+
+Verifikasi: `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, `git diff --check`, serta integration `TestAdminDashboardStatsIntegration` dan `TestAccountsHTTPIntegration` PASS. Integration memakai `sim_guru_test`; sebelum tes, statusnya telah dibaca sebagai 30/30 dengan role database non-privileged. Development `sim_guru_dev` diperiksa hanya dalam transaksi baca-saja untuk memastikan migration 30 dan tidak ada foto retensi kedaluwarsa sebelum startup. Preview `make run` berjalan di `127.0.0.1:18743`; live, ready, login, dan CSS HTTP 200. Worker startup melaporkan nol foto diperiksa/dihapus pada kedua storage. Tidak ada migration atau data sekolah yang diubah.
+
+Browser embedded menolak membuka localhost karena pengaturan izin browser tersimpan, sehingga pemeriksaan visual dan login akun tidak diklaim. Preview tersedia untuk UAT Product Owner di `http://127.0.0.1:18743/login`; setelah login sebagai Admin, Beranda menampilkan dashboard baru. Belum commit/push; tunggu hasil UAT.
+
+### FE-REFINE-05 — koreksi ikon akses cepat
+
+Ikon mata pada empat kartu akses cepat diganti ikon outline yang sama dengan tab Admin tujuan: siswa, guru, pengguna/role, dan penempatan. Ikon utama berukuran 16 px di dalam bidang aksen 36 px; chevron arah juga 16 px. Kartu akses cepat memakai latar netral abu muda dan state hover, sementara statistik tetap pada kartu putih berbayang, sehingga dua jenis informasi lebih mudah dibedakan. Route, permission, query, nilai statistik, dan data tetap sama.
+
+Tes render memastikan tidak ada ikon mata, ukuran ikon aksen sesuai, setiap tautan memakai ikon tujuan yang benar, dan tampilan statistik terpisah dari akses cepat. `go test -count=1 ./...` PASS setelah revisi. Preview server dibangun ulang secara terkontrol di `127.0.0.1:18743`; login, health, dan CSS HTTP 200. Browser embedded masih menolak akses localhost akibat permission setting, maka UAT visual desktop/ponsel tetap menunggu Product Owner. Tidak commit/push.
+
+### FE-REFINE-05 — hapus tombol muat ulang pada Beranda Admin
+
+Tombol `Muat ulang` disembunyikan khusus untuk akun ber-role Admin; Beranda role lain tetap mempertahankan tombol existing. Tes render menegaskan kedua perilaku tersebut. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Server 18743 direstart normal; live/ready/login/CSS HTTP 200. Tidak ada perubahan data, query, atau permission. Product Owner dapat memuat ulang halaman untuk UAT visual; belum commit/push.
+
+### FE-REFINE-05 — UAT dan final gate (31 Oktober 2026)
+
+Product Owner menyatakan UAT final PASS. Pada final gate publikasi, `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, serta integration `TestAdminDashboardStatsIntegration` dan `TestAccountsHTTPIntegration` lulus. Tes integrasi memakai database test proyek. `git diff --check` diperiksa sebelum publikasi. Tidak ada migration, perubahan database development, atau restart server dalam final gate ini.

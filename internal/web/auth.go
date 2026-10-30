@@ -63,6 +63,7 @@ type view struct {
 	NavActive, NavGroup                 string
 	NavigationSection, NavigationActive string
 	NavigationTabs                      []navigationTab
+	AdminDashboard                      *master.AdminDashboardStats
 	ModalOpen                           bool
 	ModalID                             string
 	Users                               []auth.User

@@ -221,14 +221,7 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("POST /akademik/kelas/{id}/edit", a.require("admin", a.academicClassForm))
 	mux.HandleFunc("GET /akademik/histori/{entity}/{id}", a.require("", a.academicHistory))
 	mux.HandleFunc("GET /akademik/histori/penempatan/{id}", a.require("", a.placementHistory))
-	mux.HandleFunc("GET /{$}", a.require("", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Vary", "HX-Request")
-		name := "page"
-		if r.Header.Get("HX-Request") == "true" {
-			name = "overview"
-		}
-		a.render(w, r, name, 200, view{Page: "home", Title: "Beranda"})
-	}))
+	mux.HandleFunc("GET /{$}", a.require("", a.home))
 	csrfError := csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Form kedaluwarsa atau tidak sah. Muat ulang halaman dan coba kembali.", 403)
 	}))

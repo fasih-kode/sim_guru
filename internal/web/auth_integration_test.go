@@ -185,7 +185,7 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	}
 	login(adminClient, admin.Username, password)
 	dashboard := get(adminClient, "/", 200)
-	if !strings.Contains(dashboard, "Pengguna dan Role") || strings.Contains(dashboard, password) {
+	if !strings.Contains(dashboard, "Siswa aktif") || !strings.Contains(dashboard, "Guru aktif") || !strings.Contains(dashboard, "Pegawai aktif") || !strings.Contains(dashboard, "Kelas pada tahun aktif") || !strings.Contains(dashboard, "Akses cepat") || !strings.Contains(dashboard, `href="/master/students"`) || !strings.Contains(dashboard, `href="/master/teachers"`) || !strings.Contains(dashboard, `href="/admin/users"`) || !strings.Contains(dashboard, `href="/admin/placements"`) || strings.Contains(dashboard, password) {
 		t.Fatal("invalid administrator dashboard")
 	}
 	// A missing session logout is harmless and does not create an audit entry.
@@ -217,7 +217,7 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	teacherClient := newClient()
 	login(teacherClient, username, teacherPassword)
 	teacherPage := get(teacherClient, "/", 200)
-	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") {
+	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") || strings.Contains(teacherPage, "Ringkasan sekolah") || !strings.Contains(teacherPage, "Selamat datang,") {
 		t.Fatal("XSS or admin menu leaked")
 	}
 
