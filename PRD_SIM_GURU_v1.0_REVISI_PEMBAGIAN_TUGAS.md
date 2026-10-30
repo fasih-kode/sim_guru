@@ -84,7 +84,9 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 
 ## 3B. Kesiswaan dan BK — FINAL (D-018, diperbarui D-042 pada 29 Oktober 2026)
 
-**Status:** kebutuhan awal disetujui melalui [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026). Catatan Pembinaan Kesiswaan tahap 8A-02 telah diimplementasikan sesuai D-042. Koordinasi kasus dan layanan konseling kasus Fase 8A-03 tersedia lokal melalui migration 00029–00030, service, dan UI; UAT FINAL Product Owner PASS (8/8 fungsional, 4/4 UX-FIX-01, 5/5 handoff D-046). Final gate publikasi berlangsung; `sim_guru_dev` tidak dimigrasikan dalam proses ini.
+**Status:** kebutuhan awal disetujui melalui [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026). Catatan Pembinaan Kesiswaan 8A-02 diimplementasikan sesuai D-042. Fase 8A-03 tersedia pada worktree fitur melalui migration 00029–00030, service, dan UI. Product Owner melaporkan UAT FINAL PASS: alur 8/8, UX-FIX-01 4/4, dan handoff D-046 5/5. Final gate lokal lulus; fitur menunggu commit, integrasi ke branch review, dan publikasi. Modul BK mandiri tetap di luar cakupan.
+
+**Handoff akibat perubahan Wali Kelas — D-046 FINAL:** kasus Perlu tindak lanjut tahap Wali dapat diambil alih secara eksplisit oleh Wali aktif baru hanya jika satu penempatan aktif dan satu penugasan Wali sah dapat diverifikasi serta owner lama bukan lagi Wali aktif siswa. Alasan, owner lama/baru, pelaku, waktu, dan histori dicatat atomik. Tidak berlaku pada kasus selesai atau tahap BK/Kesiswaan; GET tidak memutasi; kondisi ambigu, stale version, dan pengulangan ditolak tanpa mutasi. Lihat [D-046](docs/DECISIONS.md#d-046--pengambilalihan-penanganan-kasus-akibat-perubahan-wali-kelas-30-oktober-2026).
 
 - **Kesiswaan:** melihat seluruh siswa dan rekap kehadiran sekolah, serta mencatat pelanggaran dan pembinaan yang dilakukan.
 - **BK:** melihat siswa yang menjadi tanggung jawabnya, serta mencatat bimbingan/konseling dan tindak lanjut pada siswa/kasus yang ditangani.
@@ -119,10 +121,6 @@ Siswa yang datang langsung ke BK memperoleh bantuan awal; Wali Kelas menerima in
 **Status setelah D-045:** hak pemantauan Wali Kelas aktif, pemilihan Guru BK aktif pada rujukan, baca ringkasan oleh Kepala Sekolah, akses catatan konseling hanya untuk BK penanggung jawab aktif, batas Kesiswaan, serta larangan akses otomatis Admin/role lain ditetapkan FINAL. Penanggung jawab aktif dapat menyelesaikan atau membuka kembali kasus dengan alasan dan histori; hanya penanggung jawab aktif yang dapat melakukan perubahan status. Penutupan tidak memerlukan approval. Tata cara formal pencatatan intake BK langsung/darurat serta penugasan ulang di luar alur normal masih perlu dirancang tanpa menahan bantuan awal/darurat.
 
 D-045 memperjelas pembacaan D-018: hak Kepala Sekolah terhadap ringkasan tidak mencakup isi konseling pribadi. Catatan konseling dipisahkan dari ringkasan koordinasi dan `student_guidance_records` existing. Hak akses Catatan Pembinaan Kesiswaan existing tetap mengikuti D-042.
-
-### Handoff penanganan tahap Wali Kelas — D-046 (FINAL, 30 Oktober 2026)
-
-Jika siswa berpindah kelas atau penugasan Wali berubah ketika kasus masih terbuka di tahap Wali Kelas, Wali Kelas baru yang dapat diverifikasi melalui penempatan dan penugasan aktif boleh mengambil alih secara eksplisit bila owner lama tidak lagi menjadi Wali aktif siswa. Pengambilalihan mencatat owner lama/baru, pelaku, waktu, alasan, dan histori append-only dalam transaksi atomik; tidak ada approval, pengalihan otomatis, atau mutasi dari GET. Akses mantan Wali tidak bertahan berdasarkan histori. Handoff tidak mengubah owner kasus pada tahap BK/Kesiswaan dan tidak berlaku untuk kasus Selesai. Ketidakjelasan cakupan, versi stale, dan pengulangan ditolak tanpa mutasi. Lihat [D-046](docs/DECISIONS.md#d-046--pengambilalihan-penanganan-kasus-akibat-perubahan-wali-kelas-30-oktober-2026).
 
 ## 4. Master Data — FINAL inti
 

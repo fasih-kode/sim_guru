@@ -29,6 +29,55 @@ type studentGuidanceView struct {
 	Next          int
 }
 
+func (a *application) redirectStudentGuidanceArchive(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/kesiswaan/kasus/arsip-pembinaan", http.StatusSeeOther)
+}
+
+func (a *application) redirectStudentGuidanceArchiveDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/kesiswaan/kasus/arsip-pembinaan/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+func (a *application) retiredStudentGuidanceMutation(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "page", http.StatusGone, view{
+		Page: "student-case-error", Title: "Arsip Pembinaan",
+		Error: "Arsip pembinaan lama hanya dapat dibaca. Catat penanganan baru melalui alur Kasus Siswa.",
+	})
+}
+
+func (a *application) studentGuidanceArchive(w http.ResponseWriter, r *http.Request) {
+	data, status, err := a.studentGuidanceListData(r)
+	if err != nil {
+		a.studentGuidanceArchiveFailure(w, r, err)
+		return
+	}
+	data.CanManage = false
+	a.render(w, r, "page", status, view{Page: "student-guidance-archive", Title: "Arsip Pembinaan", StudentGuidance: data})
+}
+
+func (a *application) studentGuidanceArchiveDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := a.studentGuidanceDetailData(r.Context(), principal(r).ID, id, false)
+	if err != nil {
+		a.studentGuidanceArchiveFailure(w, r, err)
+		return
+	}
+	a.render(w, r, "page", http.StatusOK, view{Page: "student-guidance-archive-detail", Title: "Arsip Pembinaan", StudentGuidance: data})
+}
+
+func (a *application) studentGuidanceArchiveFailure(w http.ResponseWriter, r *http.Request, err error) {
+	status, message := guidanceHTTPError(err)
+	a.render(w, r, "page", status, view{Page: "student-guidance-archive-error", Title: "Arsip Pembinaan", Error: message})
+}
+
 func (a *application) studentGuidance(w http.ResponseWriter, r *http.Request) {
 	data, status, err := a.studentGuidanceListData(r)
 	if err != nil {

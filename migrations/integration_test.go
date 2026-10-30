@@ -55,7 +55,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 28 || target != 28 {
+	if err != nil || current != 30 || target != 30 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -80,6 +80,16 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.student_guidance_records') IS NOT NULL AND to_regclass('app.student_guidance_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing student guidance tables")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.student_cases') IS NOT NULL AND to_regclass('app.student_case_entries') IS NOT NULL AND to_regclass('app.student_case_counseling_notes') IS NOT NULL AND to_regclass('app.student_case_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		t.Fatal("missing case coordination tables")
+	}
+	var nullableCaseLink, ownerGuard, historyAppendOnly, handoffEvent bool
+	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='student_guidance_records' AND column_name='case_id' AND is_nullable='YES'),
+		EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='student_cases_owner_stage_guard' AND NOT tgisinternal),
+		EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='student_case_history_append_only' AND NOT tgisinternal),
+		EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_case_history_event_type_check' AND pg_get_constraintdef(oid) LIKE '%wali_handoff%')`).Scan(&nullableCaseLink, &ownerGuard, &historyAppendOnly, &handoffEvent); err != nil || !nullableCaseLink || !ownerGuard || !historyAppendOnly || !handoffEvent {
+		t.Fatal("case link must remain optional and case guard/history trigger must exist")
 	}
 	var guidanceRecordFK, guidanceStatus, guidanceHistoryFK bool
 	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_guidance_records_student_id_fkey' AND contype='f' AND confdeltype='a'),

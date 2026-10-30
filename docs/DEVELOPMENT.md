@@ -45,7 +45,7 @@ Buka http://127.0.0.1:18743. APP_HOST default 127.0.0.1; APP_PORT default 18743.
 Secara default aplikasi tidak mempercayai `X-Forwarded-Proto` maupun `X-Forwarded-Host`. Jika reverse proxy berjalan di mesin yang sama, jalankan proses aplikasi dengan `APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128`; kosongkan variabel untuk penggunaan tanpa proxy. Daftar hanya memuat alamat koneksi proxy yang benar-benar dipercaya. Jangan gunakan `0.0.0.0/0`, jangan memasukkan seluruh domain ngrok sebagai origin tepercaya, dan jangan mengubah header forwarded dari sumber lain menjadi tepercaya. Proxy harus mengirim satu `X-Forwarded-Proto: https` dan satu `X-Forwarded-Host` yang berisi host permintaan HTTPS; aplikasi menolak nilai ganda atau host yang malformed. Pada koneksi proxy yang lolos pemeriksaan CIDR, pemeriksaan CSRF memakai skema/host HTTPS eksternal dan cookie CSRF serta sesi memakai atribut `Secure`. HTTP localhost langsung tetap memakai cookie development non-Secure. Contoh peluncuran tanpa mengubah `.env`:
 
 ```sh
-APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128 APP_REPOSITORY_ROOT="$(pwd -P)" TEACHER_PHOTO_DIR="$HOME/.local/share/sim-guru-private/teacher-photos" STAFF_PHOTO_DIR="$HOME/.local/share/sim-guru-private/staff-photos" make run
+APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128 APP_REPOSITORY_ROOT="$(pwd -P)" TEACHER_PHOTO_DIR="/path/privat/foto-guru" STAFF_PHOTO_DIR="/path/privat/foto-pegawai" make run
 ```
 
 Jika proxy berjalan pada host lain, konfigurasi hanya CIDR alamat proxy tersebut setelah memastikan jalur koneksi dan perilaku sanitasi headernya. Tidak ada wildcard origin; CSRF dan `CrossOriginProtection` tetap aktif.
@@ -95,7 +95,7 @@ Isi kedua URL dalam .env secara lokal memakai password kuat yang dimasukkan mela
 ## Mengaktifkan autentikasi
 CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak. Key development lokal sudah dibuat tanpa ditampilkan. Pada mesin baru, ganti placeholder .env.example di .env dengan secrets.token_hex(32) melalui editor lokal atau script yang tidak mencetak key ke log. Pertahankan key antar restart; rotasi key membuat form/cookie CSRF lama tidak berlaku. Jangan menyalin key antar lingkungan.
 
-Migration terbaru di repository adalah versi 26. Migration 00018 menambah fondasi kalender bertanggal dan tanggal mulai penempatan tanpa mengisi tanggal lama otomatis; migration 00019–00025 menambah fondasi absensi harian/per pelajaran dan tata kelola, laporan, serta nama permintaan koreksi kehadiran guru; migration 00026 menambah master pegawai non-guru beserta histori perubahan. Sebelum menjalankan binary terbaru, periksa status dengan `make migrate-status`; terapkan hanya migration aditif yang tertunda melalui `make migrate-up` setelah backup dan pemeriksaan yang sesuai. Migration 00017 mengarsipkan kisi jadwal yang dihapus tanpa membuang histori dan mengizinkan kisi aktif baru untuk sasaran yang sama. Tidak ada akun/password bawaan dan tidak ada akun development yang dibuat oleh pengujian.
+Migration terbaru pada source worktree ini adalah versi 30. Migration 00018 menambah fondasi kalender bertanggal dan tanggal mulai penempatan tanpa mengisi tanggal lama otomatis; migration 00019–00025 menambah fondasi absensi harian/per pelajaran dan tata kelola, laporan, serta nama permintaan koreksi kehadiran guru; migration 00026 menambah master pegawai non-guru beserta histori perubahan; migration 00027 menambah presensi mandiri pegawai TU; migration 00028 menambah catatan pembinaan Kesiswaan; migration 00029 menambah koordinasi kasus siswa; migration 00030 menambahkan event dan guard pengambilalihan kasus oleh Wali aktif baru (D-046). Status database berbeda per lingkungan dan tidak disimpulkan dari versi source. Sebelum menjalankan binary terbaru, periksa target serta status dengan `make migrate-status`; terapkan hanya migration aditif yang telah diuji melalui `make migrate-up` setelah backup dan pemeriksaan yang sesuai. Migration 00017 mengarsipkan kisi jadwal yang dihapus tanpa membuang histori dan mengizinkan kisi aktif baru untuk sasaran yang sama. Tidak ada akun/password bawaan dan tidak ada akun development yang dibuat oleh pengujian.
 
 Buat Admin pertama melalui terminal sendiri:
 
@@ -245,8 +245,8 @@ Storage foto opsional. Dengan `TEACHER_PHOTO_DIR` kosong, fitur yang sudah terse
 ```sh
 export APP_REPOSITORY_ROOT="$(pwd -P)"
 install -d -m 700 "$HOME/.local/share/sim-guru-private"
-export TEACHER_PHOTO_DIR="$HOME/.local/share/sim-guru-private/teacher-photos"
-export STAFF_PHOTO_DIR="$HOME/.local/share/sim-guru-private/staff-photos"
+export TEACHER_PHOTO_DIR="/path/privat/foto-guru"
+export STAFF_PHOTO_DIR="/path/privat/foto-pegawai"
 make run
 ```
 
@@ -266,6 +266,6 @@ Kapasitas rutin worker saat ini maksimal **50 foto per 24 jam** (ditambah satu b
 
 ## Fase 8A-02 — Catatan Pembinaan Kesiswaan
 
-Kerja fitur berlangsung pada worktree `/home/fasih/Projects/sim_guru-fase8a`, branch `feature/fase8a-kesiswaan`, setelah merge lokal baseline G4-B ke branch fitur. Migration berikutnya adalah 00028. Pengujian migration/integrasi memakai `TEST_DATABASE_URL` yang berakhiran `_test`; sementara database lokal yang tersedia bernama `sim_guru_test` dan role aplikasi tidak berhak membuat database baru. Jalankan tes migrasi/integrasi secara serial dan pastikan tidak ada runner lain pada database itu. Tes tidak pernah diarahkan ke `DATABASE_URL` atau `sim_guru_dev`.
+Kerja fitur berlangsung pada worktree `worktree Fase 8A`, branch `feature/fase8a-kesiswaan`, setelah merge lokal baseline G4-B ke branch fitur. Migration berikutnya adalah 00028. Pengujian migration/integrasi memakai `TEST_DATABASE_URL` yang berakhiran `_test`; sementara database lokal yang tersedia bernama `sim_guru_test` dan role aplikasi tidak berhak membuat database baru. Jalankan tes migrasi/integrasi secara serial dan pastikan tidak ada runner lain pada database itu. Tes tidak pernah diarahkan ke `DATABASE_URL` atau `sim_guru_dev`.
 
 Saat dibuka ke UAT kelak, migration development harus menjadi langkah terkoordinasi terpisah: periksa target/koneksi database dan backup aman, pastikan tes 00028 PASS, baru minta persetujuan/ikuti instruksi deployment development yang berlaku. Jangan mengasumsikan `sim_guru_dev` telah dimigrasikan dari hasil tes pada `sim_guru_test`. Server G4-B pada port 18743 dan konfigurasi/foto development tidak disentuh oleh pekerjaan Fase 8A-02 ini.
