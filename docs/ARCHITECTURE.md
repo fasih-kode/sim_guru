@@ -152,6 +152,14 @@ Pembatalan context server membatalkan context purge. HTTP shutdown diberi 10 det
 
 Kapasitas rutin worker saat ini dibatasi 50 foto per 24 jam, ditambah batch awal startup. Volume selfie yang melebihi kapasitas dapat menambah backlog; evaluasi frekuensi atau beberapa batch terbatas sebelum DEV-03F operasional. Batas 10 detik hanya berlaku pada graceful shutdown HTTP: jika operasi filesystem worker macet, proses tetap menunggu worker dan tidak menjamin shutdown keseluruhan selesai dalam 10 detik.
 
+## Kehadiran mandiri Pegawai TU — DEV-03G4-B
+
+Migration 00027 menambah domain terpisah `staff_attendance_events`, `staff_attendance_photos`, dan `staff_attendance_history`, dengan snapshot identitas, event Masuk/Pulang unik per pegawai/tanggal/aksi, hash idempotensi, metadata lokasi/geofence, serta pasangan event/foto yang ditegakkan FK/constraint trigger tertunda. Data ini tidak digabungkan ke event, histori, laporan atau rekap kewajiban mengajar guru. D-038/D-039 tetap menjadi aturan guru; tidak ada koreksi mandiri TU atau koreksi oleh pengelola terhadap catatannya sendiri.
+
+`Store.CaptureStaffAttendance` mengambil identitas hanya dari akun aktif yang terhubung ke `staff_members` aktif dan mempunyai role `pegawai_tu`; staff ID tidak diterima dari browser. Waktu PostgreSQL dikonversi ke tanggal WIB. Validasi geofence, radius, akurasi, normalisasi selfie JPEG, batas 100 KiB, dan tenggat retensi dua bulan kalender memakai primitive yang sama dengan capture guru. Event/foto/histori disimpan dalam transaksi; token idempotensi sama harus membawa fingerprint bukti yang sama, sedangkan aksi berbeda ditolak constraint. Pulang tanpa Masuk tetap diperbolehkan.
+
+Pembaca hari, histori, dan foto membatasi query ke akun pemilik dan role aktif; foto yang mencapai `retain_until` langsung ditolak meskipun berkas belum dihapus. Worker retensi menjalankan purge guru dan pegawai sebagai domain terpisah, masing-masing paling banyak 50 foto per siklus. Storage `STAFF_PHOTO_DIR` eksplisit dan privat, memakai instance `teacherphoto.Store` terpisah dari `TEACHER_PHOTO_DIR`; kedua direktori tidak boleh sama atau saling bersarang. Menonaktifkan storage pegawai tidak mematikan storage/worker guru. Route SSR `/pegawai/kehadiran-saya` memakai CSRF, no-store, fragment riwayat milik sendiri, serta modal GPS/selfie bersama yang hanya meminta perangkat setelah interaksi pengguna.
+
 ## Kehadiran mandiri guru — DEV-03F1
 
 `GET /kehadiran-saya` memakai `TeacherAttendanceToday(actorID)` untuk membaca identitas guru aktif, role Guru Mapel/Wali Kelas, tanggal PostgreSQL dalam WIB, dan event hari ini milik identitas tersebut. Browser tidak menentukan teacher_id ataupun tanggal. Reader memakai helper otorisasi yang sama dengan capture dan transaksi repeatable-read tanpa perintah tulis; row lock identitas diperlukan oleh helper tersebut. Event yang tidak ada ditampilkan Belum Dicatat. Sumber manual ditampilkan sebagai Dicatat Petugas.

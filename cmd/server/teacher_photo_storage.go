@@ -14,6 +14,9 @@ func openTeacherPhotoStorage(cfg config.Config) (*teacherphoto.Store, error) {
 	if cfg.TeacherPhotoDirectory == "" {
 		return nil, nil
 	}
+	if photoDirectoriesOverlap(cfg.TeacherPhotoDirectory, cfg.StaffPhotoDirectory) {
+		return nil, errors.New("storage foto guru dan pegawai harus memakai direktori privat terpisah")
+	}
 	// Root eksplisit diverifikasi sebagai tree SIM-GURU, bukan ditebak dari cwd atau binary.
 	module, err := os.ReadFile(filepath.Join(cfg.RepositoryRoot, "go.mod"))
 	fields := strings.Fields(string(module))

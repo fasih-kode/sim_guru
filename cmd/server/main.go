@@ -55,14 +55,31 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	slog.Info("storage foto kehadiran guru", "active", photos != nil)
 	if photos != nil {
 		defer photos.Close()
 	}
+	staffPhotos, err := openStaffPhotoStorage(cfg)
+	if err != nil {
+		return err
+	}
+	if staffPhotos != nil {
+		defer staffPhotos.Close()
+	}
+	slog.Info("storage foto kehadiran pegawai", "active", staffPhotos != nil)
 	academics := &academic.Store{DB: db}
-	var purge teacherPhotoPurger
 	if photos != nil {
 		academics.Photos = photos
-		purge = academics
+	}
+	academics.StaffPhotos = staffPhotos
+	var purge any
+	switch {
+	case photos != nil && staffPhotos != nil:
+		purge = allPhotoRetentionService{store: academics}
+	case photos != nil:
+		purge = teacherPhotoRetentionService{store: academics}
+	case staffPhotos != nil:
+		purge = staffPhotoRetentionService{store: academics}
 	}
 	accounts, err := auth.New(db)
 	if err != nil {

@@ -15,10 +15,10 @@ import (
 )
 
 type Config struct {
-	Environment, Address, DatabaseURL     string
-	TeacherPhotoDirectory, RepositoryRoot string
-	TrustedProxyCIDRs                     []netip.Prefix
-	CSRFKey                               []byte
+	Environment, Address, DatabaseURL                          string
+	TeacherPhotoDirectory, StaffPhotoDirectory, RepositoryRoot string
+	TrustedProxyCIDRs                                          []netip.Prefix
+	CSRFKey                                                    []byte
 }
 
 // Load reads optional local configuration without overriding exported variables.
@@ -64,16 +64,16 @@ func Parse(get func(string) string) (Config, error) {
 	if err != nil || len(key) != 32 {
 		return Config{}, errors.New("CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak")
 	}
-	photoDirectory, repositoryRoot := get("TEACHER_PHOTO_DIR"), get("APP_REPOSITORY_ROOT")
-	if photoDirectory != "" && (!filepath.IsAbs(photoDirectory) || !filepath.IsAbs(repositoryRoot)) {
-		return Config{}, errors.New("TEACHER_PHOTO_DIR dan APP_REPOSITORY_ROOT wajib berupa path absolut saat storage foto diaktifkan")
+	teacherPhotoDirectory, staffPhotoDirectory, repositoryRoot := get("TEACHER_PHOTO_DIR"), get("STAFF_PHOTO_DIR"), get("APP_REPOSITORY_ROOT")
+	if (teacherPhotoDirectory != "" || staffPhotoDirectory != "") && (!filepath.IsAbs(repositoryRoot) || (teacherPhotoDirectory != "" && !filepath.IsAbs(teacherPhotoDirectory)) || (staffPhotoDirectory != "" && !filepath.IsAbs(staffPhotoDirectory))) {
+		return Config{}, errors.New("APP_REPOSITORY_ROOT dan direktori foto yang diaktifkan wajib berupa path absolut")
 	}
 	trustedProxyCIDRs, err := parseTrustedProxyCIDRs(get("APP_TRUSTED_PROXY_CIDRS"))
 	if err != nil {
 		return Config{}, err
 	}
 	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key,
-		TeacherPhotoDirectory: photoDirectory, RepositoryRoot: repositoryRoot, TrustedProxyCIDRs: trustedProxyCIDRs}, nil
+		TeacherPhotoDirectory: teacherPhotoDirectory, StaffPhotoDirectory: staffPhotoDirectory, RepositoryRoot: repositoryRoot, TrustedProxyCIDRs: trustedProxyCIDRs}, nil
 }
 
 func parseTrustedProxyCIDRs(value string) ([]netip.Prefix, error) {

@@ -20,6 +20,12 @@ func (f photoPurgeFunc) PurgeExpiredTeacherAttendancePhotos(ctx context.Context,
 	return f(ctx, limit)
 }
 
+type staffPhotoPurgeFunc func(context.Context, int) (academic.TeacherAttendancePhotoPurgeResult, error)
+
+func (f staffPhotoPurgeFunc) PurgeExpiredStaffAttendancePhotos(ctx context.Context, limit int) (academic.TeacherAttendancePhotoPurgeResult, error) {
+	return f(ctx, limit)
+}
+
 func waitSignal(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
 	select {
@@ -95,4 +101,28 @@ func TestTeacherPhotoRetentionCancelledBeforeStart(t *testing.T) {
 		return academic.TeacherAttendancePhotoPurgeResult{}, nil
 	})
 	runTeacherPhotoRetention(ctx, purger, make(chan time.Time), slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+func TestStaffPhotoRetentionRunsWithoutTeacherStorage(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls atomic.Int32
+	var log bytes.Buffer
+	purger := staffPhotoPurgeFunc(func(cycleCtx context.Context, limit int) (academic.TeacherAttendancePhotoPurgeResult, error) {
+		if limit != academic.MaxTeacherAttendancePhotoPurgeBatch {
+			t.Errorf("limit=%d", limit)
+		}
+		if _, ok := cycleCtx.Deadline(); !ok {
+			t.Error("retention timeout missing")
+		}
+		calls.Add(1)
+		cancel()
+		return academic.TeacherAttendancePhotoPurgeResult{Examined: 2, Purged: 1, Failed: 1}, nil
+	})
+	runTeacherPhotoRetention(ctx, purger, make(chan time.Time), slog.New(slog.NewJSONHandler(&log, nil)))
+	if calls.Load() != 1 {
+		t.Fatalf("staff purge calls=%d", calls.Load())
+	}
+	if !strings.Contains(log.String(), `"domain":"pegawai"`) || !strings.Contains(log.String(), `"purged":1`) {
+		t.Fatal("staff retention result was not logged safely")
+	}
 }
