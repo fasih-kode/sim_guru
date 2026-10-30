@@ -297,9 +297,29 @@ body:has(.form-modal[open]) { overflow:hidden; }
 .teacher-report-description { max-width:280px; overflow-wrap:anywhere; }
 .teacher-report-content { overflow-wrap:anywhere; }
 
+.student-guidance-table-surface { overflow-x:auto; overscroll-behavior-inline:contain; }
+.student-guidance-table { min-width:1180px; table-layout:fixed; }
+.student-guidance-table thead tr { border-bottom:1px solid #eaecf0; background:#f9fafb; }
+.student-guidance-table th { padding:16px 20px; color:#667085; font-size:.75rem; white-space:normal; vertical-align:top; }
+.student-guidance-table td { padding:16px 20px; color:#344054; line-height:1.5; vertical-align:top; white-space:normal; overflow-wrap:anywhere; }
+.student-guidance-table td:first-child { white-space:nowrap; }
+.student-guidance-table tbody tr { border-bottom:1px solid #eaecf0; }
+.student-guidance-table tbody tr:last-child { border-bottom:0; }
+.student-guidance-table tbody tr:hover { background:#fafbff; }
+.guidance-table-text { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+@media(max-width:640px) {
+ .student-guidance-page .table-pagination { gap:4px; }
+ .student-guidance-page .table-pagination .table-page-arrow { gap:4px; padding:6px 8px; font-size:12px; }
+ .student-guidance-page .table-page-links a,.student-guidance-page .table-page-links span,.student-guidance-page .table-page-links button { min-width:28px; }
+}
+
 /* Hasil daftar tetap terlihat saat loading; tombol submit tetap menjadi fallback tanpa JS. */
 .list-feedback { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; font-size:.875rem; color:#667085; }
 .list-feedback:has([data-list-message]:not(:empty)),.list-feedback:has(.htmx-request) { margin-bottom:1rem; }
 .list-feedback .htmx-indicator { display:none; }
 .list-feedback .htmx-indicator.htmx-request { display:inline; }
 .live-list-ready [data-list-filter] button[type="submit"] { display:none; }
+.student-guidance-mobile-list { grid-template-columns:minmax(0,1fr); }
+.student-guidance-mobile-card { min-width:0; overflow-wrap:anywhere; }
+.student-guidance-mobile-card p { min-width:0; overflow-wrap:anywhere; }

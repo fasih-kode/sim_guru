@@ -17,6 +17,7 @@ import (
 
 	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
+	"github.com/fasih-kode/sim_guru/internal/studentaffairs"
 )
 
 // TestInstantSearchBrowserHarness hanya menghidangkan view sintetis di loopback.
@@ -40,15 +41,35 @@ func TestInstantSearchBrowserHarness(t *testing.T) {
 			once.Do(func() { close(done) })
 			return
 		}
-		if r.Method != "GET" {
-			http.Error(w, "Fixture tidak menyimpan data", 405)
-			return
-		}
 		if strings.HasPrefix(r.URL.Path, "/static/") {
 			http.FileServer(http.FS(content)).ServeHTTP(w, r)
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: 1, Active: true, DisplayName: "Fixture UI tanpa akun DB", Roles: []string{"admin", "kurikulum", "pegawai_tu", "pengelola_kehadiran_guru"}}))
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: 1, Active: true, DisplayName: "Fixture UI tanpa akun DB", Roles: []string{"admin", "kurikulum", "pegawai_tu", "pengelola_kehadiran_guru", "kesiswaan"}}))
+		if r.Method == "POST" {
+			if r.URL.Path != "/kesiswaan/pembinaan/1/status" {
+				http.Error(w, "Fixture tidak menyimpan data", 405)
+				return
+			}
+			_ = r.ParseForm()
+			data := &studentGuidanceView{
+				Record:    studentaffairs.GuidanceRecord{ID: 1, Version: 1, StudentNameAtEvent: "Siswa Fixture 01", ClassNameAtEvent: "8A", Date: "2026-10-20", Incident: "Kejadian Fixture", Action: "Percakapan dan tindak lanjut", Status: studentaffairs.GuidanceNeedsFollowUp},
+				CanManage: true, StatusVersion: 1,
+				StatusChange: studentaffairs.GuidanceStatusChange{Status: studentaffairs.GuidanceStatus(r.PostForm.Get("status")), Reason: r.PostForm.Get("reason")},
+			}
+			status := http.StatusUnprocessableEntity
+			data.StatusError = "Pilih status yang berbeda untuk mencatat perubahan."
+			if r.PostForm.Get("version") != "1" {
+				status = http.StatusConflict
+				data.StatusError = "Catatan pembinaan berubah. Muat ulang sebelum menyimpan kembali."
+			}
+			app.render(w, r, "student-guidance-detail", status, view{Page: "student-guidance-detail", Title: "Detail Catatan Pembinaan", StudentGuidance: data})
+			return
+		}
+		if r.Method != "GET" {
+			http.Error(w, "Fixture tidak menyimpan data", 405)
+			return
+		}
 		q := r.URL.Query().Get("q")
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		if page < 1 {
@@ -57,7 +78,7 @@ func TestInstantSearchBrowserHarness(t *testing.T) {
 		if q == "lama" {
 			time.Sleep(2 * time.Second)
 		}
-		if q == "gagal" {
+		if q == "gagal" && r.URL.Path == "/kesiswaan/pembinaan" {
 			mu.Lock()
 			failCount++
 			fail := failCount == 1
@@ -106,6 +127,57 @@ func TestInstantSearchBrowserHarness(t *testing.T) {
 					continue
 				}
 				v.TeacherReports.Reports = append(v.TeacherReports.Reports, academic.TeacherAttendanceReport{ID: int64(i), TeacherName: fmt.Sprintf("Guru Fixture %02d", i), Kind: kind, StartsOn: from, EndsOn: to, Active: true})
+			}
+		case r.URL.Path == "/kesiswaan/pembinaan":
+			v.Page = "student-guidance"
+			guidance := &studentGuidanceView{CanManage: true, Filter: studentaffairs.GuidanceFilter{Search: q, Page: page, Status: studentaffairs.GuidanceStatus(r.URL.Query().Get("status"))}}
+			for i := 1; i <= 13; i++ {
+				incident := fmt.Sprintf("Pembinaan Fixture %02d", i)
+				if i == 1 {
+					incident += " " + strings.Repeat("uraianpanjang", 35)
+				}
+				record := studentaffairs.GuidanceRecord{ID: int64(i), StudentNameAtEvent: fmt.Sprintf("Siswa Fixture %02d", i), ClassNameAtEvent: "8A", Date: "2026-10-20", Incident: incident, Action: "Percakapan dan tindak lanjut", Status: studentaffairs.GuidanceNeedsFollowUp}
+				if i%3 == 0 {
+					record.Status = studentaffairs.GuidanceCompleted
+				}
+				if q != "" && q != "gagal" && !strings.Contains(strings.ToLower(record.StudentNameAtEvent+" "+record.Incident+" "+record.Action), strings.ToLower(q)) {
+					continue
+				}
+				if guidance.Filter.Status != "" && guidance.Filter.Status != record.Status {
+					continue
+				}
+				guidance.List.Records = append(guidance.List.Records, record)
+			}
+			guidance.List.Page = page
+			start := (page - 1) * 10
+			if start > len(guidance.List.Records) {
+				start = len(guidance.List.Records)
+			}
+			end := start + 10
+			if end < len(guidance.List.Records) {
+				guidance.List.HasNext = true
+			} else {
+				end = len(guidance.List.Records)
+			}
+			guidance.List.Records = guidance.List.Records[start:end]
+			guidance.Next = 0
+			if guidance.List.HasNext {
+				guidance.Next = page + 1
+			}
+			if page > 1 {
+				guidance.Previous = page - 1
+			}
+			if r.URL.Query().Get("new") == "1" {
+				guidance.ModalOpen = true
+				guidance.Students = []studentaffairs.GuidanceStudentOption{{ID: 1, Name: "Siswa Fixture 01", ClassName: "8A"}}
+				guidance.Input = studentaffairs.GuidanceInput{Date: "2026-10-29", Status: studentaffairs.GuidanceNeedsFollowUp}
+			}
+			v.StudentGuidance = guidance
+		case strings.HasPrefix(r.URL.Path, "/kesiswaan/pembinaan/"):
+			v.Page = "student-guidance-detail"
+			v.StudentGuidance = &studentGuidanceView{
+				Record:    studentaffairs.GuidanceRecord{ID: 1, Version: 1, StudentNameAtEvent: "Siswa Fixture 01", ClassNameAtEvent: "8A", Date: "2026-10-20", Incident: "Kejadian Fixture", Action: "Percakapan dan tindak lanjut", Status: studentaffairs.GuidanceNeedsFollowUp},
+				CanManage: true, StatusVersion: 1,
 			}
 		default:
 			data := &teacherRecapView{Base: r.URL.Path, From: from, To: to, Search: q, Managed: true, Page: page, DayPage: 1}

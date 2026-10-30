@@ -13,6 +13,7 @@ function listMessage(message, retry = false) {
   if (!region) return;
   region.querySelector('[data-list-message]').textContent = message;
   region.querySelector('[data-list-retry]').hidden = !retry;
+  region.toggleAttribute('data-list-stale', retry);
 }
 
 function listProtected(region) {
@@ -144,10 +145,21 @@ document.body.addEventListener('htmx:beforeSwap', event => {
   const request = listRequests.get(event.detail.xhr);
   if (!request) return;
   const {xhr} = event.detail;
-  if (request.revision !== listRevision || !request.region.isConnected || listProtected(request.region)) { event.detail.shouldSwap = false; return; }
+  if (request.revision !== listRevision || !request.region.isConnected || listProtected(request.region)) {
+    event.detail.shouldSwap = false;
+    event.detail.isError = false;
+    request.failureMessage = 'Permintaan pencarian lama diabaikan. Hasil terbaru tetap dipertahankan.';
+    return;
+  }
   if (xhr.status !== 200 || !new DOMParser().parseFromString(xhr.responseText,'text/html').querySelector('#list-region')) {
     event.detail.shouldSwap = false;
-    listMessage(xhr.status === 401 || xhr.status === 403 ? 'Sesi atau hak akses berubah. Muat ulang halaman untuk melanjutkan.' : 'Hasil belum dapat diperbarui. Periksa filter atau coba lagi.',true);
+    event.detail.isError = false;
+    request.failureMessage = xhr.status === 401 || xhr.status === 403
+      ? 'Sesi atau hak akses berubah. Daftar yang tampil adalah hasil sebelumnya; muat ulang untuk melanjutkan.'
+      : xhr.status === 400 || xhr.status === 422
+        ? 'Filter pencarian tidak valid. Daftar yang tampil adalah hasil sebelumnya; periksa filter lalu coba lagi.'
+        : 'Hasil terbaru belum diterima. Daftar yang tampil adalah hasil sebelumnya; periksa koneksi lalu coba lagi.';
+    listMessage(request.failureMessage,true);
     return;
   }
   listFocus = request;
@@ -175,6 +187,9 @@ document.body.addEventListener('htmx:afterRequest', event => {
   const request = listRequests.get(event.detail.xhr);
   request?.region.removeAttribute('aria-busy');
   document.querySelector('[data-list-region]')?.removeAttribute('aria-busy');
-  if (request && event.detail.failed && request.revision === listRevision) listMessage('Hasil belum dapat diperbarui. Periksa koneksi dan coba lagi.',true);
+  if (request && event.detail.failed && request.revision === listRevision && !request.failureMessage) {
+    request.failureMessage = 'Hasil terbaru belum diterima. Daftar yang tampil adalah hasil sebelumnya; periksa koneksi lalu coba lagi.';
+    listMessage(request.failureMessage,true);
+  }
 });
 document.addEventListener('DOMContentLoaded', () => initializeLiveLists());

@@ -18,6 +18,15 @@ SIM-GURU adalah modular monolith Go dengan SSR. Fondasi aplikasi, autentikasi/ad
 | migrations | SQL embed, namespace app, Goose dengan advisory lock PostgreSQL |
 | web/styles | Sumber Tailwind; template Go menjadi sumber pemindaian kelas |
 | scripts | Lifecycle cluster lokal dan penyalinan aset htmx |
+| internal/studentaffairs | Model dan validasi domain pembinaan Kesiswaan; package ini tidak mencakup catatan BK |
+
+## Pembinaan Kesiswaan — Fase 8A
+
+`internal/studentaffairs` memuat model, validasi tanggal/teks/status, perubahan status beralasan dengan snapshot before/after, dan predikat cakupan role untuk unit test. `internal/academic/student_guidance.go` memeriksa role aktif dan data penempatan/penugasan langsung di PostgreSQL. Kesiswaan membuat, membaca, dan mengubah seluruh sekolah; Kepala Sekolah membaca; Wali Kelas membaca menurut penempatan aktif serta penugasan saat baca, dan akses ditolak saat cakupan ambigu. Perpindahan mengikuti Wali Kelas baru; histori penugasan tidak memberi akses lama. BK, Guru Mapel, Admin dan role lain tidak memperoleh akses otomatis.
+
+Model menyimpan `StudentID` resmi beserta nama/kelas snapshot sebagai konteks historis; snapshot tidak menentukan otorisasi baca sekarang. Kelas saat tanggal kejadian harus berasal dari penempatan/perpindahan bertanggal dan kalender semester yang tepat, atau pembuatan ditolak. Nama disalin dari master saat pencatatan karena tidak ada tanggal efektif nama historis. Status dapat berpindah dua arah dengan alasan dan histori; tidak ada approval. Catatan BK tetap domain terpisah menurut D-018.
+
+Migration 00028 menambah `student_guidance_records` dan `student_guidance_history`, dengan FK non-cascade, dua status D-018, versi optimistic concurrency dan index daftar. Record/histori ditulis dalam satu transaksi; update beralasan memakai advisory mutation lock dan `SELECT FOR UPDATE`. Route SSR `/kesiswaan/pembinaan` menghidupkan shared Instant Search (350 ms), filter status, pagination SQL 10, modal tambah/edit, status, dan detail histori. UI wali/Kepala Sekolah bersifat baca-saja; service tetap menjadi batas keamanan. Belum ada modul BK atau rekap pelanggaran/angka otomatis.
 
 Alur: browser → middleware keamanan → router → template lengkap atau fragmen HTML. GET / menghasilkan halaman; HX-Request: true menghasilkan section overview dengan Vary: HX-Request. Aset dilayani lokal dari binary. /health/live memeriksa proses; /health/ready memeriksa DB dan kesesuaian versi migrasi tanpa menampilkan detail koneksi. Server bind loopback secara default, memiliki timeout HTTP dan shutdown 10 detik.
 
@@ -36,6 +45,7 @@ Database memakai namespace app; tabel versi Goose berada di public. Migration 00
 ## Route aktual
 Publik: GET/POST /login, GET /health/live, GET /health/ready, GET /static/*.
 Terautentikasi: GET / (SSR/fragmen htmx), POST /logout, GET/POST /account/password.
+Kesiswaan/Kepala Sekolah/Wali Kelas: GET /kesiswaan/pembinaan dan GET /kesiswaan/pembinaan/{id}; otorisasi baca aktual diperiksa ulang service menurut D-042. Kesiswaan: POST /kesiswaan/pembinaan/new, /kesiswaan/pembinaan/{id}/edit, dan /kesiswaan/pembinaan/{id}/status. Data histori dibaca bersama detail; role baca-saja tidak memperoleh kontrol mutasi.
 Admin: GET /admin/users (cari/filter/pagination 50), GET/POST /admin/users/new, GET/POST /admin/users/{id}/edit, GET /admin/audit.
 Kurikulum: GET /akademik; GET/POST /akademik/tahun-ajaran, POST /akademik/tahun-ajaran/{id}/aktifkan; GET /akademik/semester, POST /akademik/semester/{id}/aktifkan; GET/POST /akademik/pengampu, GET/POST /akademik/jam-pelajaran, GET/POST /akademik/jadwal; GET /akademik/histori/{school_year|semester}/{id}.
 Admin: GET/POST /akademik/kelas/new dan /akademik/kelas/{id}/edit; POST /admin/placements.
