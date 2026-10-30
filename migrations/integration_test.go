@@ -55,7 +55,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 27 || target != 27 {
+	if err != nil || current != 28 || target != 28 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -77,6 +77,15 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.staff_attendance_events') IS NOT NULL AND to_regclass('app.staff_attendance_photos') IS NOT NULL AND to_regclass('app.staff_attendance_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing staff attendance tables")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.student_guidance_records') IS NOT NULL AND to_regclass('app.student_guidance_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		t.Fatal("missing student guidance tables")
+	}
+	var guidanceRecordFK, guidanceStatus, guidanceHistoryFK bool
+	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_guidance_records_student_id_fkey' AND contype='f' AND confdeltype='a'),
+		EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_guidance_records_status_check' AND contype='c'),
+		EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_guidance_history_record_id_fkey' AND contype='f' AND confdeltype='a')`).Scan(&guidanceRecordFK, &guidanceStatus, &guidanceHistoryFK); err != nil || !guidanceRecordFK || !guidanceStatus || !guidanceHistoryFK {
+		t.Fatal("cannot inspect guidance foreign keys")
 	}
 	var uniqueActions, photoPair, staffForeignKey bool
 	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname='staff_attendance_events' AND c.contype='u' AND pg_get_constraintdef(c.oid) LIKE 'UNIQUE (staff_member_id, on_date, action)%'), EXISTS(SELECT 1 FROM pg_constraint WHERE conname='staff_attendance_event_photo_fk' AND contype='f'), EXISTS(SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid WHERE t.relname='staff_attendance_events' AND c.contype='f' AND pg_get_constraintdef(c.oid) LIKE '%staff_member_id%staff_members%')`).Scan(&uniqueActions, &photoPair, &staffForeignKey); err != nil || !uniqueActions || !photoPair || !staffForeignKey {

@@ -70,8 +70,18 @@ document.addEventListener('keydown', (event) => {
   document.querySelectorAll('details.table-actions[open]').forEach((menu) => { menu.open = false; });
 });
 
+document.body.addEventListener('htmx:beforeSwap', (event) => {
+  const target = event.detail.target;
+  const status = event.detail.xhr?.status;
+  if (target?.id === 'student-guidance-detail-region' && (status === 409 || status === 422)) {
+    event.detail.shouldSwap = true;
+    event.detail.isError = false;
+  }
+});
+
 for (const event of ['htmx:responseError', 'htmx:sendError', 'htmx:timeout']) {
-  document.body.addEventListener(event, () => {
+  document.body.addEventListener(event, (detail) => {
+    if (detail.detail.elt?.closest('[data-list-region]')) return;
     showNotification(document.getElementById('request-error'));
   });
 }

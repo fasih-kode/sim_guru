@@ -150,6 +150,27 @@ func TestGuidanceStatusChangeRequiresReasonAndValidTransition(t *testing.T) {
 	}
 }
 
+func TestGuidanceContentChangeRequiresBothFieldsAndReason(t *testing.T) {
+	change := GuidanceContentChange{Incident: "  Kejadian baru  ", Action: "  Tindakan baru  ", Reason: "  Klarifikasi  "}
+	if err := change.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if change.Incident != "Kejadian baru" || change.Action != "Tindakan baru" || change.Reason != "Klarifikasi" {
+		t.Fatalf("perubahan belum dinormalisasi: %+v", change)
+	}
+	for _, invalid := range []GuidanceContentChange{
+		{Action: "Tindakan", Reason: "Alasan"},
+		{Incident: "Kejadian", Reason: "Alasan"},
+		{Incident: "Kejadian", Action: "Tindakan"},
+		{Incident: strings.Repeat("a", GuidanceTextMaxRunes+1), Action: "Tindakan", Reason: "Alasan"},
+		{Incident: "Kejadian", Action: "Tindakan", Reason: strings.Repeat("a", GuidanceReasonMaxRunes+1)},
+	} {
+		if err := invalid.Validate(); err == nil {
+			t.Fatalf("perubahan tidak valid diterima: %+v", invalid)
+		}
+	}
+}
+
 func TestGuidanceStatusChangeReasonLimit(t *testing.T) {
 	change := GuidanceStatusChange{Status: GuidanceCompleted, Reason: " " + strings.Repeat("界", GuidanceReasonMaxRunes) + " "}
 	if err := change.Validate(GuidanceNeedsFollowUp); err != nil {

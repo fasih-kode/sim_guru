@@ -47,6 +47,7 @@ type view struct {
 	TeacherReports              *teacherReportsView
 	TeacherAttendance           *teacherAttendanceView
 	StaffAttendance             *staffAttendanceView
+	StudentGuidance             *studentGuidanceView
 	TeacherAttendanceManagement *teacherAttendanceManagementView
 	TeacherAttendanceRecord     *teacherAttendanceRecordView
 	Arrival                     *arrivalView
@@ -110,6 +111,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	switch {
 	case strings.HasPrefix(path, "/pegawai/kehadiran-saya"):
 		return "staff-attendance", "staff-attendance"
+	case strings.HasPrefix(path, "/kesiswaan/pembinaan"):
+		return "student-guidance", "student-guidance"
 	case path == "/kehadiran-saya/rekap":
 		return "teacher-recap", "teacher-attendance"
 	case path == "/tu/kehadiran-guru/rekap":

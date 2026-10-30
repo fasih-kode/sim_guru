@@ -22,6 +22,9 @@ const (
 )
 
 var ErrGuidanceConflict = errors.New("Catatan pembinaan telah berubah. Muat ulang sebelum menyimpan perubahan.")
+var ErrGuidanceForbidden = errors.New("Akses catatan pembinaan ditolak.")
+var ErrGuidanceNotFound = errors.New("Catatan pembinaan tidak ditemukan.")
+var ErrGuidancePlacementUnclear = errors.New("Penempatan siswa pada tanggal kejadian belum dapat dipastikan.")
 
 type GuidanceStatus string
 
@@ -92,6 +95,28 @@ type GuidanceStatusChange struct {
 	Reason string
 }
 
+// GuidanceContentChange hanya mengubah uraian dan tindakan; identitas,
+// tanggal, serta snapshot konteks awal tidak dapat diganti setelah dicatat.
+type GuidanceContentChange struct {
+	Incident string
+	Action   string
+	Reason   string
+}
+
+func (in *GuidanceContentChange) Validate() error {
+	var err error
+	in.Incident, err = requiredText(in.Incident, "Jelaskan kejadian atau pelanggaran (maksimal 2.000 karakter).", GuidanceTextMaxRunes)
+	if err != nil {
+		return err
+	}
+	in.Action, err = requiredText(in.Action, "Catat tindakan pembinaan (maksimal 2.000 karakter).", GuidanceTextMaxRunes)
+	if err != nil {
+		return err
+	}
+	in.Reason, err = requiredText(in.Reason, "Alasan perubahan wajib diisi, maksimal 500 karakter.", GuidanceReasonMaxRunes)
+	return err
+}
+
 func (in *GuidanceStatusChange) Validate(current GuidanceStatus) error {
 	if !current.Valid() || !in.Status.Valid() {
 		return ValidationError("Pilih Perlu tindak lanjut atau Selesai.")
@@ -106,11 +131,18 @@ func (in *GuidanceStatusChange) Validate(current GuidanceStatus) error {
 
 type GuidanceRecord struct {
 	ID, StudentID, RecordedByID, Version int64
+	RecordedByName                       string
 	ClassIDAtEvent                       int64
 	StudentNameAtEvent, ClassNameAtEvent string
 	Date, Incident, Action               string
 	Status                               GuidanceStatus
 	RecordedAt, UpdatedAt                time.Time
+}
+
+type GuidanceStudentOption struct {
+	ID        int64
+	Name      string
+	ClassName string
 }
 
 type GuidanceSnapshot struct {
@@ -123,14 +155,16 @@ type GuidanceSnapshot struct {
 type GuidanceChange string
 
 const (
-	GuidanceRecorded      GuidanceChange = "recorded"
-	GuidanceStatusChanged GuidanceChange = "status_changed"
+	GuidanceRecorded       GuidanceChange = "recorded"
+	GuidanceContentChanged GuidanceChange = "content_changed"
+	GuidanceStatusChanged  GuidanceChange = "status_changed"
 )
 
 // GuidanceHistoryEntry adalah data append-only: perubahan menyimpan actor
 // autentikasi serta keadaan sebelum/sesudah, bukan menimpa histori terdahulu.
 type GuidanceHistoryEntry struct {
 	ID, RecordID, ActorID int64
+	ActorName             string
 	Change                GuidanceChange
 	Before                *GuidanceSnapshot
 	After                 GuidanceSnapshot
@@ -226,23 +260,19 @@ type GuidanceList struct {
 	HasNext     bool
 }
 
-// GuidanceService adalah kontrak untuk service berikutnya. Implementasinya
-// wajib memeriksa role/cakupan terhadap data DB, mengabaikan actor dari klien,
-// memakai FK siswa resmi, mengambil konteks siswa/kelas pada tanggal kejadian,
-// version optimistis, dan menulis record serta histori dalam transaksi yang
-// sama. Hanya Kesiswaan boleh membuat/mengubah; Kesiswaan dan Kepala Sekolah
-// membaca seluruh sekolah. Rancangan Wali Kelas memeriksa penempatan/penugasan
-// aktif saat baca dan menolak cakupan tidak pasti sesuai D-042. Implementasi
-// service tetap wajib memeriksa penempatan dan penugasan resmi di database.
-// Role lain tidak mendapat akses tambahan.
-// Domain BK tidak boleh bergabung atau memakai otorisasi package ini. Kontrak
-// tidak menyediakan penghapusan.
+// GuidanceService mendeskripsikan operasi domain. Adapter PostgreSQL wajib
+// memeriksa role/cakupan dari sumber resmi, mengabaikan actor dari klien,
+// mengambil snapshot siswa/kelas dari data sah, memakai version optimistis,
+// serta menulis perubahan dan histori dalam transaksi yang sama. Domain BK
+// tetap terpisah dan kontrak tidak menyediakan penghapusan.
 type GuidanceService interface {
-	Create(context.Context, int64, GuidanceInput) (GuidanceRecord, error)
-	ChangeStatus(context.Context, int64, int64, int64, GuidanceStatusChange) (GuidanceRecord, error)
-	Get(context.Context, int64, int64) (GuidanceRecord, error)
-	List(context.Context, int64, GuidanceFilter) (GuidanceList, error)
-	History(context.Context, int64, int64) ([]GuidanceHistoryEntry, error)
+	CreateStudentGuidance(context.Context, int64, GuidanceInput) (GuidanceRecord, error)
+	UpdateStudentGuidance(context.Context, int64, int64, int64, GuidanceContentChange) (GuidanceRecord, error)
+	ChangeStudentGuidanceStatus(context.Context, int64, int64, int64, GuidanceStatusChange) (GuidanceRecord, error)
+	StudentGuidanceStudents(context.Context, int64) ([]GuidanceStudentOption, error)
+	GetStudentGuidance(context.Context, int64, int64) (GuidanceRecord, error)
+	ListStudentGuidance(context.Context, int64, GuidanceFilter) (GuidanceList, error)
+	StudentGuidanceHistory(context.Context, int64, int64) ([]GuidanceHistoryEntry, error)
 }
 
 // ValidationError menandai masukan domain yang perlu diperbaiki pemanggil.
