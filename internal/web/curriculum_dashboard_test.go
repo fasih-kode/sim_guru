@@ -69,8 +69,14 @@ func TestHomeDashboardRolePriorityAndIsolation(t *testing.T) {
 	if got := homeDashboardKind(nil); got != "" {
 		t.Fatalf("pengguna anonim mendapat dashboard %q", got)
 	}
-	if got := homeDashboardKind(&auth.User{Roles: []string{"guru_mapel"}}); got != "" {
-		t.Fatalf("role tanpa hak mendapat dashboard Kurikulum: %q", got)
+	if got := homeDashboardKind(&auth.User{Roles: []string{"guru_mapel"}}); got != "guru-mapel" {
+		t.Fatalf("Guru Mapel seharusnya mendapat Beranda Guru Mapel, got %q", got)
+	}
+	if got := homeDashboardKind(&auth.User{Roles: []string{"wali_kelas"}}); got != "wali-kelas" {
+		t.Fatalf("Wali Kelas seharusnya mendapat Beranda Wali Kelas, got %q", got)
+	}
+	if got := homeDashboardKind(&auth.User{Roles: []string{"guru_mapel", "wali_kelas"}}); got != "guru-wali" {
+		t.Fatalf("Guru Mapel + Wali Kelas harus melihat kedua ringkasan, got %q", got)
 	}
 	if got := homeDashboardKind(&auth.User{Roles: []string{"kurikulum", "guru_mapel"}}); got != "kurikulum" {
 		t.Fatalf("Kurikulum + Guru Mapel seharusnya mendapat dashboard Kurikulum, got %q", got)

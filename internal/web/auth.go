@@ -64,6 +64,7 @@ type view struct {
 	NavigationSection, NavigationActive string
 	NavigationTabs                      []navigationTab
 	Dashboard                           *dashboardPresentation
+	AdditionalDashboards                []*dashboardPresentation
 	ModalOpen                           bool
 	ModalID                             string
 	Users                               []auth.User

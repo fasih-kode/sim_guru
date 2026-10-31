@@ -29,6 +29,33 @@ func (a *application) home(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		v.Dashboard = curriculumDashboardPresentation(stats)
+	case "guru-mapel":
+		stats, err := a.options.Academics.TeacherDashboard(r.Context(), user.ID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+		v.Dashboard = teacherDashboardPresentation(stats)
+	case "wali-kelas":
+		stats, err := a.options.Academics.HomeroomDashboard(r.Context(), user.ID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+		v.Dashboard = homeroomDashboardPresentation(stats)
+	case "guru-wali":
+		teacherStats, err := a.options.Academics.TeacherDashboard(r.Context(), user.ID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+		homeroomStats, err := a.options.Academics.HomeroomDashboard(r.Context(), user.ID)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
+		v.Dashboard = teacherDashboardPresentation(teacherStats)
+		v.AdditionalDashboards = []*dashboardPresentation{homeroomDashboardPresentation(homeroomStats)}
 	}
 	a.render(w, r, name, http.StatusOK, v)
 }
@@ -42,6 +69,15 @@ func homeDashboardKind(user *auth.User) string {
 	}
 	if user.HasRole("kurikulum") {
 		return "kurikulum"
+	}
+	if user.HasRole("guru_mapel") && user.HasRole("wali_kelas") {
+		return "guru-wali"
+	}
+	if user.HasRole("guru_mapel") {
+		return "guru-mapel"
+	}
+	if user.HasRole("wali_kelas") {
+		return "wali-kelas"
 	}
 	return ""
 }

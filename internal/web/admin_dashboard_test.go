@@ -71,14 +71,19 @@ func TestAdminDashboardExplainsMissingActiveYear(t *testing.T) {
 }
 
 func TestNonAdminHomeKeepsExistingOverview(t *testing.T) {
-	user := &auth.User{ID: 2, Active: true, DisplayName: "Guru Uji", Username: "guru-uji", Roles: []string{"guru_mapel"}}
+	user := &auth.User{ID: 2, Active: true, DisplayName: "Pegawai Uji", Username: "pegawai-uji", Roles: []string{"kesiswaan"}}
 	body := dashboardPageForTest(t, user, nil)
-	if !strings.Contains(body, "Selamat datang, Guru Uji") || !strings.Contains(body, "Muat ulang") || strings.Contains(body, "Ringkasan sekolah") || strings.Contains(body, "Akses cepat") {
+	if !strings.Contains(body, "Selamat datang, Pegawai Uji") || !strings.Contains(body, "Muat ulang") || strings.Contains(body, "Ringkasan sekolah") || strings.Contains(body, "Akses cepat") {
 		t.Fatal("Beranda role selain Admin harus mempertahankan tampilan existing")
 	}
 }
 
 func dashboardPageForTest(t *testing.T, user *auth.User, dashboard *dashboardPresentation) string {
+	t.Helper()
+	return dashboardPageWithSectionsForTest(t, user, dashboard, nil)
+}
+
+func dashboardPageWithSectionsForTest(t *testing.T, user *auth.User, dashboard *dashboardPresentation, additional []*dashboardPresentation) string {
 	t.Helper()
 	templates, err := template.New("web").Funcs(template.FuncMap{
 		"rowNumber":   func(int, int) int { return 1 },
@@ -91,7 +96,7 @@ func dashboardPageForTest(t *testing.T, user *auth.User, dashboard *dashboardPre
 	r := httptest.NewRequest("GET", "/", nil)
 	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, user))
 	w := httptest.NewRecorder()
-	app.render(w, r, "page", 200, view{Page: "home", Title: "Beranda", Dashboard: dashboard})
+	app.render(w, r, "page", 200, view{Page: "home", Title: "Beranda", Dashboard: dashboard, AdditionalDashboards: additional})
 	if w.Code != 200 {
 		t.Fatalf("render status=%d: %s", w.Code, w.Body.String())
 	}

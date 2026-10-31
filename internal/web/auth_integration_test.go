@@ -206,6 +206,9 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	if err = db.QueryRowContext(ctx, `SELECT id FROM app.users WHERE username=$1`, username).Scan(&teacherID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.ExecContext(ctx, `INSERT INTO app.teachers(name,user_id,active) VALUES($1,$2,true)`, "Guru dashboard "+suffix, teacherID); err != nil {
+		t.Fatal("cannot create teacher identity for dashboard integration")
+	}
 	teacher, err := accounts.Get(ctx, teacherID)
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +220,8 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	teacherClient := newClient()
 	login(teacherClient, username, teacherPassword)
 	teacherPage := get(teacherClient, "/", 200)
-	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") || strings.Contains(teacherPage, "Ringkasan sekolah") || !strings.Contains(teacherPage, "Selamat datang,") {
-		t.Fatal("XSS or admin menu leaked")
+	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") || strings.Contains(teacherPage, "Ringkasan sekolah") || !strings.Contains(teacherPage, "Ringkasan Guru Mapel") || !strings.Contains(teacherPage, "Jadwal Saya") {
+		t.Fatal("Beranda Guru Mapel tidak sesuai cakupan atau tautan Admin bocor")
 	}
 
 	reqHX, _ := http.NewRequest("GET", server.URL+"/", nil)
@@ -247,6 +250,14 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	curriculumDashboard := get(teacherClient, "/", 200)
 	if !strings.Contains(curriculumDashboard, "/akademik") || !strings.Contains(curriculumDashboard, "Ringkasan akademik") || !strings.Contains(curriculumDashboard, "Semester aktif") || !strings.Contains(curriculumDashboard, "/akademik/jadwal") || strings.Contains(curriculumDashboard, "Ringkasan sekolah") {
 		t.Fatal("new role did not appear in existing session")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel", "wali_kelas"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	combinedDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(combinedDashboard, "Ringkasan Guru Mapel") || !strings.Contains(combinedDashboard, "Ringkasan Wali Kelas") || !strings.Contains(combinedDashboard, "/wali-kelas") || strings.Contains(combinedDashboard, "/admin/users") {
+		t.Fatal("role gabungan tidak menampilkan kedua cakupan Beranda secara terpisah")
 	}
 	// Optimistic version prevents silently overwriting a newer role assignment.
 	if _, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: "stale", Active: true, Roles: []string{"admin"}, Version: teacher.Version}); !errors.Is(err, auth.ErrConflict) {

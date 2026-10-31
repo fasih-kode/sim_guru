@@ -1,16 +1,30 @@
 {{define "dashboard-overview"}}
-<section id="overview" aria-labelledby="overview-title">
+<div id="overview">{{template "dashboard-section" .}}</div>
+{{end}}
+
+{{define "combined-dashboard"}}
+<div id="overview" aria-label="Ringkasan Guru Mapel dan Wali Kelas">
+  {{template "dashboard-section" .Dashboard}}
+  {{range .AdditionalDashboards}}<div class="mt-10">{{template "dashboard-section" .}}</div>{{end}}
+</div>
+{{end}}
+
+{{define "teacher-dashboard"}}{{template "dashboard-overview" .Dashboard}}{{end}}
+{{define "homeroom-dashboard"}}{{template "dashboard-overview" .Dashboard}}{{end}}
+
+{{define "dashboard-section"}}
+<section aria-labelledby="{{.TitleID}}">
   <div class="mb-5">
     <p class="text-sm font-medium text-brand-600">{{.Eyebrow}}</p>
-    <h2 id="overview-title" class="mt-1 text-xl font-semibold text-gray-900">{{.Heading}}</h2>
+    <h2 id="{{.TitleID}}" class="mt-1 text-xl font-semibold text-gray-900">{{.Heading}}</h2>
     {{if .Context}}<p class="mt-1 text-sm text-gray-500">{{.Context}}</p>{{end}}
   </div>
   {{if .Notice}}<p class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">{{.Notice}}</p>{{end}}
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
     {{range .Cards}}{{template "dashboard-stat-card" .}}{{end}}
   </div>
-  <section class="mt-7" aria-labelledby="quick-access-title">
-    <h2 id="quick-access-title" class="mb-3 text-lg font-semibold text-gray-900">Akses cepat</h2>
+  <section class="mt-7" aria-labelledby="{{.QuickAccessID}}">
+    <h2 id="{{.QuickAccessID}}" class="mb-3 text-lg font-semibold text-gray-900">Akses cepat</h2>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {{range .QuickLinks}}{{template "dashboard-quick-link" .}}{{end}}
     </div>
