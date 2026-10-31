@@ -267,11 +267,14 @@ func TestTeacherAttendanceReportsIntegration(t *testing.T) {
 	if _, e = s.CreateTeacherAttendanceReport(ctx, teacher.ID, input("izin", "2043-01-01", "2043-01-01")); !errors.Is(e, academic.ErrForbidden) {
 		t.Fatal("revoked role can create", e)
 	}
-	if _, e = s.TeacherAttendanceReportDetail(ctx, teacher.ID, first.ID, academic.TeacherReportOwn, 1); e != nil {
-		t.Fatal("role change lost historical read", e)
+	if _, e = s.TeacherAttendanceReportDetail(ctx, teacher.ID, first.ID, academic.TeacherReportOwn, 1); !errors.Is(e, academic.ErrForbidden) {
+		t.Fatal("akun tanpa role presensi guru yang aktif dapat membaca laporan sendiri", e)
 	}
 	if _, e = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'guru_mapel')`, teacher.ID); e != nil {
 		t.Fatal(e)
+	}
+	if _, e = s.TeacherAttendanceReportDetail(ctx, teacher.ID, first.ID, academic.TeacherReportOwn, 1); e != nil {
+		t.Fatal("role presensi aktif tidak memulihkan pembacaan laporan sendiri", e)
 	}
 	if _, e = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, teacher.ID); e != nil {
 		t.Fatal(e)

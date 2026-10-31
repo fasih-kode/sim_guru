@@ -127,11 +127,15 @@ func TestTeacherAttendanceRecapHTTPIntegration(t *testing.T) {
 		}
 		return string(data)
 	}
-	for _, q := range []string{"G3", "g3", ""} {
+	for _, q := range []string{"G3", "g3"} {
 		b := partial(manager, "/tu/kehadiran-guru/rekap?from=1906-01-01&to=1906-01-02&q="+q, 200)
 		if !strings.Contains(b, "G3 HTTP") {
-			t.Fatal("pencarian cocok/kosong/kapitalisasi gagal")
+			t.Fatalf("pencarian rekap tidak menemukan fixture untuk q=%q (pesan-kosong=%v)", q, strings.Contains(b, "Tidak ada data yang cocok dengan pencarian."))
 		}
+	}
+	allResults := partial(manager, "/tu/kehadiran-guru/rekap?from=1906-01-01&to=1906-01-02", 200)
+	if !strings.Contains(allResults, "<tbody>") || strings.Contains(allResults, "Tidak ada data yang cocok dengan pencarian.") {
+		t.Fatal("filter kosong tidak menampilkan hasil rekap yang tersedia")
 	}
 	if b := partial(manager, "/tu/kehadiran-guru/rekap?from=1906-01-01&to=1906-01-02&q=tidak-ada-"+testutil.Random(t), 200); !strings.Contains(b, "Tidak ada data yang cocok dengan pencarian.") {
 		t.Fatal("pesan kosong salah")

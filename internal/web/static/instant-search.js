@@ -68,6 +68,38 @@ function initializeLiveLists(root = document) {
   htmx.process(region);
 }
 
+function updateJournalOutcome(form) {
+  const outcome = form.querySelector('[data-journal-outcome]')?.value;
+  if (!outcome) return;
+  const notHeld = outcome === 'not_held';
+  const reasonField = form.querySelector('[data-journal-not-held-field]');
+  const reason = reasonField?.querySelector('textarea[name="not_held_reason"]');
+  if (reasonField) reasonField.hidden = !notHeld;
+  if (reason) {
+    reason.disabled = !notHeld;
+    reason.required = notHeld;
+    if (!notHeld) reason.value = '';
+  }
+  const actualTimes = form.querySelector('[data-journal-actual-times]');
+  if (actualTimes) actualTimes.hidden = notHeld;
+  actualTimes?.querySelectorAll('input[name="actual_start"],input[name="actual_end"]').forEach(input => {
+    input.disabled = notHeld;
+    if (notHeld) input.value = '';
+  });
+  const materialHelp = form.querySelector('[data-journal-material-help]');
+  if (materialHelp) materialHelp.textContent = notHeld ? materialHelp.dataset.notHeldHelp : materialHelp.dataset.heldHelp;
+}
+
+function initializeJournalOutcomeForms(root = document) {
+  const selectors = [];
+  if (root.matches?.('[data-journal-outcome]')) selectors.push(root);
+  selectors.push(...(root.querySelectorAll?.('[data-journal-outcome]') || []));
+  selectors.forEach(select => {
+    const form = select.closest('form');
+    if (form) updateJournalOutcome(form);
+  });
+}
+
 function triggerList(form) {
   if (!form?.isConnected) return;
   lastListForm = form;
@@ -115,6 +147,11 @@ document.addEventListener('click', event => {
     if (lastListTrigger?.matches('a[hx-get]') && lastListTrigger.isConnected) htmx.trigger(lastListTrigger, 'click');
     else triggerList(lastListForm?.isConnected ? lastListForm : document.querySelector('[data-list-filter]'));
   }
+});
+document.addEventListener('change', event => {
+  if (!event.target.matches?.('[data-journal-outcome]')) return;
+  const form = event.target.closest('form');
+  if (form) updateJournalOutcome(form);
 });
 
 document.body.addEventListener('htmx:configRequest', event => {
@@ -164,7 +201,8 @@ document.body.addEventListener('htmx:beforeSwap', event => {
   }
   listFocus = request;
 });
-document.body.addEventListener('htmx:afterSwap', event => {
+document.body.addEventListener('htmx:afterSettle', event => {
+  initializeJournalOutcomeForms(event.target);
   if (event.detail.target.id !== 'list-region') return;
   const request = listFocus;
   const url = event.detail.xhr.responseURL;
@@ -192,4 +230,7 @@ document.body.addEventListener('htmx:afterRequest', event => {
     listMessage(request.failureMessage,true);
   }
 });
-document.addEventListener('DOMContentLoaded', () => initializeLiveLists());
+document.addEventListener('DOMContentLoaded', () => {
+  initializeLiveLists();
+  initializeJournalOutcomeForms();
+});

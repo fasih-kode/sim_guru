@@ -330,6 +330,24 @@ FE mengikuti TailAdmin/pola aplikasi: filter bertahan, tabel bernomor/pagination
 
 **AC:** guru di luar penugasan ditolak; jurnal Final tidak dapat diubah tanpa mekanisme koreksi beralasan; tidak ada jurnal oleh Guru Pengganti/Cadangan; jadwal yang tidak terlaksana tidak otomatis memiliki jurnal Final.
 
+### D-048 — kontrak Jurnal Mengajar yang disetujui Product Owner (31 Oktober 2026)
+
+Jurnal tetap membedakan status **Draf** dan **Final**. Draf boleh belum lengkap. Untuk pembelajaran terlaksana, materi maksimal 500 karakter wajib sebelum Final; catatan kegiatan opsional maksimal 2.000 karakter. Jika jadwal resmi berbeda dari pelaksanaan, waktu aktual dicatat terpisah dan tidak mengubah snapshot jadwal.
+
+Jurnal menyediakan penanda **Tidak Terlaksana** dengan alasan wajib saat penanda disimpan dan saat Final. Draf boleh belum lengkap pada materi/catatan. Final Tidak Terlaksana tidak menjadi bukti pembelajaran terlaksana; Final untuk pembelajaran terlaksana wajib bermateri. Status jadwal kosong tidak otomatis menjadi penanda tersebut, dan ketiadaan presensi tidak membuatnya otomatis.
+
+Konteks blok jam diisi dari jadwal resmi: daftar berurutan nomor JP, waktu mulai/selesai tiap JP, kelas, mapel, guru resmi, serta ID dan snapshot revisi. Guru tidak mengubah nomor JP. Snapshot historis tidak berubah jika jadwal atau konfigurasi jam direvisi. Draf terdampak revisi mendapat penanda **Perlu Ditinjau** dan tetap pada occurrence aslinya.
+
+Satu jurnal berlaku untuk satu occurrence, dikunci dengan ID slot/logical lesson stabil lintas revisi dan tanggal WIB. Mapping lintas revisi harus pasti; ambiguitas ditolak dan diselesaikan eksplisit oleh Kurikulum, tanpa tebakan otomatis.
+
+**D-049 — cutover lineage:** jadwal historis tanpa bukti kesinambungan tidak di-backfill otomatis. Jurnal baru untuk tanggal sebelum cutover dilarang sampai ada mekanisme pemetaan historis yang diputuskan terpisah; pengisian terlambat untuk tanggal sejak cutover tetap diperbolehkan. Revision yang digunakan dipilih berdasarkan tanggal occurrence WIB dan tanggal efektif publikasinya, bukan revision terbaru saat ini. Setiap versi jurnal mempertahankan snapshotnya sendiri, termasuk revision serta nomor dan waktu masing-masing JP. Konflik lineage menahan operasi jurnal terkait saja; tidak menahan jadwal, absensi, atau presensi.
+
+Guru historis dapat membaca dan mengoreksi jurnal miliknya ketika akun serta role yang diperlukan masih aktif; guru baru tidak mewarisi mutasi terhadap jurnal lama. Perubahan assignment tidak menulis ulang pemilik atau isi jurnal.
+
+Ekspor **PDF** dan **XLSX** tersedia untuk Jurnal Saya dengan filter tahun ajaran, semester, tanggal, kelas, mapel, dan status; ekspor memuat seluruh hasil filter. PDF memuat nomor, tanggal WIB, kelas, mapel, nomor JP, materi, catatan dan status. XLSX memiliki header, tanggal WIB, satu baris per jurnal, dan memperlakukan teks pengguna sebagai teks. Status Draf ditandai jelas. Hak ekspor agregat role lain tidak ditetapkan di sini.
+
+Indikator anomali hanya menunjukkan perbedaan sumber sesuai otorisasi sumber tersebut. Tidak menyimpulkan pelanggaran atau mengubah jadwal/absensi/presensi. Detail teknis implementasi tidak boleh melonggarkan D-020, D-033, atau otorisasi role.
+
 ## 9. Penilaian — FINAL prinsip, OPEN rincian formula
 
 - Hak input, remedial, dan finalisasi nilai hanya mengikuti guru pengampu resmi yang ditugaskan. Tidak ada akses nilai sementara untuk Guru Pengganti/Cadangan. Jika pengampu resmi berubah, akses baru berlaku menurut tanggal efektif dan riwayat nilai sebelumnya tidak ditimpa.

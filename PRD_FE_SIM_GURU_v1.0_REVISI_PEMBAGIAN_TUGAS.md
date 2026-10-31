@@ -118,6 +118,14 @@ Modal konfirmasi hanya aktif setelah pemeriksaan berhasil, menampilkan jumlah pe
 - Setelah Final, tombol **Ajukan Koreksi** dapat diganti menjadi **Koreksi dengan Alasan** untuk guru berwenang; versi sebelumnya tetap dapat dilihat.
 - Jika data tidak sesuai jadwal, tampilkan indikator anomali tanpa mengubah catatan otomatis.
 
+#### D-048 — rincian antarmuka Jurnal Mengajar (31 Oktober 2026)
+- Jadwal Saya menyediakan pintasan Isi/Lanjutkan Jurnal. Data tahun/semester, tanggal WIB, kelas, mapel, guru resmi, revisi jadwal dan blok JP diprefill dan baca-saja. Tampilkan urutan nomor setiap JP serta waktu konfigurasi resmi per nomor; waktu aktual berbeda ditampilkan/dicatat terpisah.
+- Materi maksimal 500 karakter wajib saat Final untuk pembelajaran terlaksana; catatan opsional maksimal 2.000 karakter. Draf dapat belum lengkap. Penanda Tidak Terlaksana meminta alasan dan tidak menyatakan pembelajaran telah terjadi; tidak muncul otomatis karena absensi/presensi.
+- Draf yang konteks jadwalnya berubah diberi penanda **Perlu Ditinjau**. Jangan memindahkan jurnal atau mengubah snapshot; Final mempertahankan data revisi semula.
+- Sediakan ekspor PDF untuk cetak/arsip dan XLSX untuk pengolahan. Filter berlaku untuk keseluruhan hasil, bukan hanya halaman pagination. Beri label Draf. PDF memuat tanggal WIB, kelas, mapel, nomor JP, materi, catatan, status; XLSX memakai satu baris per jurnal, header jelas, tanggal WIB dan nilai pengguna sebagai teks.
+- Hak baca/koreksi jurnal historis mengikuti identitas pemilik dan D-048. Akses agregat/ekspor Kurikulum atau Kepala Sekolah tidak disimpulkan otomatis.
+- D-049: jangan membuat jurnal baru untuk tanggal sebelum cutover tanpa pemetaan historis yang diputuskan terpisah. Pengisian terlambat sejak cutover tetap didukung; halaman memilih revision efektif pada tanggal occurrence WIB dan setiap versi menampilkan snapshot JP/revision saat disimpan.
+
 ### 3.7 Penilaian
 - Halaman TP, komponen, input nilai per siswa, remedial, rekomendasi (hanya jika rumus tersedia), nilai akhir dan finalisasi.
 - Nilai Final ditampilkan read-only; tombol **Koreksi Nilai Final** membuka alasan dan proses pemeriksaan Kurikulum yang sederhana, bukan approval Kepala Sekolah.
