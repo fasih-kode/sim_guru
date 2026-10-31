@@ -29,6 +29,7 @@ type TeachingJournalListItem struct {
 	MeetingDate, ClassSnapshot, SubjectSnapshot          string
 	TeacherSnapshot, State, Outcome                      string
 	Material, ActivityNotes                              string
+	ReviewReason                                         string
 	Version                                              int
 	RecordedAt                                           time.Time
 }
@@ -88,6 +89,7 @@ type TeachingJournalDetail struct {
 	CreatedAt                                            time.Time
 	CurrentVersion                                       TeachingJournalVersionRecord
 	Lineage                                              TeachingJournalLineageSnapshot
+	ReviewReason                                         string
 }
 
 type TeachingJournalHistory struct {
@@ -101,6 +103,43 @@ type TeachingJournalOccurrenceOption struct {
 	RevisionNumber                                                          int
 	Periods                                                                 []TeachingJournalPeriodSnapshot
 }
+
+// Indikator hanya membandingkan snapshot draf milik pengguna dengan slot pada
+// revision published yang efektif untuk tanggal occurrence menurut WIB.
+// Keputusan lineage tetap menjadi sumber pemetaan; kemiripan slot tidak ditebak.
+const teachingJournalReviewJoins = `
+	LEFT JOIN LATERAL (
+		SELECT r.id
+		FROM app.weekly_timetable_revisions r
+		WHERE r.semester_id=j.semester_id AND r.status='published' AND r.effective_from<=j.meeting_date
+		ORDER BY r.effective_from DESC,r.revision_no DESC LIMIT 1
+	) journal_effective ON true
+	LEFT JOIN app.teaching_journal_lineage_status journal_lineage ON journal_lineage.revision_id=journal_effective.id
+	LEFT JOIN LATERAL (
+		SELECT e.id,e.weekday,e.class_id,e.subject_id,e.teacher_id,e.assignment_id,e.period_start,e.period_end
+		FROM app.teaching_journal_lineage_decisions d
+		JOIN app.weekly_timetable_entries e ON e.id=d.target_entry_id AND e.revision_id=d.to_revision_id
+		WHERE d.to_revision_id=journal_effective.id AND d.logical_lesson_id=j.logical_lesson_id AND d.target_entry_id IS NOT NULL
+	) journal_slot ON true
+`
+
+const teachingJournalReviewReasonSQL = `CASE
+	WHEN v.state<>'draft' THEN ''
+	WHEN journal_effective.id IS NULL THEN ''
+	WHEN journal_effective.id=j.revision_id THEN ''
+	WHEN journal_lineage.lineage_status='pending' THEN 'Revisi jadwal efektif belum memiliki keputusan kesinambungan; kecocokan draf belum dapat dipastikan.'
+	WHEN journal_slot.id IS NULL THEN 'Slot pada draf tidak ditemukan pada revisi jadwal efektif untuk tanggal ini.'
+	WHEN journal_slot.weekday<>EXTRACT(ISODOW FROM j.meeting_date)::integer
+		OR journal_slot.class_id<>j.class_id OR journal_slot.subject_id<>j.subject_id
+		OR journal_slot.teacher_id<>j.teacher_id OR journal_slot.assignment_id<>j.assignment_id
+		OR COALESCE((SELECT jsonb_agg(jsonb_build_array(p.period_no,p.starts_at::text,p.ends_at::text) ORDER BY p.period_no)
+			FROM app.weekly_timetable_periods p
+			WHERE p.revision_id=journal_effective.id AND p.weekday=journal_slot.weekday
+				AND p.period_no BETWEEN journal_slot.period_start AND journal_slot.period_end),'[]'::jsonb)
+			IS DISTINCT FROM COALESCE((SELECT jsonb_agg(jsonb_build_array(p.period_no,p.starts_at::text,p.ends_at::text) ORDER BY p.period_no)
+				FROM app.teaching_journal_version_periods p WHERE p.version_id=v.id),'[]'::jsonb)
+		THEN 'Rincian jadwal efektif untuk tanggal ini berbeda dari snapshot draf.'
+	ELSE '' END`
 
 func (s *Store) teachingJournalReader(ctx context.Context, actor int64) (*sql.Tx, error) {
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
@@ -151,9 +190,10 @@ func (s *Store) TeachingJournals(ctx context.Context, actor int64, f TeachingJou
 	defer tx.Rollback()
 	rows, err := tx.QueryContext(ctx, `SELECT j.id,j.logical_lesson_id,j.semester_id,j.revision_id,j.timetable_entry_id,
 		j.class_id,j.subject_id,j.teacher_id,j.meeting_date::text,j.class_snapshot,j.subject_snapshot,j.teacher_snapshot,
-		v.state,v.outcome,v.material,v.activity_notes,j.current_version_no,v.recorded_at
+		v.state,v.outcome,v.material,v.activity_notes,j.current_version_no,v.recorded_at,`+teachingJournalReviewReasonSQL+`
 		FROM app.teaching_journals j
 		JOIN app.teaching_journal_versions v ON v.journal_id=j.id AND v.version_no=j.current_version_no
+		`+teachingJournalReviewJoins+`
 		WHERE j.owner_user_id=$1
 		AND ($2=0 OR j.semester_id=$2) AND ($3=0 OR j.class_id=$3) AND ($4=0 OR j.subject_id=$4)
 		AND ($5='' OR j.meeting_date >= $5::date) AND ($6='' OR j.meeting_date <= $6::date)
@@ -172,7 +212,7 @@ func (s *Store) TeachingJournals(ctx context.Context, actor int64, f TeachingJou
 		if err = rows.Scan(&item.ID, &item.LogicalLessonID, &item.SemesterID, &item.RevisionID, &item.EntryID,
 			&item.ClassID, &item.SubjectID, &item.TeacherID, &item.MeetingDate, &item.ClassSnapshot,
 			&item.SubjectSnapshot, &item.TeacherSnapshot, &item.State, &item.Outcome, &item.Material,
-			&item.ActivityNotes, &item.Version, &item.RecordedAt); err != nil {
+			&item.ActivityNotes, &item.Version, &item.RecordedAt, &item.ReviewReason); err != nil {
 			return TeachingJournalPage{}, err
 		}
 		page.Items = append(page.Items, item)
@@ -373,19 +413,21 @@ func (s *Store) TeachingJournalDetail(ctx context.Context, actor, journalID int6
 		y.name||' · Semester '||sm.number::text,r.revision_no,j.class_snapshot,j.subject_snapshot,j.teacher_snapshot,j.created_at,j.current_version_no,
 		coalesce(tr.id,0),coalesce(tr.from_revision_id,0),coalesce(ld.source_entry_id,0),
 		coalesce(tr.transition_kind,''),coalesce(ld.decision,''),coalesce(ld.reason,''),
-		coalesce(ld.actor_id,0),coalesce(ld.recorded_at,tr.recorded_at,j.created_at),coalesce(tr.effective_from,j.meeting_date)
+		coalesce(ld.actor_id,0),coalesce(ld.recorded_at,tr.recorded_at,j.created_at),coalesce(tr.effective_from,j.meeting_date),`+teachingJournalReviewReasonSQL+`
 		FROM app.teaching_journals j
 		JOIN app.semesters sm ON sm.id=j.semester_id JOIN app.school_years y ON y.id=sm.school_year_id
 		JOIN app.weekly_timetable_revisions r ON r.id=j.revision_id
+		JOIN app.teaching_journal_versions v ON v.journal_id=j.id AND v.version_no=j.current_version_no
 		LEFT JOIN app.teaching_journal_lineage_decisions ld ON ld.to_revision_id=j.revision_id AND ld.target_entry_id=j.timetable_entry_id AND ld.logical_lesson_id=j.logical_lesson_id
 		LEFT JOIN app.teaching_journal_lineage_transitions tr ON tr.id=ld.transition_id
+		`+teachingJournalReviewJoins+`
 		WHERE j.id=$1 AND j.owner_user_id=$2`, journalID, actor).Scan(
 		&d.ID, &d.LogicalLessonID, &d.SemesterID, &d.RevisionID, &d.EntryID, &d.AssignmentID,
 		&d.ClassID, &d.SubjectID, &d.TeacherID, &d.OwnerUserID, &d.MeetingDate, &d.SemesterSnapshot, &d.RevisionNumber, &d.ClassSnapshot,
 		&d.SubjectSnapshot, &d.TeacherSnapshot, &d.CreatedAt, &currentVersion,
 		&d.Lineage.TransitionID, &d.Lineage.FromRevisionID, &d.Lineage.SourceEntryID,
 		&d.Lineage.Kind, &d.Lineage.Decision, &d.Lineage.Reason, &d.Lineage.ActorID,
-		&d.Lineage.RecordedAt, &d.Lineage.EffectiveFrom)
+		&d.Lineage.RecordedAt, &d.Lineage.EffectiveFrom, &d.ReviewReason)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TeachingJournalDetail{}, ErrNotFound
 	}

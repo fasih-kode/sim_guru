@@ -128,6 +128,20 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 	if err != nil {
 		return TeachingJournalResult{}, err
 	}
+	var lineagePending bool
+	err = tx.QueryRowContext(ctx, `SELECT COALESCE((
+		SELECT ls.lineage_status='pending'
+		FROM app.weekly_timetable_revisions r
+		LEFT JOIN app.teaching_journal_lineage_status ls ON ls.revision_id=r.id
+		WHERE r.semester_id=$1 AND r.status='published' AND r.effective_from<=$2::date
+		ORDER BY r.effective_from DESC,r.revision_no DESC LIMIT 1
+	),false)`, semesterID, date).Scan(&lineagePending)
+	if err != nil {
+		return TeachingJournalResult{}, err
+	}
+	if lineagePending {
+		return TeachingJournalResult{}, ValidationError("Revisi jadwal efektif belum memiliki keputusan kesinambungan Kurikulum; jurnal belum dapat diubah.")
+	}
 	var revisionID, entryID, assignmentID, classID, subjectID, officialTeacherID int64
 	var className, subjectName, teacherName string
 	if isNew {

@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -323,5 +324,214 @@ func TestTeachingJournalReadHTTPIntegration(t *testing.T) {
 	notHeldList := readPage("/jurnal-saya?semester_id="+strconv.FormatInt(semester, 10)+"&class_id="+strconv.FormatInt(class.ID, 10)+"&subject_id="+strconv.FormatInt(subjectID, 10)+"&outcome=not_held", http.StatusOK)
 	if !strings.Contains(notHeldList, "Rencana pembelajaran sebagai konteks") || !strings.Contains(notHeldList, "Catatan konteks kegiatan") || !strings.Contains(notHeldList, "Konteks, bukan bukti pembelajaran") {
 		t.Fatal("not-held journal list omitted current context or its explanation")
+	}
+}
+
+func TestTeachingJournalReviewIndicatorIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	s := &academic.Store{DB: db}
+	ctx := context.Background()
+	admin, _ := testutil.User(t, db, "admin")
+	cur, _ := testutil.User(t, db, "kurikulum")
+	teacher, _ := testutil.User(t, db, "guru_mapel")
+	otherTeacher, _ := testutil.User(t, db, "guru_mapel")
+	var oldYear, oldSemester int64
+	_ = db.QueryRow(`SELECT id FROM app.school_years WHERE active`).Scan(&oldYear)
+	_ = db.QueryRow(`SELECT id FROM app.semesters WHERE active`).Scan(&oldSemester)
+	date := time.Now().In(time.FixedZone("WIB", 7*60*60))
+	date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	weekday := int(date.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	year, err := s.CreateYear(ctx, cur.ID, "Review jurnal "+testutil.Random(t)[:10])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ActivateYear(ctx, cur.ID, year.ID); err != nil {
+		t.Fatal(err)
+	}
+	var semester int64
+	if err = db.QueryRow(`SELECT id FROM app.semesters WHERE school_year_id=$1 AND number=1`, year.ID).Scan(&semester); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ActivateSemester(ctx, cur.ID, semester); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`UPDATE app.school_years SET active=false WHERE id=$1`, year.ID)
+		if oldYear > 0 {
+			_, _ = db.Exec(`UPDATE app.school_years SET active=true WHERE id=$1`, oldYear)
+		}
+		_, _ = db.Exec(`UPDATE app.semesters SET active=false WHERE id=$1`, semester)
+		if oldSemester > 0 {
+			_, _ = db.Exec(`UPDATE app.semesters SET active=true WHERE id=$1`, oldSemester)
+		}
+	})
+	if err = s.SaveSemesterCalendar(ctx, cur.ID, academic.SemesterCalendar{SemesterID: semester, StartsOn: date.AddDate(0, 0, -30).Format("2006-01-02"), EndsOn: date.AddDate(0, 0, 60).Format("2006-01-02"), SchoolDays: []int{weekday}}, "Kalender indikator jurnal"); err != nil {
+		t.Fatal(err)
+	}
+	class, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "V"+testutil.Random(t)[:5], "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var teacherID, subjectID int64
+	if err = db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru indikator jurnal',$1) RETURNING id`, teacher.ID).Scan(&teacherID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel indikator jurnal') RETURNING id`, "V"+testutil.Random(t)[:10]).Scan(&subjectID); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.AssignTeacher(ctx, cur.ID, semester, class.ID, subjectID, teacherID, date.AddDate(0, 0, -20)); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SaveLessonDay(ctx, cur.ID, semester, weekday, []academic.LessonPeriod{{Number: 1, StartsAt: "07:00", EndsAt: "07:40"}}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := s.CreateTimetableDraft(ctx, cur.ID, semester, date.AddDate(0, 0, -10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.AddTimetableEntry(ctx, cur.ID, first.ID, weekday, class.ID, subjectID, teacherID, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.PublishTimetable(ctx, cur.ID, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Cutover indikator jurnal"); err != nil {
+		t.Fatal(err)
+	}
+	var logicalID, firstEntry int64
+	if err = db.QueryRow(`SELECT logical_lesson_id,target_entry_id FROM app.teaching_journal_lineage_decisions WHERE to_revision_id=$1 AND decision='cutover'`, first.ID).Scan(&logicalID, &firstEntry); err != nil {
+		t.Fatal(err)
+	}
+	unchangedDate := date
+	changedDate := date.AddDate(0, 0, 14)
+	unchanged, err := s.SaveTeachingJournal(ctx, teacher.ID, academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: unchangedDate, RequestKey: "a1111111-1111-4111-8111-111111111111", State: "draft", Outcome: "not_held", NotHeldReason: "Pertemuan dibatalkan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := s.SaveTeachingJournal(ctx, teacher.ID, academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: changedDate, RequestKey: "a2222222-2222-4222-8222-222222222222", State: "draft", Outcome: "held", Material: "Materi draf sebelum revisi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchangedDetail, err := s.TeachingJournalDetail(ctx, teacher.ID, unchanged.ID)
+	if err != nil || unchangedDetail.ReviewReason != "" {
+		t.Fatalf("Tidak Terlaksana tanpa perubahan jadwal tidak boleh diberi indikator: reason=%q err=%v", unchangedDetail.ReviewReason, err)
+	}
+	draftBefore, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
+	if err != nil || draftBefore.ReviewReason != "" || len(draftBefore.CurrentVersion.Periods) != 1 || draftBefore.CurrentVersion.Periods[0].StartsAt != "07:00:00" {
+		t.Fatalf("draf awal harus belum ditandai dan menyimpan snapshot waktu sendiri: detail=%#v err=%v", draftBefore, err)
+	}
+
+	second, err := s.CreateTimetableDraft(ctx, cur.ID, semester, date.AddDate(0, 0, 7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.AddTimetableEntry(ctx, cur.ID, second.ID, weekday, class.ID, subjectID, teacherID, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.PublishTimetable(ctx, cur.ID, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	var secondEntry int64
+	if err = db.QueryRow(`SELECT id FROM app.weekly_timetable_entries WHERE revision_id=$1`, second.ID).Scan(&secondEntry); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ResolveTeachingJournalLineage(ctx, cur.ID, first.ID, second.ID, "Revision baru dengan slot yang sama", []academic.TeachingJournalLineageDecision{{Decision: "continue", SourceEntryID: firstEntry, TargetEntryID: secondEntry, Reason: "Slot dan konteks jadwal tetap sama"}}); err != nil {
+		t.Fatal(err)
+	}
+	unchangedRevisionDetail, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
+	if err != nil || unchangedRevisionDetail.ReviewReason != "" {
+		t.Fatalf("revision baru tanpa perubahan konteks tidak boleh menandai draf: reason=%q err=%v", unchangedRevisionDetail.ReviewReason, err)
+	}
+	if err = s.SaveLessonDay(ctx, cur.ID, semester, weekday, []academic.LessonPeriod{{Number: 1, StartsAt: "08:00", EndsAt: "08:40"}}); err != nil {
+		t.Fatal(err)
+	}
+	third, err := s.CreateTimetableDraft(ctx, cur.ID, semester, date.AddDate(0, 0, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.AddTimetableEntry(ctx, cur.ID, third.ID, weekday, class.ID, subjectID, teacherID, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.PublishTimetable(ctx, cur.ID, third.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SaveTeachingJournal(ctx, teacher.ID, academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: changedDate, ExpectedVersion: 1, State: "draft", Outcome: "held", Material: "Perubahan saat lineage pending", RequestKey: "a4444444-4444-4444-8444-444444444444"}); err == nil || !strings.Contains(err.Error(), "belum memiliki keputusan kesinambungan") {
+		t.Fatalf("mutasi draf saat lineage efektif pending harus ditolak: %v", err)
+	}
+	var versionBeforeResolution int
+	if err = db.QueryRow(`SELECT current_version_no FROM app.teaching_journals WHERE id=$1`, draft.ID).Scan(&versionBeforeResolution); err != nil || versionBeforeResolution != 1 {
+		t.Fatalf("penolakan lineage pending tidak boleh membuat versi parsial: version=%d err=%v", versionBeforeResolution, err)
+	}
+	var thirdEntry int64
+	if err = db.QueryRow(`SELECT id FROM app.weekly_timetable_entries WHERE revision_id=$1`, third.ID).Scan(&thirdEntry); err != nil {
+		t.Fatal(err)
+	}
+	pendingDetail, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
+	if err != nil || !strings.Contains(pendingDetail.ReviewReason, "belum memiliki keputusan kesinambungan") {
+		t.Fatalf("draf harus menjelaskan revision lineage yang belum terselesaikan: reason=%q err=%v", pendingDetail.ReviewReason, err)
+	}
+	if err = s.ResolveTeachingJournalLineage(ctx, cur.ID, second.ID, third.ID, "Ubah waktu slot untuk uji indikator", []academic.TeachingJournalLineageDecision{{Decision: "continue", SourceEntryID: secondEntry, TargetEntryID: thirdEntry, Reason: "Slot yang sama, waktu berubah"}}); err != nil {
+		t.Fatal(err)
+	}
+	filter := academic.BuildTeachingJournalReadFilter(1, semester, class.ID, subjectID, changedDate.Format("2006-01-02"), changedDate.Format("2006-01-02"), "draft", "")
+	page, err := s.TeachingJournals(ctx, teacher.ID, filter)
+	if err != nil || len(page.Items) != 1 || !strings.Contains(page.Items[0].ReviewReason, "berbeda dari snapshot draf") {
+		t.Fatalf("draf terdampak revisi efektif belum ditandai: page=%#v err=%v", page, err)
+	}
+	afterRevision, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
+	if err != nil || afterRevision.ReviewReason == "" || len(afterRevision.CurrentVersion.Periods) != 1 || afterRevision.CurrentVersion.Periods[0].StartsAt != "07:00:00" {
+		t.Fatalf("indikator tidak menjelaskan perubahan atau snapshot historis berubah: detail=%#v err=%v", afterRevision, err)
+	}
+	if _, err = s.TeachingJournalDetail(ctx, admin.ID, draft.ID); !errors.Is(err, academic.ErrForbidden) && !errors.Is(err, academic.ErrNotFound) {
+		t.Fatalf("akses lintas role tidak ditolak: %v", err)
+	}
+	if _, err = s.TeachingJournalDetail(ctx, otherTeacher.ID, draft.ID); !errors.Is(err, academic.ErrNotFound) {
+		t.Fatalf("indikator membocorkan jurnal lintas guru: %v", err)
+	}
+	templates, err := template.New("web").Funcs(template.FuncMap{"rowNumber": func(page, index int) int { return (page-1)*10 + index + 1 }, "weekdayName": func(day int) string { return strconv.Itoa(day) }}).ParseFS(content, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &application{templates: templates, options: Options{Academics: s, Accounts: &auth.Store{}, Masters: &master.Store{}}}
+	r := httptest.NewRequest(http.MethodGet, "/jurnal-saya?from="+changedDate.Format("2006-01-02")+"&to="+changedDate.Format("2006-01-02"), nil)
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &teacher))
+	w := httptest.NewRecorder()
+	a.teachingJournalList(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Perlu Ditinjau") || !strings.Contains(w.Body.String(), afterRevision.ReviewReason) {
+		t.Fatalf("indikator dan alasannya tidak dirender pada halaman Jurnal Saya: status=%d body=%s", w.Code, w.Body.String())
+	}
+	r = httptest.NewRequest(http.MethodGet, "/jurnal-saya?from="+changedDate.Format("2006-01-02")+"&to="+changedDate.Format("2006-01-02"), nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-List-Request", "true")
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &teacher))
+	w = httptest.NewRecorder()
+	a.teachingJournalList(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Perlu Ditinjau") || strings.Contains(w.Body.String(), "<html") {
+		t.Fatalf("filter/HTMX swap tidak mempertahankan indikator: status=%d", w.Code)
+	}
+	r = httptest.NewRequest(http.MethodGet, "/jurnal-saya/"+strconv.FormatInt(draft.ID, 10), nil)
+	r.SetPathValue("id", strconv.FormatInt(draft.ID, 10))
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &teacher))
+	w = httptest.NewRecorder()
+	a.teachingJournalDetail(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Perlu Ditinjau") || !strings.Contains(w.Body.String(), "berbeda dari snapshot draf") {
+		t.Fatalf("indikator tidak dirender pada detail Draf: status=%d", w.Code)
+	}
+
+	final, err := s.SaveTeachingJournal(ctx, teacher.ID, academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: changedDate, ExpectedVersion: 1, State: "final", Outcome: "held", Material: "Materi final draf", RequestKey: "a3333333-3333-4333-8333-333333333333"})
+	if err != nil || final.Version != 2 {
+		t.Fatalf("finalisasi draf terdampak gagal: result=%#v err=%v", final, err)
+	}
+	finalDetail, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
+	if err != nil || finalDetail.CurrentVersion.State != "final" || finalDetail.ReviewReason != "" || afterRevision.CurrentVersion.Periods[0].StartsAt != "07:00:00" {
+		t.Fatalf("Final harus mempertahankan snapshot tanpa indikator Draf: detail=%#v err=%v", finalDetail, err)
+	}
+	finalFilter := academic.BuildTeachingJournalReadFilter(1, semester, class.ID, subjectID, changedDate.Format("2006-01-02"), changedDate.Format("2006-01-02"), "final", "")
+	finalPage, err := s.TeachingJournals(ctx, teacher.ID, finalFilter)
+	if err != nil || len(finalPage.Items) != 1 || finalPage.Items[0].State != "final" || finalPage.Items[0].ReviewReason != "" {
+		t.Fatalf("nilai setelah finalisasi tetap diberi indikator Draf: page=%#v err=%v", finalPage, err)
 	}
 }

@@ -94,6 +94,14 @@ Guru historis yang menjadi pemilik jurnal dapat membaca dan mengoreksi jurnalnya
 - Perbedaan jadwal rencana dengan waktu aktual, absensi pelajaran yang belum dicatat, presensi guru, atau ketiadaan jurnal dapat ditandai netral “Perlu ditinjau”. Tidak boleh mengubah sumber, mengisi nilai/status, menyebut pelanggaran, atau memberi sanksi otomatis.
 - Indikator hanya menyampaikan perbedaan sumber kepada pihak yang memang berhak atas sumber masing-masing; indikator bukan kesimpulan pelanggaran dan tidak memberi akses tambahan. Implementasi aturan akses tiap sumber tetap diverifikasi.
 
+### Implementasi indikator revisi jadwal (9B-04A)
+
+Penanda yang diwajibkan D-048 untuk Draf dihitung saat dibaca, bukan disimpan sebagai status bisnis. Untuk tanggal occurrence, pembacaan memilih revision published yang efektif pada tanggal WIB tersebut, lalu memakai keputusan lineage D-049 untuk mencari slot logical yang sama. Penanda muncul bila revision efektif yang berbeda masih `pending`, slot logical tidak lagi tersedia, atau konteks slot efektif (kelas, mapel, guru/penugasan, hari, nomor JP, atau waktu JP) berbeda dari snapshot versi Draf. Jika revision baru hanya meneruskan slot dengan konteks yang sama, indikator tidak muncul.
+
+Final tidak diberi penanda ini dan tidak berubah akibat revision; versi historis tetap membaca snapshot tersimpan. Outcome Tidak Terlaksana sendiri bukan pemicu. Jika tidak ada revision efektif yang dapat dibandingkan, indikator tidak menyimpulkan perubahan. Pemeriksaan hanya membaca jurnal milik Guru Mapel yang terautentikasi; lineage pending diberi alasan netral tanpa membuka data jurnal orang lain. Perhitungan tidak mengubah jurnal, jadwal, absensi, presensi, atau histori.
+
+Pembacaan penanda tidak menggantikan validasi mutasi: layanan simpan mengunci operasi jurnal dan menolak pembuatan atau perubahan occurrence ketika revision published yang efektif masih berstatus lineage pending. Penolakan tidak menambah versi atau histori; setelah keputusan lineage diselesaikan, operasi dapat dicoba kembali dengan pemeriksaan otorisasi dan versi yang sama seperti alur jurnal lainnya. Ini menerapkan batas operasi D-049, bukan status atau workflow bisnis baru.
+
 ## 7. Kasus khusus
 
 | Kasus | Perilaku sesuai D-048 / implementasi yang direkomendasikan |
