@@ -84,4 +84,21 @@ func TestHomeDashboardRolePriorityAndIsolation(t *testing.T) {
 	if got := homeDashboardKind(&auth.User{Roles: []string{"admin", "kurikulum"}}); got != "admin" {
 		t.Fatalf("Admin + Kurikulum harus mempertahankan prioritas Beranda Admin, got %q", got)
 	}
+	for _, tc := range []struct {
+		roles []string
+		want  string
+	}{
+		{[]string{"bk"}, "bk"},
+		{[]string{"kesiswaan"}, "kesiswaan"},
+		{[]string{"kepala_sekolah"}, "kepala-sekolah"},
+		{[]string{"bk", "kesiswaan"}, "support-combined"},
+		{[]string{"kesiswaan", "kepala_sekolah"}, "support-combined"},
+		{[]string{"guru_mapel", "bk"}, "guru-mapel"},
+		{[]string{"wali_kelas", "kepala_sekolah"}, "wali-kelas"},
+		{[]string{"admin", "kepala_sekolah"}, "admin"},
+	} {
+		if got := homeDashboardKind(&auth.User{Roles: tc.roles}); got != tc.want {
+			t.Errorf("prioritas role %v: got %q want %q", tc.roles, got, tc.want)
+		}
+	}
 }

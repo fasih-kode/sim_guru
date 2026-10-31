@@ -77,3 +77,68 @@ func TestCombinedTeacherHomeroomDashboardKeepsScopesSeparate(t *testing.T) {
 		t.Fatal("role gabungan tidak boleh mengambil statistik Admin/Kurikulum")
 	}
 }
+
+func TestSupportDashboardsUseScopedLinksAndNoCounselingContent(t *testing.T) {
+	const privateNote = "RAHASIA_KONSELING_FIXTURE"
+	bk := dashboardPageForTest(t, &auth.User{ID: 9, Roles: []string{"bk"}}, counselorDashboardPresentation(academic.CaseDashboardStats{Cases: 3, OpenCases: 2, CompletedCases: 1}))
+	for _, want := range []string{"Kasus tahap BK", "Kasus Siswa", "/kesiswaan/kasus", ">3<", ">2<", ">1<"} {
+		if !strings.Contains(bk, want) {
+			t.Errorf("Beranda BK tidak memuat %q", want)
+		}
+	}
+	if strings.Contains(bk, privateNote) || strings.Contains(bk, "Batas Kedatangan") || strings.Contains(bk, "/absensi/harian") {
+		t.Fatal("Beranda BK menampilkan konten privat atau tautan di luar cakupan")
+	}
+
+	kesiswaan := dashboardPageForTest(t, &auth.User{ID: 10, Roles: []string{"kesiswaan"}}, studentAffairsDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31", HasActiveYear: true, ActiveStudents: 20, Recorded: 12, Present: 10, Sick: 1, Excused: 1, OpenCases: 2, HasAttendance: true}))
+	for _, want := range []string{"Siswa pada roster aktif", "Absensi tercatat hari ini", "Belum tercatat hari ini", "Kasus perlu tindak lanjut", "/absensi/harian", "/kesiswaan/kasus", "/kesiswaan/batas-kedatangan", "Hadir 10 · Sakit 1 · Izin 1 · Alpa 0"} {
+		if !strings.Contains(kesiswaan, want) {
+			t.Errorf("Beranda Kesiswaan tidak memuat %q", want)
+		}
+	}
+	if strings.Contains(kesiswaan, privateNote) {
+		t.Fatal("Beranda Kesiswaan membocorkan isi konseling")
+	}
+	if count := dashboardLinkCount(t, kesiswaan, `/kesiswaan/kasus`); count != 1 {
+		t.Fatalf("bagian Kesiswaan harus menampilkan satu tautan Kasus Siswa, got %d", count)
+	}
+
+	empty := dashboardPageForTest(t, &auth.User{ID: 11, Roles: []string{"kepala_sekolah"}}, headmasterDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31", OpenCases: 0}))
+	for _, want := range []string{"Tahun ajaran aktif belum tersedia", "Belum tersedia", "Kasus perlu tindak lanjut", "/absensi/harian", "/kesiswaan/kasus"} {
+		if !strings.Contains(empty, want) {
+			t.Errorf("Beranda Kepala Sekolah tidak menangani kondisi kosong %q", want)
+		}
+	}
+	if strings.Contains(empty, "Batas Kedatangan") || strings.Contains(empty, privateNote) {
+		t.Fatal("Beranda Kepala Sekolah memuat tautan operasional atau isi konseling")
+	}
+}
+
+func TestKesiswaanCaseQuickLinkAppearsOnceForCombinedRoles(t *testing.T) {
+	user := &auth.User{ID: 12, Roles: []string{"guru_mapel", "kesiswaan"}}
+	dashboard := teacherDashboardPresentation(academic.TeacherDashboardStats{Date: "2026-10-31"})
+	page := view{Dashboard: dashboard}
+	ensureKesiswaanCaseQuickLink(&page, user)
+	ensureKesiswaanCaseQuickLink(&page, user)
+	body := dashboardPageForTest(t, user, page.Dashboard)
+	if count := dashboardLinkCount(t, body, `/kesiswaan/kasus`); count != 1 {
+		t.Fatalf("role gabungan Guru Mapel + Kesiswaan harus mendapat satu tautan Kasus Siswa, got %d", count)
+	}
+
+	homeroom := homeroomDashboardPresentation(academic.HomeroomDashboardStats{Date: "2026-10-31"})
+	page = view{Dashboard: teacherDashboardPresentation(academic.TeacherDashboardStats{Date: "2026-10-31"}), AdditionalDashboards: []*dashboardPresentation{homeroom}}
+	ensureKesiswaanCaseQuickLink(&page, &auth.User{ID: 13, Roles: []string{"guru_mapel", "wali_kelas", "kesiswaan"}})
+	combined := dashboardPageWithSectionsForTest(t, &auth.User{ID: 13, Roles: []string{"guru_mapel", "wali_kelas", "kesiswaan"}}, page.Dashboard, page.AdditionalDashboards)
+	if count := dashboardLinkCount(t, combined, `/kesiswaan/kasus`); count != 1 {
+		t.Fatalf("tautan pada bagian Wali Kelas tidak boleh diduplikasi pada bagian Guru Mapel, got %d", count)
+	}
+}
+
+func dashboardLinkCount(t *testing.T, body, href string) int {
+	t.Helper()
+	start := strings.Index(body, `<div id="overview"`)
+	if start < 0 {
+		t.Fatal("konten Beranda tidak ditemukan")
+	}
+	return strings.Count(body[start:], `href="`+href+`"`)
+}

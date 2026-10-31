@@ -267,6 +267,38 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel", "kesiswaan"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	teacherKesDashboard := get(teacherClient, "/", 200)
+	if dashboardLinkCount(t, teacherKesDashboard, `/kesiswaan/kasus`) != 1 || !strings.Contains(teacherKesDashboard, "Ringkasan Guru Mapel") {
+		t.Fatal("role gabungan Guru Mapel + Kesiswaan harus mempertahankan prioritas Beranda dan menyediakan satu akses Kasus Siswa")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"bk", "kesiswaan"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	supportDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(supportDashboard, "Ringkasan BK") || !strings.Contains(supportDashboard, "Ringkasan Kesiswaan") || strings.Contains(supportDashboard, "/admin/users") || strings.Count(supportDashboard, `id="overview"`) != 1 {
+		t.Fatal("role gabungan BK + Kesiswaan tidak menampilkan bagian terpisah atau membocorkan navigasi Admin")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"kepala_sekolah"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	headDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(headDashboard, "Ringkasan sekolah") || !strings.Contains(headDashboard, "Kasus perlu tindak lanjut") || strings.Contains(headDashboard, "/kesiswaan/batas-kedatangan") || strings.Contains(headDashboard, "/admin/users") {
+		t.Fatal("Beranda Kepala Sekolah tidak terbatas pada ringkasan baca-saja")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
 	get(teacherClient, "/akademik", 403)
 	if _, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"pengganti"}, Version: updated.Version}); err == nil {
 		t.Fatal("unknown role accepted")

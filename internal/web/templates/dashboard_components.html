@@ -3,7 +3,7 @@
 {{end}}
 
 {{define "combined-dashboard"}}
-<div id="overview" aria-label="Ringkasan Guru Mapel dan Wali Kelas">
+<div id="overview" aria-label="Ringkasan tanggung jawab berdasarkan role">
   {{template "dashboard-section" .Dashboard}}
   {{range .AdditionalDashboards}}<div class="mt-10">{{template "dashboard-section" .}}</div>{{end}}
 </div>

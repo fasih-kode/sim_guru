@@ -175,6 +175,78 @@ func homeroomDashboardPresentation(stats academic.HomeroomDashboardStats) *dashb
 	}
 }
 
+func counselorDashboardPresentation(stats academic.CaseDashboardStats) *dashboardPresentation {
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan BK", Heading: "Kasus dalam penanganan Anda",
+		TitleID: "counselor-overview-title", QuickAccessID: "counselor-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Kasus tahap BK", Value: fmt.Sprint(stats.Cases), Detail: "Kasus dengan Anda sebagai penanggung jawab aktif.", Icon: dashboardIconCase, IconBackground: "bg-brand-50", IconColor: "text-brand-600"},
+			{Label: "Perlu tindak lanjut", Value: fmt.Sprint(stats.OpenCases), Detail: "Kasus tahap BK berstatus Perlu tindak lanjut.", Icon: dashboardIconTimetable, IconBackground: "bg-orange-50", IconColor: "text-orange-600"},
+			{Label: "Selesai", Value: fmt.Sprint(stats.CompletedCases), Detail: "Kasus tahap BK berstatus Selesai.", Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+		},
+		QuickLinks: []dashboardQuickLink{
+			{Label: "Kasus Siswa", Href: "/kesiswaan/kasus", Icon: smallDashboardIcon(dashboardIconCase)},
+		},
+	}
+}
+
+func studentAffairsDashboardPresentation(stats academic.SchoolMonitoringDashboardStats) *dashboardPresentation {
+	students, recorded, unrecorded, attendanceDetail := schoolAttendanceCardValues(stats)
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan Kesiswaan", Heading: "Kehadiran dan pembinaan siswa",
+		Context: "Tanggal " + stats.Date + " WIB",
+		TitleID: "student-affairs-overview-title", QuickAccessID: "student-affairs-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Siswa pada roster aktif", Value: students, Detail: "Penempatan aktif pada tahun ajaran aktif.", Icon: dashboardIconPeople, IconBackground: "bg-brand-50", IconColor: "text-brand-600"},
+			{Label: "Absensi tercatat hari ini", Value: recorded, Detail: attendanceDetail, Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+			{Label: "Belum tercatat hari ini", Value: unrecorded, Detail: "Siswa pada roster aktif tanpa catatan absensi hari ini.", Icon: dashboardIconCalendar, IconBackground: "bg-orange-50", IconColor: "text-orange-600"},
+			{Label: "Kasus perlu tindak lanjut", Value: fmt.Sprint(stats.OpenCases), Detail: "Tahap Kesiswaan dengan Anda sebagai penanggung jawab aktif.", Icon: dashboardIconCase, IconBackground: "bg-blue-50", IconColor: "text-blue-600"},
+		},
+		QuickLinks: []dashboardQuickLink{
+			{Label: "Kehadiran Siswa", Href: "/absensi/harian", Icon: smallDashboardIcon(dashboardIconCalendar)},
+			{Label: "Kasus Siswa", Href: "/kesiswaan/kasus", Icon: smallDashboardIcon(dashboardIconCase)},
+			{Label: "Batas Kedatangan", Href: "/kesiswaan/batas-kedatangan", Icon: smallDashboardIcon(dashboardIconTimetable)},
+		},
+	}
+}
+
+func headmasterDashboardPresentation(stats academic.SchoolMonitoringDashboardStats) *dashboardPresentation {
+	students, recorded, unrecorded, attendanceDetail := schoolAttendanceCardValues(stats)
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan sekolah", Heading: "Kehadiran dan tindak lanjut",
+		Context: "Tanggal " + stats.Date + " WIB",
+		TitleID: "headmaster-overview-title", QuickAccessID: "headmaster-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Siswa pada roster aktif", Value: students, Detail: "Penempatan aktif pada tahun ajaran aktif.", Icon: dashboardIconPeople, IconBackground: "bg-brand-50", IconColor: "text-brand-600"},
+			{Label: "Absensi tercatat hari ini", Value: recorded, Detail: attendanceDetail, Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+			{Label: "Belum tercatat hari ini", Value: unrecorded, Detail: "Siswa pada roster aktif tanpa catatan absensi hari ini.", Icon: dashboardIconCalendar, IconBackground: "bg-orange-50", IconColor: "text-orange-600"},
+			{Label: "Kasus perlu tindak lanjut", Value: fmt.Sprint(stats.OpenCases), Detail: "Ringkasan seluruh sekolah; isi konseling pribadi tidak ditampilkan.", Icon: dashboardIconCase, IconBackground: "bg-blue-50", IconColor: "text-blue-600"},
+		},
+		QuickLinks: []dashboardQuickLink{
+			{Label: "Kehadiran Siswa", Href: "/absensi/harian", Icon: smallDashboardIcon(dashboardIconCalendar)},
+			{Label: "Kasus Siswa", Href: "/kesiswaan/kasus", Icon: smallDashboardIcon(dashboardIconCase)},
+		},
+	}
+}
+
+func schoolAttendanceCardValues(stats academic.SchoolMonitoringDashboardStats) (students, recorded, unrecorded, detail string) {
+	if !stats.HasActiveYear {
+		return "Belum tersedia", "Belum tersedia", "Belum tersedia", "Tahun ajaran aktif belum tersedia."
+	}
+	students = fmt.Sprint(stats.ActiveStudents)
+	recorded = "Belum ada pencatatan"
+	detail = "Belum ada bukti absensi pada " + stats.Date + " WIB."
+	if stats.HasAttendance {
+		recorded = fmt.Sprint(stats.Recorded)
+		detail = fmt.Sprintf("Hadir %d · Sakit %d · Izin %d · Alpa %d", stats.Present, stats.Sick, stats.Excused, stats.Absent)
+	}
+	unrecorded = fmt.Sprint(stats.ActiveStudents - stats.Recorded)
+	if stats.ActiveStudents < stats.Recorded {
+		unrecorded = "Perlu pemeriksaan"
+	}
+	return students, recorded, unrecorded, detail
+}
+
 func smallDashboardIcon(icon template.HTML) template.HTML {
 	return template.HTML(strings.Replace(string(icon), "<svg ", `<svg class="size-4" `, 1))
 }
