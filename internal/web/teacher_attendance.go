@@ -20,6 +20,7 @@ type teacherAttendanceView struct {
 	Day               academic.TeacherAttendanceDay
 	CheckIn, CheckOut *academic.TeacherAttendanceSummary
 	Available         bool
+	PersonalOnly      bool
 	RequestOpen       bool
 	RequestDate       string
 	RequestKind       string
@@ -57,7 +58,9 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	f := &teacherAttendanceView{Day: day, Available: a.options.Academics.Photos != nil, RequestDate: day.Date, RequestKind: "correction", RequestAction: academic.TeacherCheckIn, RequestOpen: r.URL.Query().Get("request") == "1"}
+	user := principal(r)
+	personalOnly := user.HasRole("kepala_sekolah") && !user.HasRole("guru_mapel") && !user.HasRole("wali_kelas")
+	f := &teacherAttendanceView{Day: day, Available: a.options.Academics.Photos != nil, PersonalOnly: personalOnly, RequestDate: day.Date, RequestKind: "correction", RequestAction: academic.TeacherCheckIn, RequestOpen: !personalOnly && r.URL.Query().Get("request") == "1"}
 	for i := range day.Events {
 		event := &day.Events[i]
 		if event.Action == academic.TeacherCheckIn {
@@ -66,10 +69,12 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 			f.CheckOut = event
 		}
 	}
-	f.Evaluation, err = a.teacherTodayEvaluation(r, day.Date)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
+	if !personalOnly {
+		f.Evaluation, err = a.teacherTodayEvaluation(r, day.Date)
+		if err != nil {
+			a.academicFailure(w, err)
+			return
+		}
 	}
 	v := view{Page: "teacher-attendance", Title: "Kehadiran Saya", TeacherAttendance: f, Error: message}
 	if r.URL.Query().Get("saved") == "1" {
@@ -78,16 +83,18 @@ func (a *application) teacherAttendance(w http.ResponseWriter, r *http.Request) 
 	if r.URL.Query().Get("request_saved") == "1" {
 		v.Message = "Permintaan terkirim kepada TU. Catatan kehadiran tidak berubah."
 	}
-	reports, reportErr := a.options.Academics.TeacherAttendanceReports(r.Context(), principal(r).ID, academic.TeacherAttendanceReportFilter{Scope: academic.TeacherReportOwn, Page: 1})
-	if reportErr != nil {
-		a.academicFailure(w, reportErr)
-		return
-	}
-	v.TeacherReports = &teacherReportsView{Base: "/kehadiran-saya/laporan", Own: true, CanCreate: true, Filter: academic.TeacherAttendanceReportFilter{Page: 1}, Reports: reports}
-	if len(reports) > 10 {
-		v.TeacherReports.Next = 2
-		v.TeacherReports.NextURL = "/kehadiran-saya/laporan?page=2"
-		v.TeacherReports.Reports = reports[:10]
+	if !personalOnly {
+		reports, reportErr := a.options.Academics.TeacherAttendanceReports(r.Context(), principal(r).ID, academic.TeacherAttendanceReportFilter{Scope: academic.TeacherReportOwn, Page: 1})
+		if reportErr != nil {
+			a.academicFailure(w, reportErr)
+			return
+		}
+		v.TeacherReports = &teacherReportsView{Base: "/kehadiran-saya/laporan", Own: true, CanCreate: true, Filter: academic.TeacherAttendanceReportFilter{Page: 1}, Reports: reports}
+		if len(reports) > 10 {
+			v.TeacherReports.Next = 2
+			v.TeacherReports.NextURL = "/kehadiran-saya/laporan?page=2"
+			v.TeacherReports.Reports = reports[:10]
+		}
 	}
 	a.render(w, r, "page", status, v)
 }

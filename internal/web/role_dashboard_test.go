@@ -134,6 +134,92 @@ func TestKesiswaanCaseQuickLinkAppearsOnceForCombinedRoles(t *testing.T) {
 	}
 }
 
+func TestOperationalDashboardsAndCombinedQuickLinks(t *testing.T) {
+	staff := dashboardPageForTest(t, &auth.User{ID: 21, Roles: []string{"pegawai_tu"}}, staffDashboardPresentation(academic.StaffSelfDashboardStats{Date: "2026-10-31", HasCheckIn: true}))
+	for _, want := range []string{"Kehadiran pribadi", "Masuk hari ini", "Sudah Dicatat", "Pulang hari ini", "Belum Dicatat", `href="/pegawai/kehadiran-saya"`} {
+		if !strings.Contains(staff, want) {
+			t.Errorf("dashboard Pegawai TU tidak memuat %q", want)
+		}
+	}
+	if strings.Contains(staff, "Alpa") || strings.Contains(staff, "pegawai lain") {
+		t.Fatal("dashboard TU tidak boleh memberi makna Alpa atau menampilkan orang lain")
+	}
+
+	manager := dashboardPageForTest(t, &auth.User{ID: 22, Roles: []string{"pegawai_tu", "pengelola_kehadiran_guru"}}, teacherAttendanceManagerDashboardPresentation(academic.TeacherAttendanceManagerDashboardStats{Date: "2026-10-31", TeachersRecorded: 3, CheckIns: 2, CheckOuts: 1, Excused: 1, Sick: 1, OutOfOffice: 1}))
+	for _, want := range []string{"Guru dengan event kehadiran hari ini", ">3<", "Catatan Masuk", ">2<", "Catatan Pulang", ">1<", "Izin 1 · Sakit 1 · Dinas Luar 1", "Tidak ada status Alpa otomatis", `href="/tu/kehadiran-guru"`, `href="/tu/kehadiran-guru/rekap"`} {
+		if !strings.Contains(manager, want) {
+			t.Errorf("dashboard Pengelola tidak memuat %q", want)
+		}
+	}
+
+	operator := dashboardPageForTest(t, &auth.User{ID: 23, Roles: []string{"petugas_absensi"}}, attendanceOperatorDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31", HasActiveYear: true, ActiveStudents: 8, Recorded: 5, Present: 4, Sick: 1, HasAttendance: true}))
+	for _, want := range []string{"Siswa pada roster aktif", ">8<", "Absensi tercatat hari ini", ">5<", "Belum tercatat hari ini", ">3<", `href="/absensi/harian"`, `href="/absensi/pemindai"`, `href="/absensi/kartu"`} {
+		if !strings.Contains(operator, want) {
+			t.Errorf("dashboard Petugas Absensi tidak memuat %q", want)
+		}
+	}
+	if strings.Contains(operator, "Kasus perlu tindak lanjut") || strings.Contains(operator, "pemindaian") {
+		t.Fatal("dashboard Petugas tidak boleh menampilkan agregat kasus atau hitungan pemindaian")
+	}
+
+	combinedUser := &auth.User{ID: 24, Roles: []string{"pegawai_tu", "pengelola_kehadiran_guru"}}
+	if got := homeDashboardKind(combinedUser); got != "support-combined" {
+		t.Fatalf("TU + Pengelola harus mendapat dua bagian terpisah, got %q", got)
+	}
+	roles := supportDashboardRoles(combinedUser)
+	if len(roles) != 2 || roles[0] != "pegawai_tu" || roles[1] != "pengelola_kehadiran_guru" {
+		t.Fatalf("cakupan role gabungan TU tidak tepat: %v", roles)
+	}
+	combined := view{Dashboard: staffDashboardPresentation(academic.StaffSelfDashboardStats{Date: "2026-10-31"}), AdditionalDashboards: []*dashboardPresentation{teacherAttendanceManagerDashboardPresentation(academic.TeacherAttendanceManagerDashboardStats{Date: "2026-10-31"})}}
+	ensureOperationalQuickLinks(&combined, combinedUser)
+	body := dashboardPageWithSectionsForTest(t, combinedUser, combined.Dashboard, combined.AdditionalDashboards)
+	if dashboardLinkCount(t, body, `/tu/kehadiran-guru/rekap`) != 1 || dashboardLinkCount(t, body, `/pegawai/kehadiran-saya`) != 1 {
+		t.Fatal("tautan role gabungan TU harus tersedia tepat satu kali")
+	}
+
+	petugasKesiswaan := &auth.User{ID: 25, Roles: []string{"petugas_absensi", "kesiswaan"}}
+	if got := homeDashboardKind(petugasKesiswaan); got != "support-combined" {
+		t.Fatalf("Petugas + Kesiswaan harus mempertahankan dua cakupan, got %q", got)
+	}
+	roleParts := supportDashboardRoles(petugasKesiswaan)
+	if len(roleParts) != 2 || roleParts[0] != "kesiswaan" || roleParts[1] != "petugas_absensi" {
+		t.Fatalf("role Petugas + Kesiswaan tidak terpisah: %v", roleParts)
+	}
+	parts := view{Dashboard: studentAffairsDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31"}), AdditionalDashboards: []*dashboardPresentation{attendanceOperatorDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31"})}}
+	ensureKesiswaanCaseQuickLink(&parts, petugasKesiswaan)
+	ensureOperationalQuickLinks(&parts, petugasKesiswaan)
+	deduplicateDashboardQuickLinks(&parts)
+	combinedBody := dashboardPageWithSectionsForTest(t, petugasKesiswaan, parts.Dashboard, parts.AdditionalDashboards)
+	if dashboardLinkCount(t, combinedBody, `/kesiswaan/kasus`) != 1 || dashboardLinkCount(t, combinedBody, `/absensi/pemindai`) != 1 || dashboardLinkCount(t, combinedBody, `/absensi/harian`) != 1 {
+		t.Fatal("role Petugas + Kesiswaan kehilangan atau menggandakan akses cepat")
+	}
+
+	adminPetugas := &auth.User{ID: 26, Roles: []string{"admin", "petugas_absensi"}}
+	if got := homeDashboardKind(adminPetugas); got != "admin" {
+		t.Fatalf("Admin tetap memakai dashboard prioritasnya, got %q", got)
+	}
+	priorityView := view{Dashboard: teacherDashboardPresentation(academic.TeacherDashboardStats{Date: "2026-10-31"})}
+	ensureOperationalQuickLinks(&priorityView, adminPetugas)
+	if dashboardLinkCount(t, dashboardPageForTest(t, adminPetugas, priorityView.Dashboard), `/absensi/pemindai`) != 1 {
+		t.Fatal("role Petugas pada akun prioritas harus tetap memperoleh akses cepat tanpa mengubah dashboard utama")
+	}
+	managerOnly := &auth.User{ID: 27, Roles: []string{"pengelola_kehadiran_guru"}}
+	if got := homeDashboardKind(managerOnly); got != "" || len(supportDashboardRoles(managerOnly)) != 0 {
+		t.Fatalf("role Pengelola tanpa pasangan pegawai_tu tidak boleh membuka dashboard, got %q / %v", got, supportDashboardRoles(managerOnly))
+	}
+}
+
+func TestOperationalDashboardEmptyStatesDoNotInventAbsence(t *testing.T) {
+	staff := dashboardPageForTest(t, &auth.User{ID: 31, Roles: []string{"pegawai_tu"}}, staffDashboardPresentation(academic.StaffSelfDashboardStats{Date: "2026-10-31"}))
+	if strings.Contains(staff, "Alpa") || !strings.Contains(staff, "Belum Dicatat") {
+		t.Fatal("status TU kosong harus tetap sekadar belum dicatat")
+	}
+	noYear := dashboardPageForTest(t, &auth.User{ID: 32, Roles: []string{"petugas_absensi"}}, attendanceOperatorDashboardPresentation(academic.SchoolMonitoringDashboardStats{Date: "2026-10-31"}))
+	if !strings.Contains(noYear, "Tahun ajaran aktif belum tersedia") || strings.Contains(noYear, ">0<") {
+		t.Fatal("roster Petugas tanpa tahun aktif tidak boleh ditampilkan sebagai nol")
+	}
+}
+
 func dashboardLinkCount(t *testing.T, body, href string) int {
 	t.Helper()
 	start := strings.Index(body, `<div id="overview"`)

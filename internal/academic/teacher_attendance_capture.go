@@ -301,7 +301,7 @@ func activeTeacherForAttendance(ctx context.Context, tx *sql.Tx, actorID int64) 
 		FROM app.users u
 		JOIN app.teachers t ON t.user_id=u.id AND t.active
 		WHERE u.id=$1 AND u.active
-		  AND EXISTS (SELECT 1 FROM app.user_roles r WHERE r.user_id=u.id AND r.role_code IN ('guru_mapel','wali_kelas'))
+		  AND EXISTS (SELECT 1 FROM app.user_roles r WHERE r.user_id=u.id AND r.role_code IN ('guru_mapel','wali_kelas','kepala_sekolah'))
 		FOR KEY SHARE OF u,t`, actorID).Scan(&teacherID, &teacherName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", ErrForbidden

@@ -294,7 +294,7 @@ func (s *Store) CaptureStaffAttendance(ctx context.Context, actorID int64, input
 func linkedStaffForAttendance(ctx context.Context, tx *sql.Tx, actorID int64) (int64, string, int64, error) {
 	var id, userID int64
 	var name string
-	err := tx.QueryRowContext(ctx, `SELECT s.id,s.name,s.user_id FROM app.users u JOIN app.user_roles r ON r.user_id=u.id AND r.role_code='pegawai_tu' JOIN app.staff_members s ON s.user_id=u.id WHERE u.id=$1 AND u.active FOR KEY SHARE OF u,s`, actorID).Scan(&id, &name, &userID)
+	err := tx.QueryRowContext(ctx, `SELECT s.id,s.name,s.user_id FROM app.users u JOIN app.user_roles r ON r.user_id=u.id AND r.role_code IN ('pegawai_tu','kepala_sekolah') JOIN app.staff_members s ON s.user_id=u.id WHERE u.id=$1 AND u.active FOR KEY SHARE OF u,s`, actorID).Scan(&id, &name, &userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", 0, ErrForbidden
 	}
@@ -304,7 +304,7 @@ func linkedStaffForAttendance(ctx context.Context, tx *sql.Tx, actorID int64) (i
 func activeStaffForAttendanceIdentity(ctx context.Context, tx *sql.Tx, actorID int64) (int64, string, int64, error) {
 	var id, userID int64
 	var name string
-	err := tx.QueryRowContext(ctx, `SELECT s.id,s.name,s.user_id FROM app.users u JOIN app.user_roles r ON r.user_id=u.id AND r.role_code='pegawai_tu' JOIN app.staff_members s ON s.user_id=u.id AND s.active WHERE u.id=$1 AND u.active FOR KEY SHARE OF u,s`, actorID).Scan(&id, &name, &userID)
+	err := tx.QueryRowContext(ctx, `SELECT s.id,s.name,s.user_id FROM app.users u JOIN app.user_roles r ON r.user_id=u.id AND r.role_code IN ('pegawai_tu','kepala_sekolah') JOIN app.staff_members s ON s.user_id=u.id AND s.active WHERE u.id=$1 AND u.active FOR KEY SHARE OF u,s`, actorID).Scan(&id, &name, &userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", 0, ErrForbidden
 	}
@@ -407,7 +407,7 @@ func (s *Store) StaffAttendancePhoto(ctx context.Context, actorID, photoID int64
 		return nil, "", ErrForbidden
 	}
 	var key, mimeType string
-	err := s.DB.QueryRowContext(ctx, `SELECT p.storage_key,p.mime_type FROM app.staff_attendance_photos p JOIN app.staff_attendance_events e ON e.id=p.event_id JOIN app.staff_members s ON s.id=e.staff_member_id JOIN app.users u ON u.id=s.user_id AND u.active JOIN app.user_roles r ON r.user_id=u.id AND r.role_code='pegawai_tu' WHERE p.id=$1 AND p.deleted_at IS NULL AND p.retain_until>clock_timestamp() AND u.id=$2`, photoID, actorID).Scan(&key, &mimeType)
+	err := s.DB.QueryRowContext(ctx, `SELECT p.storage_key,p.mime_type FROM app.staff_attendance_photos p JOIN app.staff_attendance_events e ON e.id=p.event_id JOIN app.staff_members s ON s.id=e.staff_member_id JOIN app.users u ON u.id=s.user_id AND u.active JOIN app.user_roles r ON r.user_id=u.id AND r.role_code IN ('pegawai_tu','kepala_sekolah') WHERE p.id=$1 AND p.deleted_at IS NULL AND p.retain_until>clock_timestamp() AND u.id=$2`, photoID, actorID).Scan(&key, &mimeType)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}

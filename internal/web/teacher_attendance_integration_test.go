@@ -218,6 +218,11 @@ func TestTeacherAttendanceHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	teacher := makeUser(true, "guru_mapel")
+	teacherHome := get(teacher.client, "/", 200)
+	if !strings.Contains(teacherHome, `href="/kehadiran-saya#attendance-check-in"`) || !strings.Contains(teacherHome, `href="/kehadiran-saya#attendance-check-out"`) || strings.Contains(teacherHome, ">Muat ulang") {
+		t.Fatal("Beranda guru harus menampilkan dua pintasan anchor tanpa tombol muat ulang")
+	}
+	assertCount(teacher.teacher, 0)
 	body := get(teacher.client, "/kehadiran-saya?teacher_id="+fmt.Sprint(admin.user.ID), 200)
 	token := csrfRE.FindStringSubmatch(body)
 	if len(token) != 2 {
@@ -227,6 +232,38 @@ func TestTeacherAttendanceHTTPIntegration(t *testing.T) {
 	if !strings.Contains(body, "Belum Dicatat") || !strings.Contains(body, "Guru sintetis F1") {
 		t.Fatal("missing initial attendance state")
 	}
+	headmaster := makeUser(true, "kepala_sekolah")
+	headHome := get(headmaster.client, "/", 200)
+	if !strings.Contains(headHome, `href="/kehadiran-saya#attendance-check-in"`) || !strings.Contains(headHome, `href="/kehadiran-saya#attendance-check-out"`) {
+		t.Fatal("Kepala Sekolah dengan identitas guru aktif harus mendapat pintasan presensi guru")
+	}
+	headPage := get(headmaster.client, "/kehadiran-saya?request=1", 200)
+	if strings.Contains(headPage, "Buat Laporan") || strings.Contains(headPage, "Riwayat Laporan Saya") || strings.Contains(headPage, "Minta pelengkapan / koreksi") || strings.Contains(headPage, "Permintaan pelengkapan / koreksi") {
+		t.Fatal("Kepala Sekolah tanpa role guru tidak boleh mendapat fitur laporan atau koreksi guru")
+	}
+	headToken := csrfRE.FindStringSubmatch(headPage)
+	if len(headToken) != 2 {
+		t.Fatal("Kepala Sekolah tidak mendapat token CSRF presensi")
+	}
+	headmaster.csrf = headToken[1]
+	assertCount(headmaster.teacher, 0)
+	headInKey, _ := academic.NewTeacherAttendanceIdempotencyKey()
+	upload(headmaster, fields("check_in", headInKey), jpegBytes, headmaster.csrf, 303, false)
+	headOutKey, _ := academic.NewTeacherAttendanceIdempotencyKey()
+	upload(headmaster, fields("check_out", headOutKey), jpegBytes, headmaster.csrf, 303, false)
+	assertCount(headmaster.teacher, 2)
+	get(headmaster.client, "/kehadiran-saya/laporan", 403)
+	headmasterCombined := makeUser(true, "kepala_sekolah", "guru_mapel")
+	combinedPage := get(headmasterCombined.client, "/kehadiran-saya", 200)
+	if !strings.Contains(combinedPage, "Buat Laporan") || !strings.Contains(combinedPage, "Riwayat Laporan Saya") {
+		t.Fatal("Kepala Sekolah dengan role Guru Mapel tetap mempertahankan fitur Guru yang memang berhak diakses")
+	}
+	headWithoutIdentity := makeUser(false, "kepala_sekolah")
+	headWithoutIdentityHome := get(headWithoutIdentity.client, "/", 200)
+	if !strings.Contains(headWithoutIdentityHome, `disabled aria-disabled="true"`) || strings.Contains(headWithoutIdentityHome, `href="/kehadiran-saya#`) || strings.Contains(headWithoutIdentityHome, `href="/pegawai/kehadiran-saya#`) {
+		t.Fatal("Kepala Sekolah tanpa identitas aktif harus melihat pintasan nonaktif")
+	}
+	get(headWithoutIdentity.client, "/kehadiran-saya", 403)
 	key1, _ := academic.NewTeacherAttendanceIdempotencyKey()
 	upload(teacher, fields("check_in", key1), jpegBytes, "", 403, false)
 	upload(teacher, fields("check_in", key1), []byte("invalid-selfie"), teacher.csrf, 422, false)

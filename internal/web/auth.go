@@ -65,6 +65,7 @@ type view struct {
 	NavigationTabs                      []navigationTab
 	Dashboard                           *dashboardPresentation
 	AdditionalDashboards                []*dashboardPresentation
+	HomeAttendance                      *homeAttendanceShortcuts
 	ModalOpen                           bool
 	ModalID                             string
 	Users                               []auth.User

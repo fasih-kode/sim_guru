@@ -12,6 +12,21 @@
 {{define "teacher-dashboard"}}{{template "dashboard-overview" .Dashboard}}{{end}}
 {{define "homeroom-dashboard"}}{{template "dashboard-overview" .Dashboard}}{{end}}
 
+{{define "home-attendance-shortcuts"}}
+<div class="mb-6" aria-label="Pintasan presensi pribadi">
+  <div class="grid max-w-lg grid-cols-2 gap-3">
+    {{if and . .Available}}
+    <a class="button-primary min-h-11 w-full justify-center" href="{{.Href}}#attendance-check-in">{{template "icon-login" .}}Catat Masuk</a>
+    <a class="button-secondary min-h-11 w-full justify-center" href="{{.Href}}#attendance-check-out">{{template "icon-check" .}}Catat Pulang</a>
+    {{else}}
+    <button class="button-primary min-h-11 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled aria-disabled="true" aria-describedby="home-attendance-disabled">{{template "icon-login" .}}Catat Masuk</button>
+    <button class="button-secondary min-h-11 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled aria-disabled="true" aria-describedby="home-attendance-disabled">{{template "icon-check" .}}Catat Pulang</button>
+    <p class="col-span-2 text-sm text-gray-500" id="home-attendance-disabled" role="status">{{if .}}{{.Message}}{{else}}Kelayakan presensi belum dapat diperiksa; tombol dinonaktifkan.{{end}}</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 {{define "dashboard-section"}}
 <section aria-labelledby="{{.TitleID}}">
   <div class="mb-5">

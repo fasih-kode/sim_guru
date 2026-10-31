@@ -82,7 +82,7 @@ func staffAttendanceHTTPError(err error) (int, string) {
 	case errors.As(err, &tooLarge):
 		return http.StatusRequestEntityTooLarge, "Ukuran unggahan melebihi batas. Ambil ulang foto."
 	case errors.Is(err, academic.ErrForbidden):
-		return http.StatusForbidden, "Hanya pegawai TU aktif dengan akun dan role yang sesuai yang dapat mencatat kehadiran sendiri."
+		return http.StatusForbidden, "Akun tidak memiliki identitas personel aktif dan role yang sesuai untuk mencatat kehadiran sendiri."
 	case errors.Is(err, academic.ErrConflict):
 		return http.StatusConflict, "Aksi kehadiran hari ini sudah tercatat atau bukti retry berbeda. Periksa status terbaru."
 	case errors.Is(err, academic.ErrStaffAttendancePhoto):

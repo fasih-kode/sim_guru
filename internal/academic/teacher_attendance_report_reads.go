@@ -34,7 +34,8 @@ func (s *Store) teacherReportReader(ctx context.Context, actor int64, scope Teac
 			return nil, e
 		}
 		var allowed bool
-		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.users WHERE id=$1 AND active)`, actor).Scan(&allowed)
+		e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.users u WHERE u.id=$1 AND u.active
+			AND EXISTS(SELECT 1 FROM app.user_roles r WHERE r.user_id=u.id AND r.role_code IN ('guru_mapel','wali_kelas')))`, actor).Scan(&allowed)
 		if e != nil || !allowed {
 			tx.Rollback()
 			if e != nil {

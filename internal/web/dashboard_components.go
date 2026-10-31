@@ -29,6 +29,12 @@ type dashboardPresentation struct {
 	QuickLinks                        []dashboardQuickLink
 }
 
+type homeAttendanceShortcuts struct {
+	Available bool
+	Href      string
+	Message   string
+}
+
 func adminDashboardPresentation(stats master.AdminDashboardStats) *dashboardPresentation {
 	yearContext := ""
 	classValue := "—"
@@ -225,6 +231,60 @@ func headmasterDashboardPresentation(stats academic.SchoolMonitoringDashboardSta
 		QuickLinks: []dashboardQuickLink{
 			{Label: "Kehadiran Siswa", Href: "/absensi/harian", Icon: smallDashboardIcon(dashboardIconCalendar)},
 			{Label: "Kasus Siswa", Href: "/kesiswaan/kasus", Icon: smallDashboardIcon(dashboardIconCase)},
+		},
+	}
+}
+
+func staffDashboardPresentation(stats academic.StaffSelfDashboardStats) *dashboardPresentation {
+	checkIn, checkOut := "Belum Dicatat", "Belum Dicatat"
+	if stats.HasCheckIn {
+		checkIn = "Sudah Dicatat"
+	}
+	if stats.HasCheckOut {
+		checkOut = "Sudah Dicatat"
+	}
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan Pegawai TU", Heading: "Kehadiran pribadi", Context: "Tanggal " + stats.Date + " WIB",
+		TitleID: "staff-overview-title", QuickAccessID: "staff-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Masuk hari ini", Value: checkIn, Detail: "Status catatan kehadiran milik Anda.", Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+			{Label: "Pulang hari ini", Value: checkOut, Detail: "Status catatan kehadiran milik Anda.", Icon: dashboardIconCalendar, IconBackground: "bg-blue-50", IconColor: "text-blue-600"},
+		},
+		QuickLinks: []dashboardQuickLink{{Label: "Kehadiran Pegawai", Href: "/pegawai/kehadiran-saya", Icon: smallDashboardIcon(dashboardIconCheck)}},
+	}
+}
+
+func teacherAttendanceManagerDashboardPresentation(stats academic.TeacherAttendanceManagerDashboardStats) *dashboardPresentation {
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan Pengelola", Heading: "Catatan kehadiran guru", Context: "Tanggal " + stats.Date + " WIB",
+		TitleID: "teacher-manager-overview-title", QuickAccessID: "teacher-manager-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Guru dengan event kehadiran hari ini", Value: fmt.Sprint(stats.TeachersRecorded), Detail: "Guru yang memiliki setidaknya satu event kehadiran.", Icon: dashboardIconTeacher, IconBackground: "bg-brand-50", IconColor: "text-brand-600"},
+			{Label: "Catatan Masuk", Value: fmt.Sprint(stats.CheckIns), Detail: "Jumlah guru dengan event Masuk tercatat.", Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+			{Label: "Catatan Pulang", Value: fmt.Sprint(stats.CheckOuts), Detail: "Jumlah guru dengan event Pulang tercatat.", Icon: dashboardIconCalendar, IconBackground: "bg-blue-50", IconColor: "text-blue-600"},
+			{Label: "Laporan aktif hari ini", Value: "Ringkasan", Detail: fmt.Sprintf("Guru dengan laporan: Izin %d · Sakit %d · Dinas Luar %d. Tidak ada status Alpa otomatis.", stats.Excused, stats.Sick, stats.OutOfOffice), Icon: dashboardIconCase, IconBackground: "bg-orange-50", IconColor: "text-orange-600"},
+		},
+		QuickLinks: []dashboardQuickLink{
+			{Label: "Kelola Kehadiran Guru", Href: "/tu/kehadiran-guru", Icon: smallDashboardIcon(dashboardIconTeacher)},
+			{Label: "Rekap Kehadiran Guru", Href: "/tu/kehadiran-guru/rekap", Icon: smallDashboardIcon(dashboardIconCalendar)},
+		},
+	}
+}
+
+func attendanceOperatorDashboardPresentation(stats academic.SchoolMonitoringDashboardStats) *dashboardPresentation {
+	students, recorded, unrecorded, detail := schoolAttendanceCardValues(stats)
+	return &dashboardPresentation{
+		Eyebrow: "Ringkasan Petugas Absensi", Heading: "Absensi siswa harian", Context: "Tanggal " + stats.Date + " WIB",
+		TitleID: "attendance-operator-overview-title", QuickAccessID: "attendance-operator-quick-access-title",
+		Cards: []dashboardStatCard{
+			{Label: "Siswa pada roster aktif", Value: students, Detail: "Penempatan aktif pada tahun ajaran aktif.", Icon: dashboardIconPeople, IconBackground: "bg-brand-50", IconColor: "text-brand-600"},
+			{Label: "Absensi tercatat hari ini", Value: recorded, Detail: detail, Icon: dashboardIconCheck, IconBackground: "bg-green-50", IconColor: "text-green-700"},
+			{Label: "Belum tercatat hari ini", Value: unrecorded, Detail: "Siswa pada roster aktif tanpa catatan absensi hari ini; bukan status Alpa.", Icon: dashboardIconCalendar, IconBackground: "bg-orange-50", IconColor: "text-orange-600"},
+		},
+		QuickLinks: []dashboardQuickLink{
+			{Label: "Absensi Harian", Href: "/absensi/harian", Icon: smallDashboardIcon(dashboardIconCalendar)},
+			{Label: "Pemindai QR", Href: "/absensi/pemindai", Icon: smallDashboardIcon(dashboardIconCheck)},
+			{Label: "Kartu QR Siswa", Href: "/absensi/kartu", Icon: smallDashboardIcon(dashboardIconPeople)},
 		},
 	}
 }

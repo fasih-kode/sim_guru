@@ -1,5 +1,5 @@
 {{define "teacher-attendance"}}
-<div class="mb-5 flex flex-wrap gap-3"><a class="button-primary" href="/kehadiran-saya/laporan?new=1">Buat Laporan</a><a class="button-secondary" href="/kehadiran-saya/laporan">Riwayat Laporan Saya</a></div>
+{{if not .TeacherAttendance.PersonalOnly}}<div class="mb-5 flex flex-wrap gap-3"><a class="button-primary" href="/kehadiran-saya/laporan?new=1">Buat Laporan</a><a class="button-secondary" href="/kehadiran-saya/laporan">Riwayat Laporan Saya</a></div>{{end}}
 <section data-teacher-attendance data-response-error="{{.Error}}" data-response-message="{{.Message}}">
   <section class="panel mb-5" data-teacher-attendance-context>
     <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
@@ -16,11 +16,11 @@
     {{end}}
     <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan TU Pengelola Kehadiran Guru.</p>
     {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi TU Pengelola Kehadiran Guru.</p>{{end}}
-    <a class="button-secondary mt-4" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi</a>
+    {{if not .TeacherAttendance.PersonalOnly}}<a class="button-secondary mt-4" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi</a>{{end}}
   </section>
   <p class="mb-4 text-sm" role="status" data-attendance-result hidden></p>
   <div class="mb-5 grid gap-5 sm:grid-cols-2" data-teacher-attendance-status tabindex="-1" aria-label="Status kehadiran terbaru">
-    <section class="panel">
+    <section class="panel" id="attendance-check-in" tabindex="-1">
       <h2 class="mb-4 text-lg font-semibold">Masuk</h2>
       {{with .TeacherAttendance.CheckIn}}
         <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
@@ -30,7 +30,7 @@
       {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
       <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_in" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckIn}}disabled{{end}}>Catat Masuk</button>
     </section>
-    <section class="panel">
+    <section class="panel" id="attendance-check-out" tabindex="-1">
       <h2 class="mb-4 text-lg font-semibold">Pulang</h2>
       {{with .TeacherAttendance.CheckOut}}
         <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>

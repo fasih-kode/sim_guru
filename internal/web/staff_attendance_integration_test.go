@@ -218,12 +218,33 @@ func TestStaffAttendanceHTTPIntegration(t *testing.T) {
 	noProfile := makeAccount("", true, false, "pegawai_tu")
 	noRole := makeAccount("Pegawai tanpa role", true, true, "guru_mapel")
 	inactive := makeAccount("Pegawai nonaktif HTTP", false, true, "pegawai_tu")
+	headmaster := makeAccount("Kepala sekolah staf", true, true, "kepala_sekolah")
+	headmasterNoIdentity := makeAccount("", true, false, "kepala_sekolah")
+	inactiveHeadmaster := makeAccount("Kepala sekolah nonaktif", false, true, "kepala_sekolah")
+	var beforeHomeEvents int
+	if err = db.QueryRow(`SELECT count(*) FROM app.staff_attendance_events WHERE staff_member_id=$1`, owner.staffID).Scan(&beforeHomeEvents); err != nil {
+		t.Fatal(err)
+	}
+	home := read(owner.client, "/", http.StatusOK)
+	if !strings.Contains(home, `href="/pegawai/kehadiran-saya#attendance-check-in"`) || !strings.Contains(home, `href="/pegawai/kehadiran-saya#attendance-check-out"`) || strings.Contains(home, ">Muat ulang") {
+		t.Fatal("role Pegawai TU + Guru tanpa identitas guru aktif harus tetap mendapat pintasan TU, tanpa muat ulang")
+	}
+	var afterHomeEvents int
+	if err = db.QueryRow(`SELECT count(*) FROM app.staff_attendance_events WHERE staff_member_id=$1`, owner.staffID).Scan(&afterHomeEvents); err != nil || afterHomeEvents != beforeHomeEvents {
+		t.Fatalf("GET Beranda tidak boleh mencatat kehadiran: sebelum=%d sesudah=%d err=%v", beforeHomeEvents, afterHomeEvents, err)
+	}
 	page := read(owner.client, "/pegawai/kehadiran-saya", http.StatusOK)
 	if !strings.Contains(page, "Kehadiran Pegawai") || !strings.Contains(page, "Catat Masuk") || !strings.Contains(page, "Catat Pulang") || !strings.Contains(page, "Ambil lokasi") || !strings.Contains(page, "Buka kamera") {
 		t.Fatal("self-service page or role menu is incomplete")
 	}
 	if strings.Count(page, "Kehadiran Pegawai") != 1 {
 		t.Fatal("role combination duplicated the staff attendance menu")
+	}
+	for _, account := range []account{noProfile, noRole, headmasterNoIdentity} {
+		homeBody := read(account.client, "/", http.StatusOK)
+		if !strings.Contains(homeBody, `disabled aria-disabled="true"`) || !strings.Contains(homeBody, "identitas Guru atau Pegawai TU aktif") || strings.Contains(homeBody, `href="/kehadiran-saya#`) || strings.Contains(homeBody, `href="/pegawai/kehadiran-saya#`) {
+			t.Fatal("akun tanpa identitas presensi aktif harus melihat tombol nonaktif, bukan route yang akan ditolak")
+		}
 	}
 	tokenMatch := csrfRE.FindStringSubmatch(page)
 	if len(tokenMatch) != 2 {
@@ -234,6 +255,7 @@ func TestStaffAttendanceHTTPIntegration(t *testing.T) {
 		t.Fatal("TU without linked profile read another staff record")
 	}
 	read(noRole.client, "/pegawai/kehadiran-saya", http.StatusForbidden)
+	read(headmasterNoIdentity.client, "/pegawai/kehadiran-saya", http.StatusForbidden)
 	read(inactive.client, "/pegawai/kehadiran-saya", http.StatusOK)
 	post := func(a account, token, key string, want int) string {
 		t.Helper()
@@ -273,6 +295,22 @@ func TestStaffAttendanceHTTPIntegration(t *testing.T) {
 		}
 		return string(result)
 	}
+	headHome := read(headmaster.client, "/", http.StatusOK)
+	if !strings.Contains(headHome, `href="/pegawai/kehadiran-saya#attendance-check-in"`) || !strings.Contains(headHome, `href="/pegawai/kehadiran-saya#attendance-check-out"`) {
+		t.Fatal("Kepala Sekolah dengan identitas pegawai aktif harus mendapat pintasan presensi pegawai")
+	}
+	headPage := read(headmaster.client, "/pegawai/kehadiran-saya", http.StatusOK)
+	headToken := csrfRE.FindStringSubmatch(headPage)
+	if len(headToken) != 2 {
+		t.Fatal("Kepala Sekolah tidak mendapat token CSRF presensi pegawai")
+	}
+	post(headmaster, headToken[1], "11223344556677889900aabbccddeeff", http.StatusSeeOther)
+	inactiveHeadPage := read(inactiveHeadmaster.client, "/pegawai/kehadiran-saya", http.StatusOK)
+	inactiveHeadToken := csrfRE.FindStringSubmatch(inactiveHeadPage)
+	if len(inactiveHeadToken) != 2 {
+		t.Fatal("halaman riwayat identitas nonaktif seharusnya tetap terbaca")
+	}
+	post(inactiveHeadmaster, inactiveHeadToken[1], "22334455667788990011aabbccddeeff", http.StatusForbidden)
 	post(owner, "", "aabbccddeeff00112233445566778899", http.StatusForbidden)
 	post(owner, csrfToken, "aabbccddeeff00112233445566778899", http.StatusSeeOther)
 	var eventID, photoID int64
