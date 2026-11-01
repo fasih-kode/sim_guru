@@ -11,7 +11,7 @@ test:
 	go test -race ./...
 integration:
 # Paket memakai database test bersama, jadi sementara dijalankan serial.
-	go test -p 1 -count=1 -race -tags=integration ./internal/database ./migrations ./internal/auth ./internal/master ./internal/academic ./internal/web
+	go test -p 1 -count=1 -race -timeout 30m -tags=integration ./internal/database ./migrations ./internal/auth ./internal/master ./internal/academic ./internal/web
 check:
 	test -z "$$(gofmt -l cmd internal migrations)"
 	go vet ./...

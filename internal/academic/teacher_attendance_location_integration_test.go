@@ -61,6 +61,10 @@ func TestTeacherAttendanceLocationIntegration(t *testing.T) {
 	}
 	base := config
 	initialHistory := len(history)
+	var initialHistoryRows int
+	if err := db.QueryRow(`SELECT count(*) FROM app.teacher_attendance_location_history WHERE location_id=1`).Scan(&initialHistoryRows); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.SaveTeacherAttendanceLocation(ctx, admin.ID, academic.TeacherAttendanceLocationInput{Latitude: config.Latitude, Longitude: config.Longitude, RadiusM: config.RadiusM, ExpectedVersion: config.Version, Reason: "Tidak ada perubahan"}); err != nil {
 		t.Fatal(err)
 	}
@@ -68,16 +72,39 @@ func TestTeacherAttendanceLocationIntegration(t *testing.T) {
 	if err != nil || len(history) != initialHistory {
 		t.Fatalf("no-op added history: %d err=%v", len(history), err)
 	}
-	stale := academic.TeacherAttendanceLocationInput{Latitude: -6.21, Longitude: 106.8, RadiusM: 120, ExpectedVersion: base.Version - 1, Reason: "Versi basi"}
+	updatedLatitude := base.Latitude + 0.01
+	if updatedLatitude > 90 {
+		updatedLatitude = base.Latitude - 0.01
+	}
+	updatedRadius := base.RadiusM + 1
+	if updatedRadius > 500 {
+		updatedRadius = base.RadiusM - 1
+	}
+	updateInput := academic.TeacherAttendanceLocationInput{Latitude: updatedLatitude, Longitude: base.Longitude, RadiusM: updatedRadius, ExpectedVersion: base.Version, Reason: "Penyesuaian titik"}
+	stale := updateInput
+	stale.ExpectedVersion = base.Version - 1
+	stale.Reason = "Versi basi"
 	if err = s.SaveTeacherAttendanceLocation(ctx, admin.ID, stale); !errors.Is(err, academic.ErrConflict) {
 		t.Fatalf("stale version error=%v", err)
 	}
-	if err = s.SaveTeacherAttendanceLocation(ctx, admin2.ID, academic.TeacherAttendanceLocationInput{Latitude: -6.21, Longitude: 106.8, RadiusM: 120, ExpectedVersion: base.Version, Reason: "Penyesuaian titik"}); err != nil {
+	if err = s.SaveTeacherAttendanceLocation(ctx, admin2.ID, updateInput); err != nil {
 		t.Fatal(err)
 	}
 	config, history, err = s.TeacherAttendanceLocation(ctx, admin.ID)
-	if err != nil || config.Version != base.Version+1 || len(history) != initialHistory+1 || history[0].Before == "" || history[0].After == "" {
-		t.Fatalf("update history mismatch config=%+v history=%+v err=%v", config, history, err)
+	var historyRows int
+	if err == nil {
+		err = db.QueryRow(`SELECT count(*) FROM app.teacher_attendance_location_history WHERE location_id=1`).Scan(&historyRows)
+	}
+	wantVisibleHistory := initialHistory + 1
+	if wantVisibleHistory > 100 {
+		wantVisibleHistory = 100
+	}
+	var latestHistory any
+	if len(history) > 0 {
+		latestHistory = history[0]
+	}
+	if err != nil || config.Version != base.Version+1 || config.Latitude != updatedLatitude || config.RadiusM != updatedRadius || len(history) != wantVisibleHistory || historyRows != initialHistoryRows+1 || len(history) == 0 || history[0].Before == "" || history[0].After == "" {
+		t.Fatalf("update history mismatch config=%+v visible=%d want_visible=%d rows=%d want_rows=%d latest=%+v err=%v", config, len(history), wantVisibleHistory, historyRows, initialHistoryRows+1, latestHistory, err)
 	}
 	if err = s.SaveTeacherAttendanceLocation(ctx, admin.ID, academic.TeacherAttendanceLocationInput{Latitude: 91, Longitude: 0, RadiusM: 100, ExpectedVersion: config.Version, Reason: "Tidak valid"}); err == nil {
 		t.Fatal("invalid coordinate unexpectedly accepted")

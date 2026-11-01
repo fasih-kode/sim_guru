@@ -82,6 +82,12 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err = db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES($1,$2) RETURNING id`, "Guru Jurnal Lain", otherTeacher.ID).Scan(&otherID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'admin')`, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckIn, OccurredAt: date.Format("2006-01-02") + "T00:01", Reason: "Bukti presensi sintetis untuk integrasi jurnal", IdempotencyKey: testutil.Random(t)[:32]}); err != nil {
+		t.Fatal("cannot prepare eligible teacher attendance evidence", err)
+	}
 	if err = db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "J"+testutil.Random(t)[:10], "Mapel Jurnal").Scan(&subjectID); err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +386,10 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatal("cannot change timetable configuration for the next published revision", err)
 	}
 	// Buat split eksplisit: satu cabang meneruskan logical ID, cabang kedua baru.
-	r3Draft, err := s.CreateTimetableDraft(ctx, cur.ID, semester, date.AddDate(0, 0, 1))
+	// Jadwalkan revisi pada tanggal occurrence yang tetap sama hari-minggunya
+	// agar keberlanjutan slot dapat dibuktikan melalui layanan occurrence.
+	r3Effective := date.AddDate(0, 0, 7)
+	r3Draft, err := s.CreateTimetableDraft(ctx, cur.ID, semester, r3Effective)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,6 +435,10 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err != nil || len(versionAfterPublish.Periods) != 2 || versionAfterPublish.Periods[0].StartsAt != "07:00:00" {
 		t.Fatalf("publishing a new timetable revision changed a saved journal snapshot: %#v %v", versionAfterPublish, err)
 	}
+	finalSnapshotAfterPublish, err := s.TeachingJournalVersionDetail(ctx, teacher.ID, results[0].ID, 4)
+	if err != nil || len(finalSnapshotAfterPublish.Periods) != 2 || finalSnapshotAfterPublish.Periods[0].StartsAt != "07:00:00" {
+		t.Fatalf("publishing a new timetable revision changed the Final correction snapshot: %#v %v", finalSnapshotAfterPublish, err)
+	}
 	var nextRevisionStart string
 	if err = db.QueryRow(`SELECT starts_at::text FROM app.weekly_timetable_periods WHERE revision_id=$1 AND weekday=$2 AND period_no=1`, r2, weekday).Scan(&nextRevisionStart); err != nil || nextRevisionStart != "08:00:00" {
 		t.Fatalf("new revision did not get its own timetable period snapshot: %q %v", nextRevisionStart, err)
@@ -440,8 +453,24 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if newLogicalID == logicalID {
 		t.Fatal("split cabang memperoleh logical ID yang sama")
 	}
+	preStopOccurrences, pending, err := s.TeachingJournalOccurrences(ctx, otherTeacher.ID, r3Effective.Format("2006-01-02"))
+	if err != nil || pending || len(preStopOccurrences) != 1 || preStopOccurrences[0].LogicalLessonID != newLogicalID {
+		t.Fatalf("logical slot hasil split harus tersedia sebelum tanggal stop: occurrences=%#v pending=%t err=%v", preStopOccurrences, pending, err)
+	}
 	// Merge operasional tidak menyatukan ID: satu sumber berlanjut dan sumber lain dihentikan.
-	r4, r4Entry := makeRevision(date.AddDate(0, 0, 2))
+	r4Effective := date.AddDate(0, 0, 8)
+	r4, r4Entry := makeRevision(r4Effective)
+	var transitionsBeforeMerge int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_transitions WHERE to_revision_id=$1`, r4).Scan(&transitionsBeforeMerge); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ResolveTeachingJournalLineage(ctx, cur.ID, r2, r4, "Percobaan merge ambigu", []TeachingJournalLineageDecision{{Decision: "continue", SourceEntryID: r2Entry, TargetEntryID: r4Entry, Reason: "Sumber pertama"}, {Decision: "continue", SourceEntryID: r2NewEntry, TargetEntryID: r4Entry, Reason: "Sumber kedua"}}); err == nil {
+		t.Fatal("dua logical lesson berbeda tidak boleh digabungkan ke satu target")
+	}
+	var transitionsAfterRejectedMerge int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_transitions WHERE to_revision_id=$1`, r4).Scan(&transitionsAfterRejectedMerge); err != nil || transitionsAfterRejectedMerge != transitionsBeforeMerge {
+		t.Fatalf("penolakan merge ambigu meninggalkan histori lineage parsial: before=%d after=%d err=%v", transitionsBeforeMerge, transitionsAfterRejectedMerge, err)
+	}
 	if err = s.ResolveTeachingJournalLineage(ctx, cur.ID, r2, r4, "Konsolidasi slot", []TeachingJournalLineageDecision{{Decision: "continue", SourceEntryID: r2Entry, TargetEntryID: r4Entry, Reason: "Sumber utama diteruskan"}, {Decision: "stop", SourceEntryID: r2NewEntry, Reason: "Slot kedua dihentikan"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -452,8 +481,12 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if stopCount != 1 {
 		t.Fatal("merge tidak mencatat penghentian lineage kedua")
 	}
+	postStopOccurrences, pending, err := s.TeachingJournalOccurrences(ctx, otherTeacher.ID, r4Effective.Format("2006-01-02"))
+	if err != nil || pending || len(postStopOccurrences) != 0 {
+		t.Fatalf("logical slot harus berhenti tepat pada tanggal efektif stop: occurrences=%#v pending=%t err=%v", postStopOccurrences, pending, err)
+	}
 	// Upaya memakai kembali ID yang dihentikan gagal di trigger PostgreSQL.
-	r5, r5Entry := makeRevision(date.AddDate(0, 0, 3))
+	r5, r5Entry := makeRevision(date.AddDate(0, 0, 9))
 	reuseTx, txErr := db.BeginTx(ctx, nil)
 	if txErr != nil {
 		t.Fatal(txErr)
@@ -484,5 +517,44 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	}
 	if lessonAttendanceBefore != lessonAttendanceAfter || lessonHistoryBefore != lessonHistoryAfter || teacherEventsBefore != teacherEventsAfter || teacherHistoryBefore != teacherHistoryAfter {
 		t.Fatalf("journal operations changed attendance/presence evidence: lesson=%s/%s lesson_history=%s/%s teacher=%s/%s teacher_history=%s/%s", lessonAttendanceBefore, lessonAttendanceAfter, lessonHistoryBefore, lessonHistoryAfter, teacherEventsBefore, teacherEventsAfter, teacherHistoryBefore, teacherHistoryAfter)
+	}
+	start := make(chan struct{})
+	var concurrentSave TeachingJournalResult
+	var concurrentSaveErr, concurrentCheckOutErr error
+	concurrentCheckOutKey := testutil.Random(t)[:32]
+	input = TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: date, RequestKey: "99999999-9999-4999-8999-999999999999", ExpectedVersion: 4, State: "final", Outcome: "held", Material: "Koreksi yang diserialisasi terhadap presensi", CorrectionReason: "Koreksi konkurensi sintetis"}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		concurrentSave, concurrentSaveErr = s.SaveTeachingJournal(ctx, teacher.ID, input)
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		_, concurrentCheckOutErr = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckOut, OccurredAt: date.Format("2006-01-02") + "T00:02", Reason: "Checkout sintetis konkurensi", IdempotencyKey: concurrentCheckOutKey})
+	}()
+	close(start)
+	wg.Wait()
+	if concurrentCheckOutErr != nil {
+		t.Fatal("concurrent official check-out failed", concurrentCheckOutErr)
+	}
+	var finalVersion, finalHistory int
+	if err = db.QueryRow(`SELECT current_version_no FROM app.teaching_journals WHERE id=$1`, results[0].ID).Scan(&finalVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_history WHERE journal_id=$1`, results[0].ID).Scan(&finalHistory); err != nil {
+		t.Fatal(err)
+	}
+	if errors.Is(concurrentSaveErr, ErrTeacherLessonIneligible) {
+		if finalVersion != 4 || finalHistory != 4 {
+			t.Fatalf("presensi yang menang lock harus menolak koreksi tanpa versi parsial: version=%d history=%d", finalVersion, finalHistory)
+		}
+	} else if concurrentSaveErr == nil {
+		if concurrentSave.Version != 5 || finalVersion != 5 || finalHistory != 5 {
+			t.Fatalf("jurnal yang menang lock harus menyimpan satu versi lengkap: result=%#v version=%d history=%d", concurrentSave, finalVersion, finalHistory)
+		}
+	} else {
+		t.Fatal("unexpected concurrent journal result", concurrentSaveErr)
 	}
 }
