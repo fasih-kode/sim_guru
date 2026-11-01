@@ -22,9 +22,8 @@ func TestValidateTeachingJournalContentAllowsCorrectedOutcomes(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "waktu aktual tidak berlaku untuk pertemuan tidak terlaksana",
-			input:   TeachingJournalInput{State: "final", Outcome: "not_held", NotHeldReason: "Dibatalkan", ActualStart: "07:30", ActualEnd: "08:00"},
-			wantErr: true,
+			name:  "tidak terlaksana tidak meminta waktu selain snapshot jadwal",
+			input: TeachingJournalInput{State: "final", Outcome: "not_held", NotHeldReason: "Dibatalkan"},
 		},
 		{
 			name:    "alasan tidak terlaksana tidak boleh ikut koreksi terlaksana",

@@ -160,7 +160,7 @@ func TestTeachingJournalEditFormShowsOutcomeControlsAndPlainLanguageHistory(t *t
 	}
 	a := &application{templates: templateSet}
 	user := &auth.User{ID: 5, Active: true, Roles: []string{"guru_mapel"}}
-	final := academic.TeachingJournalVersionRecord{Number: 2, State: "final", Outcome: "not_held", Material: "Konteks", ActivityNotes: "Catatan", NotHeldReason: "Dibatalkan"}
+	final := academic.TeachingJournalVersionRecord{Number: 2, State: "final", Outcome: "not_held", Material: "Konteks", ActivityNotes: "Catatan", NotHeldReason: "Dibatalkan", ActualStart: "07:30:00", ActualEnd: "08:00:00"}
 	detail := academic.TeachingJournalDetail{ID: 17, MeetingDate: "2026-10-31", CurrentVersion: final}
 	r := httptest.NewRequest("GET", "/jurnal-saya/17/edit", nil).WithContext(context.WithValue(context.Background(), principalKey{}, user))
 	w := httptest.NewRecorder()
@@ -168,10 +168,18 @@ func TestTeachingJournalEditFormShowsOutcomeControlsAndPlainLanguageHistory(t *t
 		Detail: &detail, Selected: &final, CanEdit: true, Occurrence: &academic.TeachingJournalOccurrenceOption{Date: "2026-10-31"}, Form: &teachingJournalForm{Outcome: final.Outcome, Material: final.Material, ActivityNotes: final.ActivityNotes, NotHeldReason: final.NotHeldReason, CorrectionReason: "Koreksi"},
 	}})
 	body := w.Body.String()
-	for _, required := range []string{"Koreksi Jurnal Final", `data-journal-outcome`, `data-journal-not-held-field`, `data-journal-actual-times`, "Catatan kegiatan", "Alasan koreksi", `name="expected_version"`} {
+	for _, required := range []string{"Koreksi Jurnal Final", `data-journal-outcome`, `data-journal-not-held-field`, "snapshot jadwal resmi", "Catatan kegiatan", "Alasan koreksi", `name="expected_version"`} {
 		if !strings.Contains(body, required) {
 			t.Errorf("correction form missing %q", required)
 		}
+	}
+	if strings.Contains(body, `name="actual_start"`) || strings.Contains(body, `name="actual_end"`) {
+		t.Fatal("journal correction form still accepts teacher-entered actual times")
+	}
+	detailEvidence := httptest.NewRecorder()
+	a.render(detailEvidence, httptest.NewRequest("GET", "/jurnal-saya/17", nil).WithContext(context.WithValue(context.Background(), principalKey{}, user)), "page", http.StatusOK, view{Page: "teaching-journal-detail", Title: "Detail", TeachingJournal: &teachingJournalView{Detail: &detail, Selected: &final}})
+	if !strings.Contains(detailEvidence.Body.String(), "Catatan historis dari versi lama") || !strings.Contains(detailEvidence.Body.String(), "snapshot Jam Pelajaran") {
+		t.Fatal("previously stored time evidence is not identified as historical alongside official schedule snapshot")
 	}
 	detailResponse := httptest.NewRecorder()
 	a.render(detailResponse, httptest.NewRequest("GET", "/jurnal-saya/17", nil).WithContext(context.WithValue(context.Background(), principalKey{}, user)), "page", http.StatusOK, view{Page: "teaching-journal-detail", Title: "Detail", TeachingJournal: &teachingJournalView{Detail: &detail, Selected: &final, History: academic.TeachingJournalHistory{JournalID: 17, Versions: []academic.TeachingJournalVersionRecord{{Number: 1, State: "final", Event: "finalized"}}}}})

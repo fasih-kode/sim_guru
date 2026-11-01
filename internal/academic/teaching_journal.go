@@ -24,8 +24,6 @@ type TeachingJournalInput struct {
 	Material         string
 	ActivityNotes    string
 	NotHeldReason    string
-	ActualStart      string
-	ActualEnd        string
 	CorrectionReason string
 	ExpectedVersion  int
 }
@@ -57,7 +55,7 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 	if in.ExpectedVersion < 0 {
 		return result, ValidationError("Versi jurnal tidak valid.")
 	}
-	canonical := fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|%s|%d", in.LogicalLessonID, date, in.State, in.Outcome, in.Material, in.ActivityNotes, in.NotHeldReason, in.ActualStart, in.ActualEnd, in.ExpectedVersion)
+	canonical := fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%d", in.LogicalLessonID, date, in.State, in.Outcome, in.Material, in.ActivityNotes, in.NotHeldReason, in.ExpectedVersion)
 	if in.ExpectedVersion > 0 {
 		canonical += "|" + in.CorrectionReason
 	}
@@ -186,11 +184,6 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 			return TeachingJournalResult{}, ErrConflict
 		}
 	}
-	var actualStart, actualEnd any
-	if in.ActualStart != "" {
-		actualStart = in.ActualStart
-		actualEnd = in.ActualEnd
-	}
 	var correction any
 	event := "created"
 	if !isNew {
@@ -208,7 +201,7 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 		event = "finalized"
 	}
 	var versionID int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO app.teaching_journal_versions(journal_id,version_no,state,outcome,material,activity_notes,not_held_reason,actual_starts_at,actual_ends_at,actor_id,correction_reason,request_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,recorded_at`, journalID, versionNo, in.State, in.Outcome, in.Material, in.ActivityNotes, in.NotHeldReason, actualStart, actualEnd, actor, correction, in.RequestKey, digest[:]).Scan(&versionID, &result.RecordedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO app.teaching_journal_versions(journal_id,version_no,state,outcome,material,activity_notes,not_held_reason,actor_id,correction_reason,request_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,recorded_at`, journalID, versionNo, in.State, in.Outcome, in.Material, in.ActivityNotes, in.NotHeldReason, actor, correction, in.RequestKey, digest[:]).Scan(&versionID, &result.RecordedAt)
 	if err != nil {
 		return TeachingJournalResult{}, dbError(err)
 	}
@@ -278,24 +271,14 @@ func validateTeachingJournalContent(in TeachingJournalInput) error {
 	if in.Outcome != "held" && in.Outcome != "not_held" {
 		return ValidationError("Status pertemuan tidak valid.")
 	}
-	if in.Outcome == "not_held" && (len([]rune(in.NotHeldReason)) == 0 || in.ActualStart != "" || in.ActualEnd != "") {
-		return ValidationError("Pertemuan tidak terlaksana wajib memiliki alasan dan tidak mencatat waktu aktual.")
+	if in.Outcome == "not_held" && len([]rune(in.NotHeldReason)) == 0 {
+		return ValidationError("Pertemuan tidak terlaksana wajib memiliki alasan.")
 	}
 	if in.Outcome == "held" && in.NotHeldReason != "" {
 		return ValidationError("Alasan tidak terlaksana hanya diisi untuk pertemuan yang tidak terlaksana.")
 	}
 	if in.State == "final" && in.Outcome == "held" && len([]rune(in.Material)) == 0 {
 		return ValidationError("Materi wajib diisi sebelum jurnal pembelajaran difinalkan.")
-	}
-	if (in.ActualStart == "") != (in.ActualEnd == "") {
-		return ValidationError("Waktu mulai dan selesai aktual harus diisi bersama.")
-	}
-	if in.ActualStart != "" {
-		start, e1 := time.Parse("15:04", in.ActualStart)
-		end, e2 := time.Parse("15:04", in.ActualEnd)
-		if e1 != nil || e2 != nil || !start.Before(end) {
-			return ValidationError("Waktu aktual tidak valid.")
-		}
 	}
 	return nil
 }

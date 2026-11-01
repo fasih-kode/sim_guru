@@ -83,12 +83,6 @@ function updateJournalOutcome(form) {
     reason.required = notHeld;
     if (!notHeld) reason.value = '';
   }
-  const actualTimes = form.querySelector('[data-journal-actual-times]');
-  if (actualTimes) actualTimes.hidden = notHeld;
-  actualTimes?.querySelectorAll('input[name="actual_start"],input[name="actual_end"]').forEach(input => {
-    input.disabled = notHeld;
-    if (notHeld) input.value = '';
-  });
   const materialHelp = form.querySelector('[data-journal-material-help]');
   if (materialHelp) materialHelp.textContent = notHeld ? materialHelp.dataset.notHeldHelp : materialHelp.dataset.heldHelp;
 }
