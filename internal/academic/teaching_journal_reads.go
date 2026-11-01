@@ -5,11 +5,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const teachingJournalPageSize = 10
+const teachingJournalExportMaxRows = 1000
+
+var ErrTeachingJournalExportLimit = errors.New("hasil ekspor jurnal melebihi batas 1000 baris")
 
 type TeachingJournalReadFilter struct {
 	SemesterID int64
@@ -29,6 +33,9 @@ type TeachingJournalListItem struct {
 	MeetingDate, ClassSnapshot, SubjectSnapshot          string
 	TeacherSnapshot, State, Outcome                      string
 	Material, ActivityNotes                              string
+	NotHeldReason                                        string
+	Periods                                              []TeachingJournalPeriodSnapshot
+	PeriodLabel                                          string
 	ReviewReason                                         string
 	Version                                              int
 	RecordedAt                                           time.Time
@@ -188,43 +195,107 @@ func (s *Store) TeachingJournals(ctx context.Context, actor int64, f TeachingJou
 		return TeachingJournalPage{}, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT j.id,j.logical_lesson_id,j.semester_id,j.revision_id,j.timetable_entry_id,
-		j.class_id,j.subject_id,j.teacher_id,j.meeting_date::text,j.class_snapshot,j.subject_snapshot,j.teacher_snapshot,
-		v.state,v.outcome,v.material,v.activity_notes,j.current_version_no,v.recorded_at,`+teachingJournalReviewReasonSQL+`
-		FROM app.teaching_journals j
-		JOIN app.teaching_journal_versions v ON v.journal_id=j.id AND v.version_no=j.current_version_no
-		`+teachingJournalReviewJoins+`
-		WHERE j.owner_user_id=$1
-		AND ($2=0 OR j.semester_id=$2) AND ($3=0 OR j.class_id=$3) AND ($4=0 OR j.subject_id=$4)
-		AND ($5='' OR j.meeting_date >= $5::date) AND ($6='' OR j.meeting_date <= $6::date)
-		AND ($7='' OR v.state=$7) AND ($8='' OR v.outcome=$8)
-		AND ($9='' OR j.class_snapshot ILIKE '%'||$9||'%' OR j.subject_snapshot ILIKE '%'||$9||'%' OR j.teacher_snapshot ILIKE '%'||$9||'%')
-		ORDER BY j.meeting_date DESC,j.id DESC LIMIT $10 OFFSET $11`, actor, f.SemesterID, f.ClassID,
-		f.SubjectID, f.FromDate, f.ToDate, f.State, f.Outcome, f.Search, teachingJournalPageSize+1,
-		(f.Page-1)*teachingJournalPageSize)
+	items, err := queryTeachingJournalRows(ctx, tx, actor, f, teachingJournalPageSize+1, (f.Page-1)*teachingJournalPageSize)
 	if err != nil {
 		return TeachingJournalPage{}, err
 	}
-	defer rows.Close()
-	page := TeachingJournalPage{Page: f.Page, Items: make([]TeachingJournalListItem, 0, teachingJournalPageSize)}
-	for rows.Next() {
-		var item TeachingJournalListItem
-		if err = rows.Scan(&item.ID, &item.LogicalLessonID, &item.SemesterID, &item.RevisionID, &item.EntryID,
-			&item.ClassID, &item.SubjectID, &item.TeacherID, &item.MeetingDate, &item.ClassSnapshot,
-			&item.SubjectSnapshot, &item.TeacherSnapshot, &item.State, &item.Outcome, &item.Material,
-			&item.ActivityNotes, &item.Version, &item.RecordedAt, &item.ReviewReason); err != nil {
-			return TeachingJournalPage{}, err
-		}
-		page.Items = append(page.Items, item)
-	}
-	if err = rows.Err(); err != nil {
-		return TeachingJournalPage{}, err
-	}
+	page := TeachingJournalPage{Page: f.Page, Items: items}
 	if len(page.Items) > teachingJournalPageSize {
 		page.HasNext = true
 		page.Items = page.Items[:teachingJournalPageSize]
 	}
 	return page, nil
+}
+
+const teachingJournalListSQL = `SELECT j.id,j.logical_lesson_id,j.semester_id,j.revision_id,j.timetable_entry_id,
+	j.class_id,j.subject_id,j.teacher_id,j.meeting_date::text,j.class_snapshot,j.subject_snapshot,j.teacher_snapshot,
+	v.state,v.outcome,v.material,v.activity_notes,v.not_held_reason,j.current_version_no,v.recorded_at,
+	COALESCE((SELECT jsonb_agg(jsonb_build_object('ordinal',p.ordinal,'period_no',p.period_no,'starts_at',p.starts_at::text,'ends_at',p.ends_at::text) ORDER BY p.ordinal)
+		FROM app.teaching_journal_version_periods p WHERE p.version_id=v.id),'[]'::jsonb),` + teachingJournalReviewReasonSQL + `
+	FROM app.teaching_journals j
+	JOIN app.teaching_journal_versions v ON v.journal_id=j.id AND v.version_no=j.current_version_no
+	` + teachingJournalReviewJoins + `
+	WHERE j.owner_user_id=$1
+	AND ($2=0 OR j.semester_id=$2) AND ($3=0 OR j.class_id=$3) AND ($4=0 OR j.subject_id=$4)
+	AND ($5='' OR j.meeting_date >= $5::date) AND ($6='' OR j.meeting_date <= $6::date)
+	AND ($7='' OR v.state=$7) AND ($8='' OR v.outcome=$8)
+	AND ($9='' OR j.class_snapshot ILIKE '%'||$9||'%' OR j.subject_snapshot ILIKE '%'||$9||'%' OR j.teacher_snapshot ILIKE '%'||$9||'%')
+	ORDER BY j.meeting_date DESC,j.id DESC LIMIT $10 OFFSET $11`
+
+func queryTeachingJournalRows(ctx context.Context, tx *sql.Tx, actor int64, f TeachingJournalReadFilter, limit, offset int) ([]TeachingJournalListItem, error) {
+	rows, err := tx.QueryContext(ctx, teachingJournalListSQL, actor, f.SemesterID, f.ClassID, f.SubjectID,
+		f.FromDate, f.ToDate, f.State, f.Outcome, f.Search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]TeachingJournalListItem, 0, min(limit, teachingJournalPageSize+1))
+	for rows.Next() {
+		var item TeachingJournalListItem
+		var periods []byte
+		if err = rows.Scan(&item.ID, &item.LogicalLessonID, &item.SemesterID, &item.RevisionID, &item.EntryID,
+			&item.ClassID, &item.SubjectID, &item.TeacherID, &item.MeetingDate, &item.ClassSnapshot,
+			&item.SubjectSnapshot, &item.TeacherSnapshot, &item.State, &item.Outcome, &item.Material,
+			&item.ActivityNotes, &item.NotHeldReason, &item.Version, &item.RecordedAt, &periods, &item.ReviewReason); err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal(periods, &item.Periods); err != nil {
+			return nil, err
+		}
+		item.PeriodLabel = journalPeriodLabel(item.Periods)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func journalPeriodLabel(periods []TeachingJournalPeriodSnapshot) string {
+	if len(periods) == 0 {
+		return "—"
+	}
+	var parts []string
+	for i := 0; i < len(periods); {
+		start, end := periods[i].PeriodNo, periods[i].PeriodNo
+		for i+1 < len(periods) && periods[i+1].PeriodNo == end+1 {
+			i++
+			end = periods[i].PeriodNo
+		}
+		if start == end {
+			parts = append(parts, strconv.Itoa(start))
+		} else {
+			parts = append(parts, strconv.Itoa(start)+"–"+strconv.Itoa(end))
+		}
+		i++
+	}
+	return "Jam ke-" + strings.Join(parts, ", ")
+}
+
+// TeachingJournalsForExport memakai filter dan query daftar yang sama, tetapi
+// mengambil semua hasil dalam satu cakupan berotorisasi hingga batas aman.
+func (s *Store) TeachingJournalsForExport(ctx context.Context, actor int64, f TeachingJournalReadFilter) ([]TeachingJournalListItem, error) {
+	f.Page = 1
+	if err := validateTeachingJournalReadFilter(f); err != nil {
+		return nil, err
+	}
+	tx, err := s.teachingJournalReader(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	items, err := queryTeachingJournalRows(ctx, tx, actor, f, teachingJournalExportMaxRows+1, 0)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateTeachingJournalExportCount(len(items)); err != nil {
+		return nil, ErrTeachingJournalExportLimit
+	}
+	return items, nil
+}
+
+func validateTeachingJournalExportCount(count int) error {
+	if count < 0 || count > teachingJournalExportMaxRows {
+		return ErrTeachingJournalExportLimit
+	}
+	return nil
 }
 
 // TeachingJournalFilterOptions hanya menampilkan label yang muncul pada jurnal
@@ -303,7 +374,7 @@ func (s *Store) TeachingJournalOccurrences(ctx context.Context, actor int64, dat
 		ORDER BY r.semester_id,r.effective_from DESC,r.revision_no DESC
 	) SELECT EXISTS(SELECT 1 FROM effective e
 		JOIN app.teaching_journal_lineage_status ls ON ls.revision_id=e.id AND ls.lineage_status='pending'
-		JOIN app.weekly_timetable_entries te ON te.revision_id=e.id AND te.teacher_id=$2
+		JOIN app.weekly_timetable_entries te ON te.revision_id=e.id AND te.teacher_id=$2 AND te.weekday=EXTRACT(ISODOW FROM $1::date)::int
 		JOIN app.teaching_assignments ta ON ta.id=te.assignment_id AND ta.semester_id=e.semester_id AND ta.class_id=te.class_id AND ta.subject_id=te.subject_id AND ta.teacher_id=te.teacher_id AND ta.effective_from<=$1::date AND (ta.effective_until IS NULL OR ta.effective_until>$1::date))`, date, teacherID).Scan(&pending)
 	if err != nil {
 		return nil, false, err
@@ -324,7 +395,8 @@ func (s *Store) TeachingJournalOccurrences(ctx context.Context, actor int64, dat
 		JOIN app.logical_lessons l ON l.id=d.logical_lesson_id AND l.semester_id=r.semester_id
 		JOIN app.classes c ON c.id=e.class_id JOIN app.subjects s ON s.id=e.subject_id JOIN app.teachers t ON t.id=e.teacher_id
 		JOIN app.teaching_assignments a ON a.id=e.assignment_id AND a.semester_id=r.semester_id AND a.class_id=e.class_id AND a.subject_id=e.subject_id AND a.teacher_id=e.teacher_id AND a.effective_from<=$1::date AND (a.effective_until IS NULL OR a.effective_until>$1::date)
-		WHERE NOT EXISTS(SELECT 1 FROM app.teaching_journals j WHERE j.logical_lesson_id=l.id AND j.meeting_date=$1::date)
+		WHERE e.weekday=EXTRACT(ISODOW FROM $1::date)::int
+		  AND NOT EXISTS(SELECT 1 FROM app.teaching_journals j WHERE j.logical_lesson_id=l.id AND j.meeting_date=$1::date)
 		ORDER BY c.grade,c.name,s.name,e.period_start`, date, teacherID)
 	if err != nil {
 		return nil, false, err

@@ -26,6 +26,9 @@ function initializeLiveLists(root = document) {
   region.classList.add('live-list-ready');
   region.querySelectorAll('form').forEach((form, index) => {
     if (form.method.toLowerCase() !== 'get') return;
+    // Form yang melakukan navigasi antarlaman (misalnya pemilih tanggal jurnal)
+    // harus tetap memakai GET browser, bukan ditukar sebagai fragmen daftar.
+    if (form.hasAttribute('data-list-navigation')) return;
     form.id ||= `list-filter-${index}`;
     form.dataset.listFilter = '';
     form.setAttribute('hx-get', form.getAttribute('action') || location.pathname);

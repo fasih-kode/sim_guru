@@ -126,8 +126,8 @@ Keputusan bisnis inti ditetapkan D-048/D-049. Status berikut adalah pekerjaan te
 2. **Resolusi lineage — diterapkan; tes split/merge dan stop/reuse masih kurang:** keputusan transition (`continue/new/stop`) menyimpan source/target, logical ID, aktor, waktu dan alasan. Konflik menolak operasi jurnal terkait tanpa memblokir publication jadwal dan domain absensi/presensi.
 3. **Kunci unik dan konkurensi jurnal — diterapkan dan diuji:** unique `(logical_lesson_id, meeting_date)`, lock, idempotency key/hash dan expected-version menjaga occurrence dan versi dari duplikasi/overwrite stale.
 4. **Snapshot JP — diterapkan dan diuji untuk snapshot per versi:** revision/entry serta nomor JP dan waktu tersimpan per versi. Tes perubahan jadwal/konfigurasi setelah simpan masih perlu ditambahkan.
-5. **Deteksi draft terdampak:** belum dibuat; revision baru belum menandai Draf sebagai Perlu Ditinjau.
-6. **Paket ekspor:** belum dibuat; query harus memakai otorisasi/filter daftar dan mencakup semua hasil, disertai pengujian ukuran, Unicode/font, layout PDF, tanggal WIB dan formula injection XLSX.
+5. **Deteksi Draf terdampak:** sudah tersedia sebagai evaluasi baca-saja sesuai D-048/D-049; Draf ditandai berdasarkan revision efektif dan lineage/konteks, tanpa mengubah status atau snapshot.
+6. **Ekspor Jurnal Saya:** Fase 9B-04B FINAL dan UAT Product Owner PASS 6/6 pada 1 November 2026. PDF/XLSX menggunakan filter dan cakupan pemilik yang sama dengan daftar serta seluruh hasil di luar pagination; batas 1.000 baris dan 20 MiB diuji pada boundary, PDF Unicode/page break dan formula injection XLSX diuji. Bukti dan cakupan tes ada di HANDOVER; full integration lintas paket tidak diklaim pada final gate.
 7. **Hak baca lain:** D-048 mengatur ekspor Jurnal Saya. Ekspor agregat dan akses detail raw oleh Kurikulum/Kepala Sekolah/role lain tetap memerlukan keputusan terpisah bila masuk scope; ini tidak menghalangi jalur Guru Mapel.
 
 Tenggat dan notifikasi tetap di luar cakupan v1 sesuai roadmap.
@@ -138,7 +138,7 @@ Jurnal Saya menyediakan PDF untuk cetak/arsip dan XLSX untuk pengolahan. Filter 
 
 PDF memuat nomor urut, tanggal WIB, kelas, mapel, nomor JP, materi, catatan, status, dan alasan Tidak Terlaksana. Teks panjang di-wrap dan page break mempertahankan header. XLSX memakai header jelas, satu baris per jurnal, tanggal WIB, nomor JP terurut, label Draf/Final dan penanda Tidak Terlaksana. Teks pengguna ditulis sebagai string, bukan formula; regression test mencakup nilai awal `=`, `+`, `-`, `@`, serta whitespace.
 
-Untuk XLSX, rancangan memakai `github.com/xuri/excelize/v2` yang sudah ada pada `go.mod`, dengan penulisan eksplisit `SetCellStr`. Untuk PDF, rekomendasi adalah `github.com/signintech/gopdf` untuk layout dokumen/tabel; sebelum menambahkan dependency, pin versi dan verifikasi lisensi, font Unicode lokal, paginasi, ukuran output, dan kebutuhan memori. Rekomendasi library bukan klaim integrasi/uji. Sumber: [Excelize](https://github.com/xuri/excelize), [gopdf](https://github.com/signintech/gopdf).
+Untuk XLSX, implementasi menulis teks pengguna secara eksplisit dengan `SetCellStr`. PDF menggunakan `github.com/signintech/gopdf` dengan font DejaVu Sans lokal yang disertakan beserta lisensinya; dependency dan layout diuji pada implementasi Fase 9B-04B. Batas hasil/ukuran dan status pemeriksaan dicatat pada HANDOVER. Sumber: [Excelize](https://github.com/xuri/excelize), [gopdf](https://github.com/signintech/gopdf).
 
 ## 10. Acceptance criteria
 

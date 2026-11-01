@@ -27,6 +27,7 @@ type academicView struct {
 	RuleForm                                             academic.CurriculumRule
 	BlockForm                                            academic.SchoolTimeBlock
 	RulePattern, PlanDate, GenerateDate, ScheduleWarning string
+	JournalDate                                          string
 
 	Years                                 []academic.Year
 	Semesters                             []academic.Semester
@@ -533,7 +534,8 @@ func (a *application) myTimetable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	classes, subjects := timetableFilterOptions(entries)
-	a.render(w, r, "page", http.StatusOK, view{Page: "my-schedule", Title: "Jadwal Saya", Academic: &academicView{Timetable: rev, TimetableEntries: entries, TimetableClasses: classes, TimetableSubjects: subjects, TeacherSchedule: true}})
+	journalDate := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+	a.render(w, r, "page", http.StatusOK, view{Page: "my-schedule", Title: "Jadwal Saya", Academic: &academicView{Timetable: rev, TimetableEntries: entries, TimetableClasses: classes, TimetableSubjects: subjects, TeacherSchedule: true, JournalDate: journalDate}})
 }
 
 func timetableFilterOptions(entries []academic.TimetableEntry) ([]academic.TeachingOption, []academic.TeachingOption) {

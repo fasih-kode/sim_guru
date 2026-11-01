@@ -126,6 +126,7 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /jadwal-saya/absensi/catatan/{id}", a.require("", a.lessonAttendanceRecord))
 	mux.HandleFunc("POST /jadwal-saya/absensi/catatan/{id}/koreksi", a.require("", a.correctLessonAttendance))
 	mux.HandleFunc("GET /jurnal-saya", a.require("guru_mapel", a.teachingJournalList))
+	mux.HandleFunc("GET /jurnal-saya/ekspor", a.require("guru_mapel", a.teachingJournalExport))
 	mux.HandleFunc("GET /jurnal-saya/baru", a.require("guru_mapel", a.teachingJournalNew))
 	mux.HandleFunc("POST /jurnal-saya", a.require("guru_mapel", a.teachingJournalSave))
 	mux.HandleFunc("GET /jurnal-saya/{id}", a.require("guru_mapel", a.teachingJournalDetail))

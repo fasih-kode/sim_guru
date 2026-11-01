@@ -3,6 +3,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -23,6 +24,7 @@ import (
 	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/fasih-kode/sim_guru/internal/testutil"
+	"github.com/xuri/excelize/v2"
 )
 
 func TestTeachingJournalReadHTTPIntegration(t *testing.T) {
@@ -75,6 +77,9 @@ func TestTeachingJournalReadHTTPIntegration(t *testing.T) {
 	}
 	var teacherID, subjectID int64
 	if err = db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru baca jurnal',$1) RETURNING id`, teacher.ID).Scan(&teacherID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO app.teachers(name,user_id) VALUES('Guru lain baca jurnal',$1)`, otherTeacher.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel baca jurnal') RETURNING id`, "R"+testutil.Random(t)[:10]).Scan(&subjectID); err != nil {
@@ -132,9 +137,46 @@ func TestTeachingJournalReadHTTPIntegration(t *testing.T) {
 	if _, _, occurrenceErr := s.TeachingJournalOccurrences(ctx, teacher.ID, newDate); occurrenceErr != nil {
 		t.Fatalf("eligible occurrence service failed: %v", occurrenceErr)
 	}
+	schedulePage := request(a.require("guru_mapel", a.myTimetable), teacher, "/jadwal-saya", nil)
+	if schedulePage.Code != http.StatusOK || !strings.Contains(schedulePage.Body.String(), `action="/jurnal-saya/baru"`) || !strings.Contains(schedulePage.Body.String(), `name="date"`) || !strings.Contains(schedulePage.Body.String(), `data-list-navigation`) || !strings.Contains(schedulePage.Body.String(), "Lihat Pertemuan") {
+		t.Fatalf("schedule page does not provide an actionable date picker: %d %s", schedulePage.Code, schedulePage.Body.String())
+	}
+	instantSearch, err := content.ReadFile("static/instant-search.js")
+	if err != nil || !strings.Contains(string(instantSearch), `form.hasAttribute('data-list-navigation')`) {
+		t.Fatalf("native navigation forms are not excluded from HTMX list enhancement: %v", err)
+	}
 	newForm := request(a.require("guru_mapel", a.teachingJournalNew), teacher, "/jurnal-saya/baru?date="+newDate, nil)
-	if newForm.Code != http.StatusOK || !strings.Contains(newForm.Body.String(), "Isi jurnal") || !strings.Contains(newForm.Body.String(), "Jam ke-1") {
+	dateOccurrenceLink := `href="/jurnal-saya/baru?date=` + newDate + `&amp;lesson_id=`
+	if newForm.Code != http.StatusOK || !strings.Contains(newForm.Body.String(), "Isi jurnal") || !strings.Contains(newForm.Body.String(), "Jam ke-1") || strings.Count(newForm.Body.String(), dateOccurrenceLink) != 1 {
 		t.Fatalf("eligible occurrence form failed: %d %s", newForm.Code, newForm.Body.String())
+	}
+	invalidDate := request(a.require("guru_mapel", a.teachingJournalNew), teacher, "/jurnal-saya/baru?date=2026-13-01", nil)
+	if invalidDate.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid occurrence date was not rejected: %d", invalidDate.Code)
+	}
+	crossTeacherOccurrence := request(a.require("guru_mapel", a.teachingJournalNew), otherTeacher, "/jurnal-saya/baru?date="+newDate+"&lesson_id="+strconv.FormatInt(logicalID, 10), nil)
+	if crossTeacherOccurrence.Code != http.StatusNotFound {
+		t.Fatalf("a teacher could select another teacher's occurrence: %d", crossTeacherOccurrence.Code)
+	}
+	wrongWeekday := date.AddDate(0, 0, 8).Format("2006-01-02")
+	wrongDayOccurrences, _, err := s.TeachingJournalOccurrences(ctx, teacher.ID, wrongWeekday)
+	if err != nil || len(wrongDayOccurrences) != 0 {
+		t.Fatalf("weekly slot was incorrectly presented on another weekday: occurrences=%d err=%v", len(wrongDayOccurrences), err)
+	}
+	wrongDayPage := request(a.require("guru_mapel", a.teachingJournalNew), teacher, "/jurnal-saya/baru?date="+wrongWeekday, nil)
+	if wrongDayPage.Code != http.StatusOK || strings.Contains(wrongDayPage.Body.String(), dateOccurrenceLink) || !strings.Contains(wrongDayPage.Body.String(), "Tidak ada pertemuan yang dapat dijurnal") {
+		t.Fatalf("date without a matching weekly slot did not show the empty state: %d %s", wrongDayPage.Code, wrongDayPage.Body.String())
+	}
+	selectedForm := request(a.require("guru_mapel", a.teachingJournalNew), teacher, "/jurnal-saya/baru?date="+newDate+"&lesson_id="+strconv.FormatInt(logicalID, 10), nil)
+	if selectedForm.Code != http.StatusOK || !strings.Contains(selectedForm.Body.String(), `name="logical_lesson_id" value="`+strconv.FormatInt(logicalID, 10)+`"`) || !strings.Contains(selectedForm.Body.String(), `name="meeting_date" value="`+newDate+`"`) {
+		t.Fatalf("selected occurrence did not open its matching journal form: %d %s", selectedForm.Code, selectedForm.Body.String())
+	}
+	var journalCount int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journals WHERE owner_user_id=$1`, teacher.ID).Scan(&journalCount); err != nil {
+		t.Fatal(err)
+	}
+	if journalCount != 1 {
+		t.Fatalf("GET date/occurrence flow created a journal unexpectedly: count=%d", journalCount)
 	}
 	var journalID int64
 	if err = db.QueryRow(`SELECT id FROM app.teaching_journals WHERE logical_lesson_id=$1 AND meeting_date=$2`, logicalID, date.Format("2006-01-02")).Scan(&journalID); err != nil {
@@ -298,6 +340,52 @@ func TestTeachingJournalReadHTTPIntegration(t *testing.T) {
 	if err != nil || hxListResponse.StatusCode != http.StatusOK || strings.Contains(string(hxListBody), "<!doctype html>") || !strings.Contains(string(hxListBody), "Materi final dikoreksi") || !strings.Contains(string(hxListBody), "Catatan final versi terkini") {
 		t.Fatalf("HTMX page-two fragment lost current journal content: status=%d err=%v", hxListResponse.StatusCode, err)
 	}
+	exportFilter := "q=" + url.QueryEscape(class.Name) + "&semester_id=" + strconv.FormatInt(semester, 10) + "&class_id=" + strconv.FormatInt(class.ID, 10) + "&subject_id=" + strconv.FormatInt(subjectID, 10) + "&from=" + date.Format("2006-01-02") + "&to=" + date.AddDate(0, 0, 120).Format("2006-01-02") + "&state=final&outcome=held"
+	exportRequest := func(user auth.User, query string) *httptest.ResponseRecorder {
+		t.Helper()
+		return request(a.require("guru_mapel", a.teachingJournalExport), user, "/jurnal-saya/ekspor?"+query, nil)
+	}
+	xlsxExport := exportRequest(teacher, exportFilter+"&format=xlsx&page=2")
+	if xlsxExport.Code != http.StatusOK || !strings.Contains(xlsxExport.Header().Get("Content-Type"), "spreadsheetml.sheet") {
+		t.Fatalf("authorized XLSX export failed: status=%d content-type=%q", xlsxExport.Code, xlsxExport.Header().Get("Content-Type"))
+	}
+	workbook, openErr := excelize.OpenReader(bytes.NewReader(xlsxExport.Body.Bytes()))
+	if openErr != nil {
+		t.Fatalf("exported workbook is invalid: %v", openErr)
+	}
+	rows, rowsErr := workbook.GetRows("Sheet1")
+	_ = workbook.Close()
+	if rowsErr != nil || len(rows) != 12 {
+		t.Fatalf("XLSX export must contain all 11 filtered rows, independent of page: rows=%d err=%v", len(rows), rowsErr)
+	}
+	allExportRows := make([]string, 0, len(rows))
+	for _, row := range rows {
+		allExportRows = append(allExportRows, strings.Join(row, "|"))
+	}
+	if !strings.Contains(strings.Join(allExportRows, "\n"), "Materi final dikoreksi") || !strings.Contains(strings.Join(allExportRows, "\n"), "Catatan final versi terkini") {
+		t.Fatalf("XLSX export omitted the latest corrected version: rows=%v", rows)
+	}
+	pdfExport := exportRequest(teacher, exportFilter+"&format=pdf&page=2")
+	if pdfExport.Code != http.StatusOK || !bytes.HasPrefix(pdfExport.Body.Bytes(), []byte("%PDF-")) || !strings.Contains(pdfExport.Header().Get("Content-Disposition"), "jurnal-saya.pdf") {
+		t.Fatalf("authorized PDF export failed: status=%d", pdfExport.Code)
+	}
+	otherExport := exportRequest(otherTeacher, exportFilter+"&format=xlsx")
+	if otherExport.Code != http.StatusOK {
+		t.Fatalf("other teacher export should return an empty owner-scoped file, got %d", otherExport.Code)
+	}
+	otherBook, openErr := excelize.OpenReader(bytes.NewReader(otherExport.Body.Bytes()))
+	if openErr != nil {
+		t.Fatalf("other teacher empty workbook is invalid: %v", openErr)
+	}
+	otherRows, rowsErr := otherBook.GetRows("Sheet1")
+	_ = otherBook.Close()
+	if rowsErr != nil || len(otherRows) != 1 {
+		t.Fatalf("export leaked another teacher's journals: rows=%d err=%v", len(otherRows), rowsErr)
+	}
+	adminExport := exportRequest(admin, exportFilter+"&format=pdf")
+	if adminExport.Code != http.StatusForbidden {
+		t.Fatalf("Admin unexpectedly received journal export permission: %d", adminExport.Code)
+	}
 	historyBody := readPage("/jurnal-saya/"+strconv.FormatInt(createdJournalID, 10)+"/versi/1", http.StatusOK)
 	if !strings.Contains(historyBody, "Versi 1") || strings.Contains(historyBody, "Koreksi dengan Alasan") {
 		t.Fatal("historical version was not read-only")
@@ -458,6 +546,10 @@ func TestTeachingJournalReviewIndicatorIntegration(t *testing.T) {
 	if err = s.PublishTimetable(ctx, cur.ID, third.ID); err != nil {
 		t.Fatal(err)
 	}
+	pendingOccurrences, pendingLineage, err := s.TeachingJournalOccurrences(ctx, teacher.ID, changedDate.Format("2006-01-02"))
+	if err != nil || !pendingLineage || len(pendingOccurrences) != 0 {
+		t.Fatalf("tanggal dengan lineage pending harus menahan pemilihan occurrence: count=%d pending=%t err=%v", len(pendingOccurrences), pendingLineage, err)
+	}
 	if _, err = s.SaveTeachingJournal(ctx, teacher.ID, academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: changedDate, ExpectedVersion: 1, State: "draft", Outcome: "held", Material: "Perubahan saat lineage pending", RequestKey: "a4444444-4444-4444-8444-444444444444"}); err == nil || !strings.Contains(err.Error(), "belum memiliki keputusan kesinambungan") {
 		t.Fatalf("mutasi draf saat lineage efektif pending harus ditolak: %v", err)
 	}
@@ -484,6 +576,10 @@ func TestTeachingJournalReviewIndicatorIntegration(t *testing.T) {
 	afterRevision, err := s.TeachingJournalDetail(ctx, teacher.ID, draft.ID)
 	if err != nil || afterRevision.ReviewReason == "" || len(afterRevision.CurrentVersion.Periods) != 1 || afterRevision.CurrentVersion.Periods[0].StartsAt != "07:00:00" {
 		t.Fatalf("indikator tidak menjelaskan perubahan atau snapshot historis berubah: detail=%#v err=%v", afterRevision, err)
+	}
+	historicalExport, err := s.TeachingJournalsForExport(ctx, teacher.ID, academic.BuildTeachingJournalReadFilter(1, semester, class.ID, subjectID, changedDate.Format("2006-01-02"), changedDate.Format("2006-01-02"), "draft", "held"))
+	if err != nil || len(historicalExport) != 1 || historicalExport[0].PeriodLabel != "Jam ke-1" || len(historicalExport[0].Periods) != 1 || historicalExport[0].Periods[0].StartsAt != "07:00:00" {
+		t.Fatalf("ekspor tidak mempertahankan snapshot JP historis setelah revisi: items=%#v err=%v", historicalExport, err)
 	}
 	if _, err = s.TeachingJournalDetail(ctx, admin.ID, draft.ID); !errors.Is(err, academic.ErrForbidden) && !errors.Is(err, academic.ErrNotFound) {
 		t.Fatalf("akses lintas role tidak ditolak: %v", err)

@@ -34,6 +34,8 @@ type teachingJournalView struct {
 	Form           *teachingJournalForm
 	PreviousURL    string
 	NextURL        string
+	PDFExportURL   string
+	XLSXExportURL  string
 	PendingLineage bool
 	CanEdit        bool
 }
@@ -132,6 +134,8 @@ func (a *application) teachingJournalList(w http.ResponseWriter, r *http.Request
 		return
 	}
 	v := &teachingJournalView{BasePath: "/jurnal-saya", Filter: filter, Page: page, FilterOptions: filterOptions}
+	v.PDFExportURL = journalExportURL(filter, "pdf")
+	v.XLSXExportURL = journalExportURL(filter, "xlsx")
 	if filter.Page > 1 {
 		v.PreviousURL = journalPageURL(filter, filter.Page-1)
 	}
