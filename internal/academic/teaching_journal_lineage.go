@@ -49,11 +49,15 @@ func (s *Store) CutoverTeachingJournalLineage(ctx context.Context, actor int64, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
-	var batchID int64
-	if err = tx.QueryRowContext(ctx, `INSERT INTO app.teaching_journal_cutover_batches(cutover_date,actor_id) VALUES((clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date,$1) RETURNING id`, actor).Scan(&batchID); err != nil {
-		return 0, dbError(err)
+	var earlierID int64
+	err = tx.QueryRowContext(ctx, `SELECT b.id FROM app.teaching_journal_cutover_batches b JOIN app.teaching_journal_lineage_transitions tr ON tr.cutover_batch_id=b.id AND tr.transition_kind='cutover' JOIN app.semesters sm ON sm.id=tr.semester_id AND sm.active ORDER BY b.cutover_date,b.id LIMIT 1`).Scan(&earlierID)
+	if err == nil {
+		return 0, ValidationError("Cutover Jurnal Mengajar sudah pernah dilakukan untuk semester aktif.")
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT sm.id,r.id,r.effective_from FROM app.semesters sm JOIN LATERAL(SELECT id,effective_from FROM app.weekly_timetable_revisions WHERE semester_id=sm.id AND status='published' AND effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date ORDER BY effective_from DESC,revision_no DESC LIMIT 1) r ON true WHERE sm.active ORDER BY sm.id FOR UPDATE OF sm`)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT sm.id,r.id,r.effective_from FROM app.semesters sm JOIN app.semester_calendars sc ON sc.semester_id=sm.id AND (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date BETWEEN sc.starts_on AND sc.ends_on JOIN LATERAL(SELECT id,effective_from FROM app.weekly_timetable_revisions WHERE semester_id=sm.id AND status='published' AND effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date ORDER BY effective_from DESC,revision_no DESC LIMIT 1) r ON true WHERE sm.active ORDER BY sm.id FOR UPDATE OF sm`)
 	if err != nil {
 		return 0, err
 	}
@@ -77,6 +81,50 @@ func (s *Store) CutoverTeachingJournalLineage(ctx context.Context, actor int64, 
 	rows.Close()
 	if len(revisions) == 0 {
 		return 0, ValidationError("Belum ada semester aktif dengan jadwal terbit yang efektif untuk cutover.")
+	}
+	// Validasi semua semester dahulu. Batch dan logical lesson belum ditulis
+	// sampai seluruh slot revision efektif lolos pemeriksaan yang sama dengan
+	// kontrak publikasi, dievaluasi kembali pada tanggal cutover WIB.
+	var slotCount int
+	for _, rev := range revisions {
+		var count int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM app.weekly_timetable_entries WHERE revision_id=$1`, rev.revisionID).Scan(&count); err != nil {
+			return 0, err
+		}
+		if count == 0 {
+			return 0, ValidationError("Jadwal terbit yang dipilih tidak memiliki slot untuk cutover.")
+		}
+		var invalid bool
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM app.weekly_timetable_entries e
+			LEFT JOIN app.teaching_assignments a ON a.id=e.assignment_id AND a.semester_id=$2
+				AND a.class_id=e.class_id AND a.subject_id=e.subject_id AND a.teacher_id=e.teacher_id
+				AND a.effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date
+				AND (a.effective_until IS NULL OR a.effective_until>(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date)
+			JOIN app.teachers t ON t.id=e.teacher_id
+			JOIN app.users u ON u.id=t.user_id
+			JOIN app.subjects s ON s.id=e.subject_id
+			JOIN app.classes c ON c.id=e.class_id
+			WHERE e.revision_id=$1 AND (a.id IS NULL OR NOT t.active OR NOT u.active OR NOT s.active
+				OR NOT EXISTS(SELECT 1 FROM app.user_roles ur WHERE ur.user_id=u.id AND ur.role_code='guru_mapel')
+				OR NOT EXISTS(SELECT 1 FROM app.semesters sm WHERE sm.id=$2 AND c.school_year_id=sm.school_year_id)
+				OR EXISTS(SELECT 1 FROM generate_series(e.period_start::int,e.period_end::int) n(period_no)
+					WHERE NOT EXISTS(SELECT 1 FROM app.weekly_timetable_periods p WHERE p.revision_id=e.revision_id AND p.weekday=e.weekday AND p.period_no=n.period_no)))
+		)`, rev.revisionID, rev.semesterID).Scan(&invalid)
+		if err != nil {
+			return 0, err
+		}
+		if invalid {
+			return 0, ValidationError("Cutover ditolak: ada slot tanpa penugasan dan identitas guru aktif yang cocok atau snapshot JP lengkap.")
+		}
+		slotCount += count
+	}
+	if slotCount == 0 {
+		return 0, ValidationError("Jadwal aktif tidak memiliki slot untuk cutover.")
+	}
+	var batchID int64
+	if err = tx.QueryRowContext(ctx, `INSERT INTO app.teaching_journal_cutover_batches(cutover_date,actor_id) VALUES((clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date,$1) RETURNING id`, actor).Scan(&batchID); err != nil {
+		return 0, dbError(err)
 	}
 	for _, rev := range revisions {
 		var transitionID int64

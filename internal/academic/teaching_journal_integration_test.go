@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -128,6 +129,88 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err = s.AddTimetableEntry(ctx, cur.ID, r2Draft.ID, weekday, class.ID, subjectID, teacherID, 1, 2); err != nil {
 		t.Fatal(err)
 	}
+	var cutoverAssignmentID int64
+	if err = db.QueryRow(`SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4`, semester, class.ID, subjectID, teacherID).Scan(&cutoverAssignmentID); err != nil {
+		t.Fatal(err)
+	}
+	assertNoCutoverRows := func(label string) {
+		t.Helper()
+		var batches, transitions, decisions, logical int
+		if e := db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_transitions WHERE semester_id=$1 AND transition_kind='cutover'`, semester).Scan(&transitions); e != nil {
+			t.Fatal(e)
+		}
+		if e := db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_decisions WHERE to_revision_id IN ($1,$2)`, r1, r2Draft.ID).Scan(&decisions); e != nil {
+			t.Fatal(e)
+		}
+		if e := db.QueryRow(`SELECT count(*) FROM app.logical_lessons WHERE semester_id=$1`, semester).Scan(&logical); e != nil {
+			t.Fatal(e)
+		}
+		if e := db.QueryRow(`SELECT count(*) FROM app.teaching_journal_cutover_batches b JOIN app.teaching_journal_lineage_transitions tr ON tr.cutover_batch_id=b.id WHERE tr.semester_id=$1`, semester).Scan(&batches); e != nil {
+			t.Fatal(e)
+		}
+		if batches != 0 || transitions != 0 || decisions != 0 || logical != 0 {
+			t.Fatalf("%s left partial cutover data: batch=%d transition=%d decision=%d logical=%d", label, batches, transitions, decisions, logical)
+		}
+	}
+	if err = s.CorrectTeachingAssignment(ctx, cur.ID, cutoverAssignmentID, semester, class.ID, subjectID, otherID, effective, nil); err != nil {
+		t.Fatal("cannot prepare assignment-mismatch test", err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Harus ditolak saat assignment tidak cocok"); err == nil {
+		t.Fatal("cutover accepted a slot whose assignment teacher mismatched")
+	}
+	assertNoCutoverRows("assignment mismatch")
+	if err = s.CorrectTeachingAssignment(ctx, cur.ID, cutoverAssignmentID, semester, class.ID, subjectID, teacherID, effective, nil); err != nil {
+		t.Fatal("cannot restore assignment fixture", err)
+	}
+	if _, err = db.Exec(`UPDATE app.teachers SET active=false WHERE id=$1`, teacherID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Harus ditolak saat guru nonaktif"); err == nil {
+		t.Fatal("cutover accepted an inactive teacher")
+	}
+	assertNoCutoverRows("inactive teacher")
+	if _, err = db.Exec(`UPDATE app.teachers SET active=true WHERE id=$1`, teacherID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Harus ditolak saat akun guru nonaktif"); err == nil {
+		t.Fatal("cutover accepted an inactive teacher account")
+	}
+	assertNoCutoverRows("inactive teacher account")
+	if _, err = db.Exec(`UPDATE app.users SET active=true WHERE id=$1`, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`DELETE FROM app.user_roles WHERE user_id=$1 AND role_code='guru_mapel'`, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Harus ditolak tanpa role Guru Mapel"); err == nil {
+		t.Fatal("cutover accepted a teacher account without Guru Mapel role")
+	}
+	assertNoCutoverRows("missing Guru Mapel role")
+	if _, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'guru_mapel')`, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	triggerSuffix := testutil.Random(t)[:12]
+	triggerName, functionName := "fail_cutover_"+triggerSuffix, "fail_cutover_"+triggerSuffix
+	if _, err = db.Exec(fmt.Sprintf(`CREATE FUNCTION app.%s() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'forced integration rollback'; END $$`, functionName)); err != nil {
+		t.Fatal("cannot prepare transactional rollback test", err)
+	}
+	if _, err = db.Exec(fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON app.teaching_journal_lineage_decisions FOR EACH ROW EXECUTE FUNCTION app.%s()`, triggerName, functionName)); err != nil {
+		_, _ = db.Exec(fmt.Sprintf(`DROP FUNCTION app.%s()`, functionName))
+		t.Fatal("cannot prepare transactional rollback trigger", err)
+	}
+	if _, err = s.CutoverTeachingJournalLineage(ctx, cur.ID, "Paksa rollback integrasi"); err == nil {
+		t.Fatal("cutover did not surface a forced mid-transaction database failure")
+	}
+	if _, err = db.Exec(fmt.Sprintf(`DROP TRIGGER %s ON app.teaching_journal_lineage_decisions`, triggerName)); err != nil {
+		t.Fatal("cannot remove temporary rollback trigger", err)
+	}
+	if _, err = db.Exec(fmt.Sprintf(`DROP FUNCTION app.%s()`, functionName)); err != nil {
+		t.Fatal("cannot remove temporary rollback function", err)
+	}
+	assertNoCutoverRows("forced mid-transaction rollback")
 	var cutoverIDs [2]int64
 	var cutoverErr [2]error
 	var publishErr error
@@ -171,6 +254,88 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if _, err = s.SaveLessonAttendance(ctx, teacher.ID, LessonAttendanceInput{Date: date.Format("2006-01-02"), EntryID: baseEntry, Fingerprint: lessonContext.Fingerprint, Students: []LessonAttendanceChoice{{StudentID: studentID, Status: "hadir"}}}); err != nil {
 		t.Fatal("cannot save attendance regression fixture", err)
 	}
+
+	var mappedCount int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_decisions d JOIN app.teaching_journal_lineage_transitions tr ON tr.id=d.transition_id WHERE tr.cutover_batch_id=$1 AND d.decision='cutover'`, cutoverIDs[0]).Scan(&mappedCount); err != nil || mappedCount != 1 {
+		t.Fatalf("cutover seeded partial or duplicate revision mapping: %d %v", mappedCount, err)
+	}
+	if baseRevision == r1 && baseEntry != e1 {
+		t.Fatalf("cutover entry mismatch: revision=%d entry=%d expected=%d", baseRevision, baseEntry, e1)
+	}
+	var cutoverDate string
+	if err = db.QueryRow(`SELECT cutover_date::text FROM app.teaching_journal_cutover_batches WHERE id=$1`, cutoverIDs[0]).Scan(&cutoverDate); err != nil {
+		t.Fatal(err)
+	}
+	// Pemetaan historis harus ditolak bila gate presensi D-050 belum lengkap,
+	// lalu dapat dibuat untuk satu slot resmi setelah bukti dilengkapi.
+	historicalDate := date.AddDate(0, 0, -7)
+	mapInput := TeachingJournalHistoricalMappingInput{Date: historicalDate.Format("2006-01-02"), RevisionID: r2Draft.ID, EntryID: publishedEntry, Reason: "Pemetaan occurrence terverifikasi Kurikulum"}
+	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, TeachingJournalHistoricalMappingInput{Date: mapInput.Date, RevisionID: r1, EntryID: e1, Reason: "Revision lama tidak boleh dipilih"}); err == nil {
+		t.Fatal("mapping accepted a published revision that was not effective on the occurrence date")
+	}
+	var mappingsBefore, lessonsBefore int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_historical_mappings WHERE meeting_date=$1`, mapInput.Date).Scan(&mappingsBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.logical_lessons WHERE semester_id=$1`, semester).Scan(&lessonsBefore); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, mapInput); err == nil {
+		t.Fatal("historical mapping bypassed the D-050 attendance gate")
+	}
+	var mappingsAfter, lessonsAfter int
+	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_historical_mappings WHERE meeting_date=$1`, mapInput.Date).Scan(&mappingsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.logical_lessons WHERE semester_id=$1`, semester).Scan(&lessonsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if mappingsAfter != mappingsBefore || lessonsAfter != lessonsBefore {
+		t.Fatalf("rejected mapping left partial rows: mappings %d→%d lessons %d→%d", mappingsBefore, mappingsAfter, lessonsBefore, lessonsAfter)
+	}
+	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, otherTeacher.ID, mapInput); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-Kurikulum mapping actor was not denied: %v", err)
+	}
+	for _, attendance := range []TeacherAttendanceManualInput{
+		{TeacherID: teacherID, Action: TeacherCheckIn, OccurredAt: historicalDate.Format("2006-01-02") + "T06:00", Reason: "Bukti presensi sintetis untuk jurnal historis", IdempotencyKey: testutil.Random(t)[:32]},
+		{TeacherID: teacherID, Action: TeacherCheckOut, OccurredAt: historicalDate.Format("2006-01-02") + "T16:00", Reason: "Bukti presensi sintetis untuk jurnal historis", IdempotencyKey: testutil.Random(t)[:32]},
+	} {
+		if _, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, attendance); err != nil {
+			t.Fatal("cannot prepare historical D-050 evidence", err)
+		}
+	}
+	mapped, err := s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, mapInput)
+	if err != nil || mapped.ID < 1 || mapped.LogicalLessonID < 1 {
+		t.Fatalf("verified historical mapping failed: %#v %v", mapped, err)
+	}
+	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, mapInput); err == nil {
+		t.Fatal("duplicate historical mapping was accepted")
+	}
+	if _, err = s.TeachingJournalHistoricalCandidates(ctx, otherTeacher.ID, mapInput.Date); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-Kurikulum candidate read was not denied: %v", err)
+	}
+	historicalOccurrences, pending, err := s.TeachingJournalOccurrences(ctx, teacher.ID, mapInput.Date)
+	if err != nil || pending || len(historicalOccurrences) != 1 || historicalOccurrences[0].LogicalLessonID != mapped.LogicalLessonID || len(historicalOccurrences[0].Periods) != 2 {
+		t.Fatalf("historical occurrence resolver mismatch: %#v pending=%t err=%v", historicalOccurrences, pending, err)
+	}
+	if _, _, err = s.TeachingJournalOccurrences(ctx, teacher.ID, historicalDate.AddDate(0, 0, -1).Format("2006-01-02")); err == nil {
+		t.Fatal("unmapped pre-cutover date was accepted")
+	}
+	historicalInput := TeachingJournalInput{LogicalLessonID: mapped.LogicalLessonID, OccurrenceDate: historicalDate, RequestKey: "a1111111-1111-4111-8111-111111111111", State: "draft", Outcome: "held"}
+	if _, err = s.SaveTeachingJournal(ctx, otherTeacher.ID, historicalInput); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("cross-owner historical journal write was accepted: %v", err)
+	}
+	historicalSaved, err := s.SaveTeachingJournal(ctx, teacher.ID, historicalInput)
+	if err != nil || historicalSaved.Version != 1 || historicalSaved.RevisionID != r2Draft.ID || historicalSaved.EntryID != publishedEntry {
+		t.Fatalf("mapped historical journal failed: %#v %v", historicalSaved, err)
+	}
+	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, mapInput); err == nil {
+		t.Fatal("mapping an occurrence with an existing journal was accepted")
+	}
+	historicalDetail, err := s.TeachingJournalDetail(ctx, teacher.ID, historicalSaved.ID)
+	if err != nil || historicalDetail.RevisionID != r2Draft.ID || historicalDetail.EntryID != publishedEntry || len(historicalDetail.CurrentVersion.Periods) != 2 || historicalDetail.CurrentVersion.Periods[1].PeriodNo != 2 {
+		t.Fatalf("historical journal snapshot or version history was not preserved: %#v %v", historicalDetail, err)
+	}
 	var lessonAttendanceBefore, lessonHistoryBefore, teacherEventsBefore, teacherHistoryBefore string
 	if err = db.QueryRow(`SELECT count(*)::text||':'||coalesce(md5(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text),'') FROM app.student_lesson_attendance a WHERE timetable_entry_id=$1 AND meeting_date=$2`, baseEntry, date.Format("2006-01-02")).Scan(&lessonAttendanceBefore); err != nil {
 		t.Fatal(err)
@@ -182,17 +347,6 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatal(err)
 	}
 	if err = db.QueryRow(`SELECT count(*)::text||':'||coalesce(md5(jsonb_agg(to_jsonb(h) ORDER BY h.id)::text),'') FROM app.teacher_attendance_history h JOIN app.teacher_attendance_events e ON e.id=h.event_id WHERE e.teacher_id=$1`, teacherID).Scan(&teacherHistoryBefore); err != nil {
-		t.Fatal(err)
-	}
-	var mappedCount int
-	if err = db.QueryRow(`SELECT count(*) FROM app.teaching_journal_lineage_decisions d JOIN app.teaching_journal_lineage_transitions tr ON tr.id=d.transition_id WHERE tr.cutover_batch_id=$1 AND d.decision='cutover'`, cutoverIDs[0]).Scan(&mappedCount); err != nil || mappedCount != 1 {
-		t.Fatalf("cutover seeded partial or duplicate revision mapping: %d %v", mappedCount, err)
-	}
-	if baseRevision == r1 && baseEntry != e1 {
-		t.Fatalf("cutover entry mismatch: revision=%d entry=%d expected=%d", baseRevision, baseEntry, e1)
-	}
-	var cutoverDate string
-	if err = db.QueryRow(`SELECT cutover_date::text FROM app.teaching_journal_cutover_batches WHERE id=$1`, cutoverIDs[0]).Scan(&cutoverDate); err != nil {
 		t.Fatal(err)
 	}
 	key := "11111111-1111-4111-8111-111111111111"
@@ -282,7 +436,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatalf("filtered journal list mismatch: %#v %v", readPage, err)
 	}
 	readPage, err = s.TeachingJournals(ctx, teacher.ID, TeachingJournalReadFilter{Page: 1, Search: "Mapel Jurnal"})
-	if err != nil || len(readPage.Items) != 1 || readPage.Items[0].ID != results[0].ID {
+	if err != nil || len(readPage.Items) != 2 || readPage.Items[0].ID != results[0].ID || readPage.Items[1].ID != historicalSaved.ID {
 		t.Fatalf("snapshot text search did not stay within the owner scope: %#v %v", readPage, err)
 	}
 	occurrenceOptions, pendingLineage, err := s.TeachingJournalOccurrences(ctx, teacher.ID, date.AddDate(0, 0, 7).Format("2006-01-02"))

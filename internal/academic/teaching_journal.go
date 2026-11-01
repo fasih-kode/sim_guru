@@ -95,8 +95,15 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 	if err != nil {
 		return TeachingJournalResult{}, err
 	}
+	var historical *historicalJournalSource
 	if date < cutoff {
-		return TeachingJournalResult{}, ValidationError("Jurnal baru sebelum cutover belum dapat dibuat tanpa pemetaan historis.")
+		historical, err = loadHistoricalJournalSource(ctx, tx, actor, in.LogicalLessonID, date)
+		if err != nil {
+			return TeachingJournalResult{}, fmt.Errorf("validasi sumber occurrence historis: %w", err)
+		}
+		if historical == nil {
+			return TeachingJournalResult{}, ValidationError("Jurnal sebelum cutover hanya dapat dibuat untuk occurrence yang telah dipetakan Kurikulum.")
+		}
 	}
 	var teacherID int64
 	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teachers WHERE user_id=$1 AND active FOR KEY SHARE`, actor).Scan(&teacherID)
@@ -104,7 +111,10 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 		return TeachingJournalResult{}, ErrForbidden
 	}
 	if err != nil {
-		return TeachingJournalResult{}, err
+		return TeachingJournalResult{}, fmt.Errorf("memeriksa identitas guru aktif: %w", err)
+	}
+	if historical != nil && historical.TeacherID != teacherID {
+		return TeachingJournalResult{}, ErrForbidden
 	}
 	var journalID, ownerUserID int64
 	var currentVersion int
@@ -119,47 +129,64 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 		return TeachingJournalResult{}, ErrForbidden
 	}
 	var semesterID int64
-	err = tx.QueryRowContext(ctx, `SELECT semester_id FROM app.logical_lessons WHERE id=$1`, in.LogicalLessonID).Scan(&semesterID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return TeachingJournalResult{}, ErrNotFound
-	}
-	if err != nil {
-		return TeachingJournalResult{}, err
+	if historical != nil {
+		semesterID = historical.SemesterID
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT semester_id FROM app.logical_lessons WHERE id=$1`, in.LogicalLessonID).Scan(&semesterID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return TeachingJournalResult{}, ErrNotFound
+		}
+		if err != nil {
+			return TeachingJournalResult{}, err
+		}
 	}
 	var lineagePending bool
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE((
+	if historical == nil {
+		err = tx.QueryRowContext(ctx, `SELECT COALESCE((
 		SELECT ls.lineage_status='pending'
 		FROM app.weekly_timetable_revisions r
 		LEFT JOIN app.teaching_journal_lineage_status ls ON ls.revision_id=r.id
 		WHERE r.semester_id=$1 AND r.status='published' AND r.effective_from<=$2::date
 		ORDER BY r.effective_from DESC,r.revision_no DESC LIMIT 1
-	),false)`, semesterID, date).Scan(&lineagePending)
-	if err != nil {
-		return TeachingJournalResult{}, err
-	}
-	if lineagePending {
-		return TeachingJournalResult{}, ValidationError("Revisi jadwal efektif belum memiliki keputusan kesinambungan Kurikulum; jurnal belum dapat diubah.")
+		),false)`, semesterID, date).Scan(&lineagePending)
+		if err != nil {
+			return TeachingJournalResult{}, err
+		}
+		if lineagePending {
+			return TeachingJournalResult{}, ValidationError("Revisi jadwal efektif belum memiliki keputusan kesinambungan Kurikulum; jurnal belum dapat diubah.")
+		}
 	}
 	var revisionID, entryID, assignmentID, classID, subjectID, officialTeacherID int64
 	var className, subjectName, teacherName string
 	if isNew {
-		err = tx.QueryRowContext(ctx, `WITH effective AS (SELECT r.id FROM app.weekly_timetable_revisions r WHERE r.semester_id=$1 AND r.status='published' AND r.effective_from<=$2::date AND EXISTS(SELECT 1 FROM app.semester_calendars sc WHERE sc.semester_id=r.semester_id AND $2::date BETWEEN sc.starts_on AND sc.ends_on) ORDER BY r.effective_from DESC,r.revision_no DESC LIMIT 1) SELECT e.revision_id,e.id,e.assignment_id,e.class_id,e.subject_id,e.teacher_id,c.grade::text||c.name,s.name,t.name FROM effective r JOIN app.teaching_journal_lineage_decisions d ON d.to_revision_id=r.id AND d.logical_lesson_id=$3 AND d.target_entry_id IS NOT NULL JOIN app.weekly_timetable_entries e ON e.id=d.target_entry_id AND e.revision_id=r.id JOIN app.classes c ON c.id=e.class_id JOIN app.subjects s ON s.id=e.subject_id JOIN app.teachers t ON t.id=e.teacher_id WHERE e.teacher_id=$4 AND EXISTS(SELECT 1 FROM app.teaching_assignments a WHERE a.id=e.assignment_id AND a.semester_id=$1 AND a.class_id=e.class_id AND a.subject_id=e.subject_id AND a.teacher_id=e.teacher_id AND a.effective_from<=$2::date AND (a.effective_until IS NULL OR a.effective_until>$2::date))`, semesterID, date, in.LogicalLessonID, teacherID).Scan(&revisionID, &entryID, &assignmentID, &classID, &subjectID, &officialTeacherID, &className, &subjectName, &teacherName)
-		if errors.Is(err, sql.ErrNoRows) {
-			return TeachingJournalResult{}, ValidationError("Revision efektif, penugasan, atau lineage untuk tanggal occurrence tidak tersedia.")
-		}
-		if err != nil {
-			return TeachingJournalResult{}, err
+		if historical != nil {
+			revisionID, entryID, assignmentID, classID, subjectID, officialTeacherID = historical.RevisionID, historical.EntryID, historical.AssignmentID, historical.ClassID, historical.SubjectID, historical.TeacherID
+			className, subjectName, teacherName = historical.ClassSnapshot, historical.SubjectSnapshot, historical.TeacherSnapshot
+		} else {
+			err = tx.QueryRowContext(ctx, `WITH effective AS (SELECT r.id FROM app.weekly_timetable_revisions r WHERE r.semester_id=$1 AND r.status='published' AND r.effective_from<=$2::date AND EXISTS(SELECT 1 FROM app.semester_calendars sc WHERE sc.semester_id=r.semester_id AND $2::date BETWEEN sc.starts_on AND sc.ends_on) ORDER BY r.effective_from DESC,r.revision_no DESC LIMIT 1) SELECT e.revision_id,e.id,e.assignment_id,e.class_id,e.subject_id,e.teacher_id,c.grade::text||c.name,s.name,t.name FROM effective r JOIN app.teaching_journal_lineage_decisions d ON d.to_revision_id=r.id AND d.logical_lesson_id=$3 AND d.target_entry_id IS NOT NULL JOIN app.weekly_timetable_entries e ON e.id=d.target_entry_id AND e.revision_id=r.id JOIN app.classes c ON c.id=e.class_id JOIN app.subjects s ON s.id=e.subject_id JOIN app.teachers t ON t.id=e.teacher_id WHERE e.teacher_id=$4 AND EXISTS(SELECT 1 FROM app.teaching_assignments a WHERE a.id=e.assignment_id AND a.semester_id=$1 AND a.class_id=e.class_id AND a.subject_id=e.subject_id AND a.teacher_id=e.teacher_id AND a.effective_from<=$2::date AND (a.effective_until IS NULL OR a.effective_until>$2::date))`, semesterID, date, in.LogicalLessonID, teacherID).Scan(&revisionID, &entryID, &assignmentID, &classID, &subjectID, &officialTeacherID, &className, &subjectName, &teacherName)
+			if errors.Is(err, sql.ErrNoRows) {
+				return TeachingJournalResult{}, ValidationError("Revision efektif, penugasan, atau lineage untuk tanggal occurrence tidak tersedia.")
+			}
+			if err != nil {
+				return TeachingJournalResult{}, err
+			}
 		}
 	} else {
 		err = tx.QueryRowContext(ctx, `SELECT revision_id,timetable_entry_id,assignment_id,class_id,subject_id,teacher_id,class_snapshot,subject_snapshot,teacher_snapshot FROM app.teaching_journals WHERE id=$1`, journalID).Scan(&revisionID, &entryID, &assignmentID, &classID, &subjectID, &officialTeacherID, &className, &subjectName, &teacherName)
 		if err != nil {
 			return TeachingJournalResult{}, err
 		}
+		if historical != nil && (revisionID != historical.RevisionID || entryID != historical.EntryID || assignmentID != historical.AssignmentID || classID != historical.ClassID || subjectID != historical.SubjectID || officialTeacherID != historical.TeacherID) {
+			return TeachingJournalResult{}, ErrConflict
+		}
 	}
 	result.RevisionID = revisionID
 	result.EntryID = entryID
 	var scheduledEnd string
-	if isNew {
+	if historical != nil {
+		scheduledEnd = historical.Periods[len(historical.Periods)-1].EndsAt
+		err = nil // SELECT jurnal baru sebelumnya menghasilkan sql.ErrNoRows secara normal.
+	} else if isNew {
 		err = tx.QueryRowContext(ctx, `SELECT max(p.ends_at)::text
 			FROM app.weekly_timetable_entries e
 			JOIN app.weekly_timetable_periods p ON p.revision_id=e.revision_id AND p.weekday=e.weekday AND p.period_no BETWEEN e.period_start AND e.period_end
@@ -170,11 +197,11 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 			WHERE v.journal_id=$1 AND v.version_no=$2`, journalID, currentVersion).Scan(&scheduledEnd)
 	}
 	if err != nil {
-		return TeachingJournalResult{}, err
+		return TeachingJournalResult{}, fmt.Errorf("membaca snapshot waktu terjadwal: %w", err)
 	}
 	eligibility, err := teacherLessonEligibilityTx(ctx, tx, teacherID, date, scheduledEnd)
 	if err != nil {
-		return TeachingJournalResult{}, err
+		return TeachingJournalResult{}, fmt.Errorf("memeriksa bukti presensi untuk occurrence: %w", err)
 	}
 	if err = teacherLessonEligibilityError(eligibility); err != nil {
 		return TeachingJournalResult{}, err
@@ -227,41 +254,47 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 		return TeachingJournalResult{}, dbError(err)
 	}
 	if isNew {
-		weekday := int(in.OccurrenceDate.In(time.FixedZone("WIB", 7*60*60)).Weekday())
-		if weekday == 0 {
-			weekday = 7
-		}
-		periodRows, e := tx.QueryContext(ctx, `SELECT p.period_no,p.starts_at::text,p.ends_at::text FROM app.weekly_timetable_entries e JOIN app.weekly_timetable_periods p ON p.revision_id=e.revision_id AND p.weekday=e.weekday AND p.period_no BETWEEN e.period_start AND e.period_end WHERE e.id=$1 AND e.revision_id=$2 ORDER BY p.period_no`, entryID, revisionID)
-		if e != nil {
-			return TeachingJournalResult{}, e
-		}
 		type jp struct {
 			number     int
 			start, end string
 		}
 		var periods []jp
-		for periodRows.Next() {
-			var p jp
-			if e = periodRows.Scan(&p.number, &p.start, &p.end); e != nil {
+		if historical != nil {
+			for _, p := range historical.Periods {
+				periods = append(periods, jp{number: p.PeriodNo, start: p.StartsAt, end: p.EndsAt})
+			}
+		} else {
+			weekday := int(in.OccurrenceDate.In(time.FixedZone("WIB", 7*60*60)).Weekday())
+			if weekday == 0 {
+				weekday = 7
+			}
+			periodRows, e := tx.QueryContext(ctx, `SELECT p.period_no,p.starts_at::text,p.ends_at::text FROM app.weekly_timetable_entries e JOIN app.weekly_timetable_periods p ON p.revision_id=e.revision_id AND p.weekday=e.weekday AND p.period_no BETWEEN e.period_start AND e.period_end WHERE e.id=$1 AND e.revision_id=$2 ORDER BY p.period_no`, entryID, revisionID)
+			if e != nil {
+				return TeachingJournalResult{}, e
+			}
+			for periodRows.Next() {
+				var p jp
+				if e = periodRows.Scan(&p.number, &p.start, &p.end); e != nil {
+					periodRows.Close()
+					return TeachingJournalResult{}, e
+				}
+				periods = append(periods, p)
+			}
+			if e = periodRows.Err(); e != nil {
 				periodRows.Close()
 				return TeachingJournalResult{}, e
 			}
-			periods = append(periods, p)
-		}
-		if e = periodRows.Err(); e != nil {
 			periodRows.Close()
-			return TeachingJournalResult{}, e
+			var weekdayValid bool
+			if e := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.weekly_timetable_entries WHERE id=$1 AND revision_id=$2 AND weekday=$3)`, entryID, revisionID, weekday).Scan(&weekdayValid); e != nil {
+				return TeachingJournalResult{}, e
+			}
+			if !weekdayValid {
+				return TeachingJournalResult{}, ValidationError("Occurrence tidak sesuai hari pada jadwal efektif.")
+			}
 		}
-		periodRows.Close()
 		if len(periods) == 0 {
 			return TeachingJournalResult{}, ValidationError("Snapshot jam pelajaran revision efektif tidak tersedia.")
-		}
-		var weekdayValid bool
-		if e := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.weekly_timetable_entries WHERE id=$1 AND revision_id=$2 AND weekday=$3)`, entryID, revisionID, weekday).Scan(&weekdayValid); e != nil {
-			return TeachingJournalResult{}, e
-		}
-		if !weekdayValid {
-			return TeachingJournalResult{}, ValidationError("Occurrence tidak sesuai hari pada jadwal efektif.")
 		}
 		for i, p := range periods {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO app.teaching_journal_version_periods(version_id,ordinal,period_no,starts_at,ends_at) VALUES($1,$2,$3,$4,$5)`, versionID, i+1, p.number, p.start, p.end); err != nil {

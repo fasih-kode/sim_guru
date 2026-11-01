@@ -205,6 +205,8 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("POST /akademik/pengampu", a.require("kurikulum", a.teachingAssignments))
 	mux.HandleFunc("GET /akademik/jam-pelajaran", a.require("kurikulum", a.lessonPeriods))
 	mux.HandleFunc("POST /akademik/jam-pelajaran", a.require("kurikulum", a.lessonPeriods))
+	mux.HandleFunc("GET /akademik/jurnal-lineage", a.require("kurikulum", a.teachingJournalLineage))
+	mux.HandleFunc("POST /akademik/jurnal-lineage", a.require("kurikulum", a.teachingJournalLineage))
 	mux.HandleFunc("GET /akademik/struktur-kurikulum", a.require("kurikulum", a.curriculumSettings))
 	mux.HandleFunc("POST /akademik/struktur-kurikulum", a.require("kurikulum", a.curriculumSettings))
 	mux.HandleFunc("GET /akademik/waktu-sekolah", a.require("kurikulum", a.curriculumSettings))

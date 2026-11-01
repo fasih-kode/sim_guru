@@ -64,6 +64,9 @@ type academicView struct {
 	EntryClassID, EntrySubjectID          int64
 	EntryWeekday, EntryStart, EntryEnd    int
 	TeacherSchedule                       bool
+	JournalCutoverDate                    string
+	JournalHistoricalDate                 string
+	JournalHistoricalCandidates           []academic.TeachingJournalHistoricalCandidate
 }
 
 type placementView struct {

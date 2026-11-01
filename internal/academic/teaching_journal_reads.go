@@ -355,9 +355,6 @@ func (s *Store) TeachingJournalOccurrences(ctx context.Context, actor int64, dat
 	if err != nil {
 		return nil, false, err
 	}
-	if beforeCutover {
-		return nil, false, ValidationError("Jurnal baru hanya dapat dibuat untuk tanggal sejak cutover.")
-	}
 	var teacherID int64
 	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teachers WHERE user_id=$1 AND active`, actor).Scan(&teacherID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -365,6 +362,16 @@ func (s *Store) TeachingJournalOccurrences(ctx context.Context, actor int64, dat
 	}
 	if err != nil {
 		return nil, false, err
+	}
+	if beforeCutover {
+		items, hasMapping, mappingErr := historicalJournalOccurrencesForTeacher(ctx, tx, actor, teacherID, date)
+		if mappingErr != nil {
+			return nil, false, mappingErr
+		}
+		if !hasMapping {
+			return nil, false, ValidationError("Tanggal ini sebelum cutover dan belum memiliki pemetaan occurrence yang ditetapkan Kurikulum.")
+		}
+		return items, false, nil
 	}
 	var pending bool
 	err = tx.QueryRowContext(ctx, `WITH effective AS (

@@ -232,6 +232,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "school-time-blocks", "curriculum-schedule"
 	case path == "/akademik/jadwal" || path == "/akademik/jadwal/impor":
 		return "weekly-timetable", "curriculum-schedule"
+	case path == "/akademik/jurnal-lineage":
+		return "curriculum-journal-lineage", "curriculum-schedule"
 	case path == "/jadwal-saya":
 		if user != nil && user.HasRole("guru_mapel") {
 			return "my-schedule", "guru-mapel"

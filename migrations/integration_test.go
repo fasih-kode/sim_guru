@@ -57,7 +57,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != 35 || target != 35 {
+	if err != nil || current != target || target != 36 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -88,6 +88,13 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.logical_lessons') IS NOT NULL AND to_regclass('app.teaching_journal_lineage_transitions') IS NOT NULL AND to_regclass('app.teaching_journal_lineage_decisions') IS NOT NULL AND to_regclass('app.teaching_journals') IS NOT NULL AND to_regclass('app.teaching_journal_versions') IS NOT NULL AND to_regclass('app.teaching_journal_version_periods') IS NOT NULL AND to_regclass('app.teaching_journal_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing teaching journal foundation tables")
+	}
+	var historicalMappingTable, historicalMappingUnique, historicalMappingAppendOnly bool
+	if err = db.QueryRowContext(ctx, `SELECT
+		to_regclass('app.teaching_journal_historical_mappings') IS NOT NULL,
+		(SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.teaching_journal_historical_mappings'::regclass AND contype='u'),
+		EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='teaching_journal_historical_mappings_append_only' AND NOT tgisinternal)`).Scan(&historicalMappingTable, &historicalMappingUnique, &historicalMappingAppendOnly); err != nil || !historicalMappingTable || !historicalMappingUnique || !historicalMappingAppendOnly {
+		t.Fatal("missing version-36 historical mapping table, occurrence uniqueness, or append-only guard")
 	}
 	var notHeldContextConstraint bool
 	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='teaching_journal_versions_not_held_context_check' AND contype='c')`).Scan(&notHeldContextConstraint); err != nil || !notHeldContextConstraint {

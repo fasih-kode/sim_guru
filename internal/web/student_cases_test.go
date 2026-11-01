@@ -166,6 +166,7 @@ func TestCurriculumSidebarUsesSharedTabsWithoutRoleDuplicates(t *testing.T) {
 		{"/akademik/pengampu", "Pengaturan Jadwal", "curriculum-teaching-assignments", "/akademik/pengampu"},
 		{"/akademik/jam-pelajaran", "Pengaturan Jadwal", "curriculum-lesson-periods", "/akademik/jam-pelajaran"},
 		{"/akademik/jadwal/impor", "Pengaturan Jadwal", "curriculum-weekly-timetable", "/akademik/jadwal"},
+		{"/akademik/jurnal-lineage", "Pengaturan Jadwal", "curriculum-journal-lineage", "/akademik/jurnal-lineage"},
 		{"/akademik/transisi", "Siswa & Penempatan", "curriculum-transitions", "/akademik/transisi"},
 		{"/master/students/4/edit", "Siswa & Penempatan", "curriculum-students", "/master/students"},
 		{"/master/teachers/3/history", "Siswa & Penempatan", "curriculum-teachers", "/master/teachers"},
@@ -194,7 +195,7 @@ func TestCurriculumSidebarUsesSharedTabsWithoutRoleDuplicates(t *testing.T) {
 	for _, tc := range []struct {
 		section string
 		want    int
-	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 2}, {"Pengaturan Jadwal", 5}, {"Siswa & Penempatan", 5}} {
+	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 2}, {"Pengaturan Jadwal", 6}, {"Siswa & Penempatan", 5}} {
 		if got := len(sectionNavigationTabs(tc.section, "", curriculum)); got != tc.want {
 			t.Errorf("jumlah tab Kurikulum %q = %d, ingin %d", tc.section, got, tc.want)
 		}
