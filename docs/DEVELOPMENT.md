@@ -20,13 +20,23 @@ Cluster sudah diinisialisasi dan dua database tersedia: sim_guru_dev dan sim_gur
 
 Cluster tidak otomatis mulai setelah reboot; jalankan perintah start. Script membutuhkan pg_config dan binary PostgreSQL versi cluster. Jangan upgrade versi mayor atau menghapus .local tanpa strategi migrasi/pemulihan dan persetujuan.
 
-## Prosedur pengujian dan preview — berlaku sejak DEV-03G2
+## Port web dan pemisahan lingkungan
 
-Seluruh tes yang memakai database, termasuk integration dan migration test, hanya memakai `sim_guru_test`. Unit test murni berjalan normal. Setelah seluruh tes relevan PASS, periksa `make migrate-status` pada koneksi development lalu terapkan migration aditif yang tertunda melalui `make migrate-up`. Periksa versi lagi sebelum menjalankan aplikasi terbaru pada `sim_guru_dev` di `http://127.0.0.1:18743`.
+Port web tunggal untuk development dan UAT manual adalah `127.0.0.1:18743`. Jalankan aplikasi dengan `make run`; target ini menetapkan port standar tersebut agar nilai `APP_PORT` yang keliru di konfigurasi lokal tidak diam-diam membuka preview pada port lain. Host tetap mengikuti `APP_HOST` yang dikonfigurasi. Jangan membuat port preview baru per fase atau server preview permanen. Jika ada kebutuhan teknis yang tidak dapat dipenuhi pada port standar, jelaskan kepada Product Owner sebelum menggunakan port lain.
 
-Preview/UAT Product Owner memakai akun development existing. Jangan membuat akun sintetis, menyalin fixture test, mengubah `.env`/kredensial, mereset database, atau memberi role tambahan secara otomatis. Admin menetapkan role TU melalui pengelolaan akun. Catat jumlah/hash data existing sebelum dan sesudah migration untuk memastikan akun, role pengguna, penugasan dan histori tetap tersedia. Identifikasi proses sebelum restart. Jika tes atau migration gagal, hentikan tahap terkait dan laporkan; jangan memperbaiki dengan reset atau SQL destruktif. Instruksi ini menggantikan prosedur preview terdahulu yang memakai database test.
+Database memiliki batas yang tegas: `sim_guru_dev` untuk development, database test terisolasi untuk tes otomatis, dan database UAT sintetis terpisah dari keduanya. Jangan memakai `sim_guru_test` untuk UAT bersamaan dengan suite otomatis. Tes HTTP otomatis harus memakai `httptest`/mekanisme in-process dan fixture database test yang sesuai; tes tidak boleh meninggalkan server preview permanen.
 
-Setelah UAT Product Owner PASS, lakukan final gate proporsional, commit dan push ke branch review tanpa meminta persetujuan tambahan. Tidak ada merge/deployment tanpa instruksi tersendiri.
+UAT dengan data sintetis yang memerlukan server dapat memakai port standar yang sama secara bergantian. Hentikan server development dengan SIGTERM/Ctrl+C dan pastikan port 18743 bebas. Siapkan konfigurasi UAT privat di luar repository; jangan mengubah `.env` development. Sebelum startup, validasi hanya nama database target dan pastikan database itu khusus UAT—jangan menampilkan URL/kredensial. Berikan `DATABASE_URL` UAT secara eksplisit pada proses UAT dan verifikasi target lagi melalui mekanisme status/read-only yang tersedia. Setelah UAT, hentikan proses UAT secara normal, bersihkan variabel UAT dari shell, pastikan konfigurasi `.env` kembali menunjuk `sim_guru_dev`, lalu jalankan `make run` untuk memulihkan development. Jangan menjalankan migration/fixture sebagai bagian startup tanpa langkah dan otorisasi terpisah.
+
+Port lama seperti 18080/18082 yang muncul pada HANDOVER merupakan catatan historis sesi UAT terdahulu, bukan prosedur aktif. Jangan menghidupkan kembali proses atau artefak lama secara otomatis. Periksa pemilik dan status proses sebelum tindakan; bersihkan hanya proses/file SIM-GURU yang terkonfirmasi tidak dipakai. Pertahankan database, kredensial aktif, file pengguna, dan fixture historis.
+
+## Prosedur pengujian dan preview — berlaku sejak DEV-03G2, diselaraskan 1 November 2026
+
+Seluruh tes yang memakai database, termasuk integration dan migration test, hanya memakai database test yang terisolasi dan targetnya diverifikasi sebelum tes. Unit test murni berjalan normal. Periksa `make migrate-status` pada koneksi development sebelum migration; terapkan migration aditif hanya jika instruksi kerja mencakupnya dan sesudah seluruh tes relevan PASS. Periksa versi lagi sebelum menjalankan aplikasi terbaru pada `sim_guru_dev` di `http://127.0.0.1:18743`.
+
+UAT manual dengan data sekolah memakai akun development existing hanya pada `sim_guru_dev`; jangan membuat akun sintetis atau mengubah role otomatis. UAT sintetis hanya memakai database UAT terisolasi dan akun/fixture sintetis di sana. Jangan menyalin fixture ke development atau mengubah `.env` untuk mengalihkan target diam-diam. Identifikasi proses sebelum restart. Jika tes atau migration gagal, hentikan tahap terkait dan laporkan; jangan memperbaiki dengan reset atau SQL destruktif. Admin menetapkan role melalui pengelolaan akun sesuai prosedur aplikasi.
+
+Setelah UAT Product Owner PASS, ikuti otorisasi publikasi yang diberikan pada tugas. Tidak ada commit/push tanpa instruksi eksplisit, dan tidak ada merge/deployment tanpa instruksi tersendiri.
 
 ## Menjalankan fondasi
 
@@ -39,7 +49,7 @@ make migrate-status
 make run
 ```
 
-Buka http://127.0.0.1:18743. APP_HOST default 127.0.0.1; APP_PORT default 18743. APP_ENV menerima development/test/production. DATABASE_URL wajib berupa URL PostgreSQL dengan nama database; production mensyaratkan sslmode=verify-full. File .env.example menyediakan nama variabel tanpa rahasia. Jangan menggunakan .env development pada produksi.
+Buka http://127.0.0.1:18743. `make run` memakai port standar 18743; `APP_HOST` default 127.0.0.1 dan `APP_ENV` menerima development/test/production. `DATABASE_URL` wajib berupa URL PostgreSQL dengan nama database; production mensyaratkan sslmode=verify-full. File .env.example menyediakan nama variabel tanpa rahasia. Jangan menggunakan .env development pada produksi.
 
 ### Reverse proxy HTTPS lokal (misalnya ngrok)
 Secara default aplikasi tidak mempercayai `X-Forwarded-Proto` maupun `X-Forwarded-Host`. Jika reverse proxy berjalan di mesin yang sama, jalankan proses aplikasi dengan `APP_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128`; kosongkan variabel untuk penggunaan tanpa proxy. Daftar hanya memuat alamat koneksi proxy yang benar-benar dipercaya. Jangan gunakan `0.0.0.0/0`, jangan memasukkan seluruh domain ngrok sebagai origin tepercaya, dan jangan mengubah header forwarded dari sumber lain menjadi tepercaya. Proxy harus mengirim satu `X-Forwarded-Proto: https` dan satu `X-Forwarded-Host` yang berisi host permintaan HTTPS; aplikasi menolak nilai ganda atau host yang malformed. Pada koneksi proxy yang lolos pemeriksaan CIDR, pemeriksaan CSRF memakai skema/host HTTPS eksternal dan cookie CSRF serta sesi memakai atribut `Secure`. HTTP localhost langsung tetap memakai cookie development non-Secure. Contoh peluncuran tanpa mengubah `.env`:

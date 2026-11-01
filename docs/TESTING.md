@@ -1,5 +1,7 @@
 # Pengujian
 
+Pengujian HTTP otomatis berjalan in-process melalui `httptest` atau harness test yang setara; port loopback sementara yang dikelola tes bukan server preview/UAT. Jangan membuat server preview permanen atau memakai port fase khusus. UAT manual memakai port standar `127.0.0.1:18743` secara bergantian dengan development, dengan database UAT sintetis terisolasi dan target koneksi yang diverifikasi secara eksplisit. Jangan jalankan integration suite bersamaan dengan UAT pada database yang sama.
+
 ## HOTFIX-F1-NGROK-CSRF-01 — login HTTPS melalui proxy tepercaya
 
 `TestTrustedProxyRequestNormalization` memeriksa CIDR peer tepercaya, host/protokol eksternal, peer tidak tepercaya, header ambigu, dan penolakan protokol selain HTTPS. `TestHTTPSReverseProxyLoginCSRFIntegration` memakai `sim_guru_test` serta akun/guru sintetis dan reverse proxy TLS loopback. Tes membuktikan GET/login HTTP lokal, POST login dengan CSRF valid lewat HTTPS proxy, cookie CSRF dan sesi beratribut `Secure`, sesi dapat membuka `/kehadiran-saya`, serta penolakan token hilang/salah, Origin palsu, POST logout/password/presensi tanpa CSRF, dan X-Forwarded palsu dari peer di luar CIDR. Cleanup menghapus hanya fixture sintetis yang dibuat tes. Tidak ada presensi yang dicatat.

@@ -1,7 +1,7 @@
 .PHONY: run build assets test integration check migrate-up migrate-status
 
 run:
-	go run ./cmd/server
+	APP_PORT=18743 go run ./cmd/server
 build:
 	go build -o bin/sim-guru ./cmd/server
 assets:
