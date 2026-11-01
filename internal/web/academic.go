@@ -93,6 +93,8 @@ func academicError(err error) (int, string) {
 		return http.StatusForbidden, err.Error()
 	case errors.Is(err, academic.ErrNotFound):
 		return http.StatusNotFound, err.Error()
+	case errors.Is(err, academic.ErrTeacherLessonIneligible):
+		return http.StatusConflict, err.Error()
 	case errors.Is(err, academic.ErrConflict):
 		return http.StatusConflict, err.Error()
 	default:

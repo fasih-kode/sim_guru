@@ -22,8 +22,9 @@ type lessonAttendanceStudentView struct {
 
 type lessonAttendanceView struct {
 	Date                               string
-	Lessons                            []academic.TimetableEntry
+	Lessons                            []lessonAttendanceLessonView
 	Lesson                             *academic.TimetableEntry
+	AttendanceBlocked                  string
 	Students                           []lessonAttendanceStudentView
 	Records                            []lessonAttendanceRecordRow
 	Record                             *lessonAttendanceRecordView
@@ -31,6 +32,11 @@ type lessonAttendanceView struct {
 	Fingerprint                        string
 	Stale                              bool
 	RevisionChanged                    bool
+}
+
+type lessonAttendanceLessonView struct {
+	Lesson           academic.TimetableEntry
+	AttendanceReason string
 }
 
 type lessonAttendanceRecordRow struct {
@@ -73,7 +79,9 @@ func (a *application) lessonAttendance(w http.ResponseWriter, r *http.Request) {
 	if principal(r).HasRole("guru_mapel") {
 		meetings, meetingErr := a.options.Academics.TeacherLessonsOnDate(r.Context(), actor, date)
 		if meetingErr == nil {
-			v.Lessons = meetings.Lessons
+			for _, lesson := range meetings.Lessons {
+				v.Lessons = append(v.Lessons, lessonAttendanceLessonView{Lesson: lesson, AttendanceReason: meetings.Eligibility[lesson.ID].Reason})
+			}
 		} else if !principal(r).HasRole("kurikulum") || !errors.Is(meetingErr, academic.ErrForbidden) {
 			a.academicFailure(w, meetingErr)
 			return
@@ -113,6 +121,16 @@ func (a *application) lessonAttendanceRecord(w http.ResponseWriter, r *http.Requ
 	v := &lessonAttendanceView{Date: record.Date, Record: toLessonAttendanceRecordView(record)}
 	page := view{Page: "lesson-attendance", Title: "Absensi per Pelajaran", LessonAttendance: v}
 	if r.URL.Query().Get("edit") == "1" && record.CanCorrect {
+		if !record.Administrative {
+			eligibility, gateErr := a.options.Academics.TeacherLessonEligibilityForDate(r.Context(), principal(r).ID, record.Date, record.EndsAt)
+			if gateErr != nil {
+				a.academicFailure(w, gateErr)
+				return
+			}
+			if !eligibility.Allowed {
+				v.AttendanceBlocked = eligibility.Reason
+			}
+		}
 		page.ModalOpen = true
 	}
 	if r.URL.Query().Get("saved") == "1" {
@@ -159,6 +177,9 @@ func (a *application) correctLessonAttendance(w http.ResponseWriter, r *http.Req
 		return
 	}
 	v := &lessonAttendanceView{Date: latest.Date, Record: toLessonAttendanceRecordView(latest), CorrectionStatus: input.NewStatus, CorrectionReason: input.Reason}
+	if isTeacherAttendanceBlocked(err) && !latest.Administrative {
+		v.AttendanceBlocked = err.Error()
+	}
 	page := view{Page: "lesson-attendance", Title: "Absensi per Pelajaran", LessonAttendance: v, Error: message}
 	if errors.Is(err, academic.ErrConflict) {
 		page.Error = "Catatan telah berubah sejak dibuka. Status terkini ditampilkan; periksa ulang sebelum mengirim koreksi baru."
@@ -272,7 +293,10 @@ func (a *application) renderLessonAttendanceRevisionConflict(w http.ResponseWrit
 	if err != nil {
 		return err
 	}
-	v := &lessonAttendanceView{Date: date, Lessons: changed.Lessons, RevisionChanged: true}
+	v := &lessonAttendanceView{Date: date, RevisionChanged: true}
+	for _, lesson := range changed.Lessons {
+		v.Lessons = append(v.Lessons, lessonAttendanceLessonView{Lesson: lesson, AttendanceReason: changed.Eligibility[lesson.ID].Reason})
+	}
 	if changed.Replacement != nil {
 		applyLessonAttendanceContext(v, *changed.Replacement, pending)
 		v.Stale = true
@@ -318,6 +342,9 @@ func hasSavedLessonAttendance(students []lessonAttendanceStudentView) bool {
 func applyLessonAttendanceContext(v *lessonAttendanceView, context academic.TeacherLessonAttendanceContext, pending map[int64]string) {
 	v.Date = context.Date
 	v.Lesson = &context.Lesson
+	if !context.AttendanceEligibility.Allowed {
+		v.AttendanceBlocked = context.AttendanceEligibility.Reason
+	}
 	v.Fingerprint = context.Fingerprint
 	statuses := make(map[int64]academic.LessonAttendanceRecord, len(context.Records))
 	for _, record := range context.Records {

@@ -62,6 +62,10 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 	var semester, teacherID, subjectID, studentID, secondStudentID int64
 	must(db.QueryRow(`SELECT id FROM app.semesters WHERE school_year_id=$1 AND number=1`, year.ID).Scan(&semester))
 	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru Konteks Uji',$1) RETURNING id`, teacher.ID).Scan(&teacherID))
+	// Role Admin hanya dipakai fixture agar guru dapat mencatat bukti manual
+	// untuk dirinya sendiri melalui service presensi resmi.
+	_, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'admin') ON CONFLICT DO NOTHING`, teacher.ID)
+	must(err)
 	must(db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "LC"+testutil.Random(t)[:8], "Mapel Konteks Uji").Scan(&subjectID))
 	must(db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES('Siswa Konteks Uji','2013-01-01','L') RETURNING id`).Scan(&studentID))
 	studentPlacementID, err := s.CreatePlacement(ctx, admin.ID, studentID, class.ID, "2020-07-01")
@@ -79,6 +83,10 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 	must(err)
 	must(s.AddTimetableEntry(ctx, curriculum.ID, revision.ID, 2, class.ID, subjectID, teacherID, 1, 1))
 	must(s.PublishTimetable(ctx, curriculum.ID, revision.ID))
+	_, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, academic.TeacherAttendanceManualInput{TeacherID: teacherID, Action: academic.TeacherCheckIn, OccurredAt: "2020-07-07T00:01", Reason: "Bukti sintetis untuk konteks absensi pelajaran", IdempotencyKey: testutil.Random(t)[:32]})
+	must(err)
+	checkOut, err := s.RecordTeacherAttendanceManual(ctx, teacher.ID, academic.TeacherAttendanceManualInput{TeacherID: teacherID, Action: academic.TeacherCheckOut, OccurredAt: "2020-07-07T23:59", Reason: "Bukti sintetis untuk konteks absensi pelajaran", IdempotencyKey: testutil.Random(t)[:32]})
+	must(err)
 
 	accounts, err := auth.New(db)
 	must(err)
@@ -493,7 +501,7 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 	}
 	modalHTML := invalidHTML[dialogStart : dialogStart+dialogEnd]
 	validationMessage := "Alasan koreksi wajib diisi, maksimal 500 karakter."
-	if invalidResponse.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(modalHTML, validationMessage) || !strings.Contains(modalHTML, `role="alert"`) || !strings.Contains(modalHTML, `option value="izin" selected`) || !strings.Contains(modalHTML, `<textarea id="lesson-correction-reason" name="reason" maxlength="500" required> </textarea>`) || strings.Count(invalidHTML, validationMessage) != 1 {
+	if invalidResponse.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(modalHTML, validationMessage) || !strings.Contains(modalHTML, `role="alert"`) || !strings.Contains(modalHTML, `option value="izin" selected`) || !strings.Contains(modalHTML, `name="reason" maxlength="500" required`) || !strings.Contains(modalHTML, `> </textarea>`) || strings.Count(invalidHTML, validationMessage) != 1 {
 		t.Fatal("invalid correction did not retain the selected status and reopen the modal")
 	}
 	var invalidAfterStatus string
@@ -526,6 +534,34 @@ func TestLessonAttendanceContextHTTPIntegration(t *testing.T) {
 	}
 	if !strings.Contains(get(teacherClient, dateURL, http.StatusOK), fmt.Sprintf("/catatan/%d", attendanceID)) {
 		t.Fatal("historical attendance is not discoverable from the dated list")
+	}
+	if _, err = s.CorrectTeacherAttendance(ctx, teacher.ID, academic.TeacherAttendanceCorrectionInput{EventID: checkOut.EventID, ExpectedVersion: checkOut.Version, OccurredAt: "2020-07-07T07:20", CorrectionReason: "Uji pulang sebelum akhir occurrence"}); err != nil {
+		t.Fatal("cannot prepare early-checkout gate for correction UI", err)
+	}
+	blockedCorrectionPage := get(teacherClient, historyURL+"?edit=1", http.StatusOK)
+	if !strings.Contains(blockedCorrectionPage, "Pulang mendahului waktu selesai pertemuan") || !strings.Contains(blockedCorrectionPage, "Isian koreksi tetap ditampilkan") {
+		t.Fatal("blocked correction form did not explain the attendance gate")
+	}
+	blockedToken := csrfRE.FindStringSubmatch(blockedCorrectionPage)
+	if len(blockedToken) != 2 {
+		t.Fatal("blocked correction form CSRF token missing")
+	}
+	var beforeBlockedStatus string
+	var beforeBlockedVersion, beforeBlockedHistory int
+	must(db.QueryRow(`SELECT status,version,(SELECT count(*) FROM app.student_lesson_attendance_history WHERE attendance_id=$1) FROM app.student_lesson_attendance WHERE id=$1`, attendanceID).Scan(&beforeBlockedStatus, &beforeBlockedVersion, &beforeBlockedHistory))
+	blockedCorrectionForm := url.Values{"gorilla.csrf.Token": {blockedToken[1]}, "attendance_id": {fmt.Sprint(attendanceID)}, "expected_version": {fmt.Sprint(beforeBlockedVersion)}, "new_status": {"alpa"}, "reason": {"Alasan yang harus tetap terlihat saat gate menolak"}}
+	blockedCorrectionResponse, postErr := teacherClient.PostForm(server.URL+correctionURL, blockedCorrectionForm)
+	must(postErr)
+	blockedCorrectionBody, readErr := io.ReadAll(blockedCorrectionResponse.Body)
+	blockedCorrectionResponse.Body.Close()
+	if readErr != nil || blockedCorrectionResponse.StatusCode != http.StatusConflict || !strings.Contains(string(blockedCorrectionBody), "Pulang mendahului waktu selesai pertemuan") || !strings.Contains(string(blockedCorrectionBody), "Alasan yang harus tetap terlihat saat gate menolak") || !strings.Contains(string(blockedCorrectionBody), `value="alpa" selected`) {
+		t.Fatalf("blocked correction did not preserve the user's input and explain the gate: status=%d read_err=%v", blockedCorrectionResponse.StatusCode, readErr)
+	}
+	var afterBlockedStatus string
+	var afterBlockedVersion, afterBlockedHistory int
+	must(db.QueryRow(`SELECT status,version,(SELECT count(*) FROM app.student_lesson_attendance_history WHERE attendance_id=$1) FROM app.student_lesson_attendance WHERE id=$1`, attendanceID).Scan(&afterBlockedStatus, &afterBlockedVersion, &afterBlockedHistory))
+	if beforeBlockedStatus != afterBlockedStatus || beforeBlockedVersion != afterBlockedVersion || beforeBlockedHistory != afterBlockedHistory {
+		t.Fatalf("blocked correction mutated attendance/history: before=%s/%d/%d after=%s/%d/%d", beforeBlockedStatus, beforeBlockedVersion, beforeBlockedHistory, afterBlockedStatus, afterBlockedVersion, afterBlockedHistory)
 	}
 
 	// Kurikulum memperoleh akses administratif setelah role Guru Mapel historis dicabut.

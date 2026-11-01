@@ -107,6 +107,7 @@ type TeachingJournalHistory struct {
 type TeachingJournalOccurrenceOption struct {
 	LogicalLessonID, SemesterID, RevisionID, EntryID                        int64
 	Date, SemesterSnapshot, ClassSnapshot, SubjectSnapshot, TeacherSnapshot string
+	AttendanceReason                                                        string
 	RevisionNumber                                                          int
 	Periods                                                                 []TeachingJournalPeriodSnapshot
 }
@@ -417,6 +418,23 @@ func (s *Store) TeachingJournalOccurrences(ctx context.Context, actor int64, dat
 	}
 	if err = rows.Err(); err != nil {
 		return nil, false, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, false, err
+	}
+	evidence, err := teacherLessonAttendanceEvidenceTx(ctx, tx, teacherID, date)
+	if err != nil {
+		return nil, false, err
+	}
+	for i := range options {
+		if len(options[i].Periods) == 0 {
+			options[i].AttendanceReason = "Snapshot waktu resmi pertemuan belum tersedia."
+			continue
+		}
+		eligibility := evaluateTeacherLessonEligibility(evidence, date, options[i].Periods[len(options[i].Periods)-1].EndsAt)
+		if !eligibility.Allowed {
+			options[i].AttendanceReason = eligibility.Reason
+		}
 	}
 	return options, pending, nil
 }

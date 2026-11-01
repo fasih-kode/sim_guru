@@ -10,23 +10,26 @@ import (
 
 // TeacherLessonDate berisi pertemuan terbit yang boleh dibuka guru pada tanggal tertentu.
 type TeacherLessonDate struct {
-	Date    string
-	Lessons []TimetableEntry
+	Date        string
+	Lessons     []TimetableEntry
+	Eligibility map[int64]TeacherLessonEligibility
 }
 
 // TeacherLessonAttendanceContext adalah konteks baca-saja untuk satu pertemuan.
 type TeacherLessonAttendanceContext struct {
-	Date        string
-	Fingerprint string
-	Lesson      TimetableEntry
-	Students    []AttendanceStudent
-	Records     []LessonAttendanceRecord
+	Date                  string
+	Fingerprint           string
+	Lesson                TimetableEntry
+	AttendanceEligibility TeacherLessonEligibility
+	Students              []AttendanceStudent
+	Records               []LessonAttendanceRecord
 }
 
 // TeacherLessonAttendanceRevisionContext hanya membuka konteks pengganti setelah
 // penugasan guru pada kelas dan mapel yang sama diverifikasi ulang.
 type TeacherLessonAttendanceRevisionContext struct {
 	Lessons     []TimetableEntry
+	Eligibility map[int64]TeacherLessonEligibility
 	Replacement *TeacherLessonAttendanceContext
 }
 
@@ -99,6 +102,14 @@ func (s *Store) TeacherLessonsOnDate(ctx context.Context, actor int64, date stri
 			}
 		}
 	}
+	evidence, err := teacherLessonAttendanceEvidenceTx(ctx, tx, teacherID, date)
+	if err != nil {
+		return result, err
+	}
+	result.Eligibility = make(map[int64]TeacherLessonEligibility, len(result.Lessons))
+	for _, lesson := range result.Lessons {
+		result.Eligibility[lesson.ID] = evaluateTeacherLessonEligibility(evidence, date, lesson.EndsAt)
+	}
 	sort.Slice(result.Lessons, func(i, j int) bool {
 		a, b := result.Lessons[i], result.Lessons[j]
 		if a.Weekday != b.Weekday {
@@ -135,6 +146,7 @@ func (s *Store) TeacherLessonAttendanceOnDate(ctx context.Context, actor int64, 
 	if selected == nil {
 		return result, ErrNotFound
 	}
+	result.AttendanceEligibility = meetings.Eligibility[selected.ID]
 	// Baca roster lewat jalur ketat agar role tambahan tidak memperluas akses.
 	attendance, err := s.attendanceContextForTeacherClass(ctx, actor, selected.TeacherID, selected.ClassID, date, true)
 	if err != nil {
@@ -232,6 +244,7 @@ func (s *Store) TeacherLessonAttendanceAfterRevision(ctx context.Context, actor 
 		return result, err
 	}
 	result.Lessons = meetings.Lessons
+	result.Eligibility = meetings.Eligibility
 	replacementID, unique := UniqueReplacementLesson(meetings.Lessons, classID, subjectID, teacherID)
 	if !unique {
 		return result, nil

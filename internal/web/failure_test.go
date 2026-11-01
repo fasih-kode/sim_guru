@@ -65,6 +65,7 @@ func TestAcademicFailureKeepsClientErrorStatusAndMessage(t *testing.T) {
 		{name: "validation", err: academic.ValidationError("Input tidak valid."), status: http.StatusUnprocessableEntity, message: "Input tidak valid."},
 		{name: "forbidden", err: academic.ErrForbidden, status: http.StatusForbidden, message: academic.ErrForbidden.Error()},
 		{name: "not found", err: academic.ErrNotFound, status: http.StatusNotFound, message: academic.ErrNotFound.Error()},
+		{name: "teacher lesson attendance blocks mutation", err: &academic.TeacherLessonIneligibleError{Reason: "Presensi guru belum memenuhi syarat."}, status: http.StatusConflict, message: "Presensi guru belum memenuhi syarat."},
 		{name: "conflict", err: academic.ErrConflict, status: http.StatusConflict, message: academic.ErrConflict.Error()},
 	}
 

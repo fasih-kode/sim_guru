@@ -186,6 +186,13 @@ func (s *Store) SaveLessonAttendance(ctx context.Context, actor int64, in Lesson
 	if lesson == nil {
 		return result, ErrConflict
 	}
+	eligibility, err := teacherLessonEligibilityTx(ctx, tx, teacherID, in.Date, lesson.EndsAt)
+	if err != nil {
+		return result, err
+	}
+	if err = teacherLessonEligibilityError(eligibility); err != nil {
+		return result, err
+	}
 	if contextForDate.Fingerprint != in.Fingerprint {
 		return result, ErrConflict
 	}

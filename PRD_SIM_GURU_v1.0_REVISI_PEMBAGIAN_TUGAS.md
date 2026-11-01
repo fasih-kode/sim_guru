@@ -308,10 +308,11 @@ Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka peng
 
 ### 7.4 Absensi per pelajaran, koreksi, dan rekap
 - Guru → Jadwal Saya → tanggal/pertemuan → daftar siswa → isi → Simpan. Server memeriksa akun/role/guru aktif, penugasan resmi yang efektif, pertemuan terpublikasi dan roster bertanggal. Satu catatan per siswa/pertemuan.
+- **D-050 FINAL:** sebelum guru membuka form dan saat transaksi simpan/koreksi, server memeriksa bukti presensi guru pada tanggal WIB occurrence. Hari ini memerlukan Check-In sah tanpa konflik; tanggal lampau memerlukan Check-In dan Check-Out sah/konsisten. Tanpa bukti lengkap, laporan Izin/Sakit aktif, Dinas Luar aktif (blokir default), bukti bertentangan/tidak jelas, atau Check-Out sebelum akhir pertemuan menahan mutasi. Koreksi resmi sumber yang memenuhi syarat membuka akses kembali otomatis. Form menyampaikan alasan dan mempertahankan isian; histori absensi/jurnal yang sudah ada tidak berubah bila bukti kemudian tidak memenuhi syarat.
 - Tombol Tandai semua Hadir adalah aksi eksplisit pengguna, lalu status siswa disesuaikan sebelum simpan. Tidak mengisi Hadir dari data kosong atau dari QR harian.
 - Koreksi absensi per pelajaran mengikuti keputusan final **D-037**: Guru Mapel historis yang akunnya aktif, ber-role Guru Mapel, dan identitas gurunya aktif boleh mengoreksi catatan yang `teacher_id`-nya sama, meskipun penugasan/jadwal/roster kini berubah. Guru pengampu baru tidak mewarisi hak tersebut. Kurikulum hanya menjadi fallback administratif bila akun historis tidak aktif/tidak terhubung atau role Guru Mapel historis telah dicabut; profil guru nonaktif saja tidak cukup. Admin, Kesiswaan, Kepala Sekolah, dan guru lain tidak mendapat bypass. Koreksi memakai status lama/baru, alasan wajib 1–500 karakter, expected version, mutation lock, dan transaksi atomik dengan histori before/after; konflik meminta tinjau ulang, status sama adalah no-op tanpa histori baru. Catatan dan histori tetap dicari berdasarkan ID permanen serta snapshot kejadian asli. Tidak ada approval Kepala Sekolah. Keputusan ini tidak mengubah hak baca rekap yang masih mengikuti cakupan peran tersendiri.
 - Wali membaca kelasnya, Kesiswaan membaca rekap siswa sekolah, Kepala Sekolah membaca ringkasan; role gabungan mengikuti masing-masing cakupan.
-- Perbedaan sumber hanya ditandai untuk pemeriksaan; tidak menyimpulkan pelanggaran atau menimpa sumber. Definisi indikator anomali rinci masih dibahas saat integrasi. Keterlambatan siswa mengikuti batas kedatangan Kesiswaan pada D-036/bab 7.6; pulang cepat belum ditetapkan.
+- Gate D-050 adalah prasyarat mutasi guru, bukan indikator pelanggaran dan tidak menyimpulkan status absensi siswa. Hak baca, koreksi administratif Kurikulum, assignment/snapshot, dan histori D-037 tetap berlaku. Keterlambatan siswa mengikuti batas kedatangan Kesiswaan pada D-036/bab 7.6; pulang cepat belum ditetapkan.
 
 ### 7.5 Urutan dan bukti lulus
 1. Fondasi kalender/tanggal penempatan/akses.
@@ -324,15 +325,15 @@ FE mengikuti TailAdmin/pola aplikasi: filter bertahan, tabel bernomor/pagination
 
 ## 8. Jurnal Mengajar — FINAL inti
 
-- Jurnal mencatat kelas, mapel, blok pelajaran aktual, **guru pengampu resmi yang berwenang**, waktu, dan materi. Tidak ada pemilihan Guru Pengganti/Cadangan.
+- Jurnal mencatat kelas, mapel, blok JP dan waktu dari snapshot jadwal resmi yang efektif, **guru pengampu resmi yang berwenang**, dan materi. Guru tidak menginput waktu aktual; tidak ada pemilihan Guru Pengganti/Cadangan.
 - Status **Draf** dan **Final**; guru berwenang dapat memfinalisasi sendiri. Koreksi Final dengan alasan dan riwayat, **tanpa inbox approval berlapis**.
-- Anomali antara jadwal, kehadiran guru, absensi siswa, dan jurnal hanya ditandai untuk pemeriksaan; tidak otomatis membuktikan pelanggaran atau menimpa sumber.
+- D-050 FINAL mensyaratkan bukti presensi guru untuk mutasi Jurnal Mengajar: Check-In sah pada hari ini tanpa konflik; Check-In dan Check-Out sah/konsisten pada tanggal lampau; laporan Izin/Sakit aktif, Dinas Luar aktif secara default, bukti tidak jelas/bertentangan, atau Check-Out sebelum akhir occurrence menahan mutasi. Evaluasi di form dan diulang dalam transaksi backend; request langsung tidak dapat melewati gate. Koreksi resmi membuka akses kembali otomatis. Catatan dan snapshot yang sudah tersimpan dipertahankan jika bukti kemudian berubah. Gate bukan indikator pelanggaran dan tidak mengubah data absensi siswa.
 
 **AC:** guru di luar penugasan ditolak; jurnal Final tidak dapat diubah tanpa mekanisme koreksi beralasan; tidak ada jurnal oleh Guru Pengganti/Cadangan; jadwal yang tidak terlaksana tidak otomatis memiliki jurnal Final.
 
 ### D-048 — kontrak Jurnal Mengajar yang disetujui Product Owner (31 Oktober 2026)
 
-Jurnal tetap membedakan status **Draf** dan **Final**. Draf boleh belum lengkap. Untuk pembelajaran terlaksana, materi maksimal 500 karakter wajib sebelum Final; catatan kegiatan opsional maksimal 2.000 karakter. Jika jadwal resmi berbeda dari pelaksanaan, waktu aktual dicatat terpisah dan tidak mengubah snapshot jadwal.
+Jurnal tetap membedakan status **Draf** dan **Final**. Draf boleh belum lengkap. Untuk pembelajaran terlaksana, materi maksimal 500 karakter wajib sebelum Final; catatan kegiatan opsional maksimal 2.000 karakter. Nomor dan seluruh waktu JP berasal dari snapshot jadwal resmi yang efektif pada tanggal pertemuan; guru tidak menginput waktu aktual. Revisi jadwal tidak mengubah snapshot jurnal historis. Revisi FINAL D-048 pada 1 November 2026 menggantikan ketentuan sebelumnya mengenai input waktu aktual.
 
 Jurnal menyediakan penanda **Tidak Terlaksana** dengan alasan wajib saat penanda disimpan dan saat Final. Draf boleh belum lengkap pada materi/catatan. Final Tidak Terlaksana tidak menjadi bukti pembelajaran terlaksana; Final untuk pembelajaran terlaksana wajib bermateri. Status jadwal kosong tidak otomatis menjadi penanda tersebut, dan ketiadaan presensi tidak membuatnya otomatis.
 
@@ -346,7 +347,7 @@ Guru historis dapat membaca dan mengoreksi jurnal miliknya ketika akun serta rol
 
 Ekspor **PDF** dan **XLSX** tersedia untuk Jurnal Saya dengan filter tahun ajaran, semester, tanggal, kelas, mapel, dan status; ekspor memuat seluruh hasil filter. PDF memuat nomor, tanggal WIB, kelas, mapel, nomor JP, materi, catatan dan status. XLSX memiliki header, tanggal WIB, satu baris per jurnal, dan memperlakukan teks pengguna sebagai teks. Status Draf ditandai jelas. Hak ekspor agregat role lain tidak ditetapkan di sini.
 
-Indikator anomali hanya menunjukkan perbedaan sumber sesuai otorisasi sumber tersebut. Tidak menyimpulkan pelanggaran atau mengubah jadwal/absensi/presensi. Detail teknis implementasi tidak boleh melonggarkan D-020, D-033, atau otorisasi role.
+Indikator **Perlu Ditinjau** Draf tetap hanya untuk perubahan revision/lineage/konteks jadwal menurut D-048/D-049. D-050 bukan indikator: ia adalah gate presensi guru untuk mutasi Jurnal dan Absensi Pelajaran. Ketiadaan jurnal atau baris absensi siswa tidak ditafsirkan sebagai ketidakhadiran atau pelanggaran. Tidak ada perbandingan waktu aktual guru karena D-048 tidak memperbolehkan input waktu aktual. Hak sumber dan role tidak berubah.
 
 ## 9. Penilaian — FINAL prinsip, OPEN rincian formula
 

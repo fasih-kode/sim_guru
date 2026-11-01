@@ -158,6 +158,27 @@ func (s *Store) SaveTeachingJournal(ctx context.Context, actor int64, in Teachin
 	}
 	result.RevisionID = revisionID
 	result.EntryID = entryID
+	var scheduledEnd string
+	if isNew {
+		err = tx.QueryRowContext(ctx, `SELECT max(p.ends_at)::text
+			FROM app.weekly_timetable_entries e
+			JOIN app.weekly_timetable_periods p ON p.revision_id=e.revision_id AND p.weekday=e.weekday AND p.period_no BETWEEN e.period_start AND e.period_end
+			WHERE e.id=$1 AND e.revision_id=$2`, entryID, revisionID).Scan(&scheduledEnd)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT max(p.ends_at)::text
+			FROM app.teaching_journal_versions v JOIN app.teaching_journal_version_periods p ON p.version_id=v.id
+			WHERE v.journal_id=$1 AND v.version_no=$2`, journalID, currentVersion).Scan(&scheduledEnd)
+	}
+	if err != nil {
+		return TeachingJournalResult{}, err
+	}
+	eligibility, err := teacherLessonEligibilityTx(ctx, tx, teacherID, date, scheduledEnd)
+	if err != nil {
+		return TeachingJournalResult{}, err
+	}
+	if err = teacherLessonEligibilityError(eligibility); err != nil {
+		return TeachingJournalResult{}, err
+	}
 	if isNew && in.ExpectedVersion != 0 {
 		return TeachingJournalResult{}, ErrConflict
 	}

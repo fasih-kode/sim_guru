@@ -67,6 +67,13 @@ func newLessonAttendanceFixture(t *testing.T) lessonAttendanceFixture {
 	var teacherID, otherTeacherID int64
 	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru absensi per pelajaran',$1) RETURNING id`, teacher.ID).Scan(&teacherID))
 	must(db.QueryRow(`INSERT INTO app.teachers(name,user_id) VALUES('Guru mapel lain',$1) RETURNING id`, other.ID).Scan(&otherTeacherID))
+	for _, proof := range []struct {
+		action TeacherAttendanceAction
+		at     string
+	}{{TeacherCheckIn, "T00:01"}, {TeacherCheckOut, "T23:59"}} {
+		_, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: proof.action, OccurredAt: dateText + proof.at, Reason: "Bukti presensi sintetis untuk integrasi absensi", IdempotencyKey: testutil.Random(t)[:32]})
+		must(err)
+	}
 	var subject, otherSubject int64
 	must(db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel absensi') RETURNING id`, "LA"+testutil.Random(t)[:10]).Scan(&subject))
 	must(db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,'Mapel lain') RETURNING id`, "LB"+testutil.Random(t)[:10]).Scan(&otherSubject))
@@ -430,6 +437,35 @@ func TestSaveLessonAttendanceIntegration(t *testing.T) {
 	}
 	if dailyCount != 0 {
 		t.Fatal("lesson attendance changed daily attendance", dailyCount)
+	}
+	var checkOutID int64
+	if err = f.db.QueryRow(`SELECT id FROM app.teacher_attendance_events WHERE teacher_id=(SELECT id FROM app.teachers WHERE user_id=$1) AND on_date=$2::date AND action='check_out'`, f.teacher.ID, f.date).Scan(&checkOutID); err != nil {
+		t.Fatal("missing synthetic check-out evidence", err)
+	}
+	if _, err = f.store.CorrectTeacherAttendance(f.ctx, f.teacher.ID, TeacherAttendanceCorrectionInput{EventID: checkOutID, ExpectedVersion: 1, OccurredAt: f.date + "T02:00", CorrectionReason: "Uji blok penyimpanan absensi"}); err != nil {
+		t.Fatal("cannot prepare early-checkout evidence", err)
+	}
+	var attendanceBefore, historyBefore int
+	if err = f.db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance WHERE timetable_entry_id=$1 AND meeting_date=$2`, f.entryID, f.date).Scan(&attendanceBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id=$1 AND a.meeting_date=$2`, f.entryID, f.date).Scan(&historyBefore); err != nil {
+		t.Fatal(err)
+	}
+	blockedForm := f.formFor(t, f.teacher.ID, f.date, f.entryID)
+	_, err = f.store.SaveLessonAttendance(f.ctx, f.teacher.ID, f.input(f.date, f.entryID, blockedForm.Fingerprint, LessonAttendanceChoice{StudentID: f.students[0], Status: "sakit"}))
+	if !errors.Is(err, ErrTeacherLessonIneligible) {
+		t.Fatalf("direct lesson-attendance mutation bypassed the changed eligibility: %v", err)
+	}
+	var attendanceAfter, historyAfter int
+	if err = f.db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance WHERE timetable_entry_id=$1 AND meeting_date=$2`, f.entryID, f.date).Scan(&attendanceAfter); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.db.QueryRow(`SELECT count(*) FROM app.student_lesson_attendance_history h JOIN app.student_lesson_attendance a ON a.id=h.attendance_id WHERE a.timetable_entry_id=$1 AND a.meeting_date=$2`, f.entryID, f.date).Scan(&historyAfter); err != nil {
+		t.Fatal(err)
+	}
+	if attendanceBefore != attendanceAfter || historyBefore != historyAfter {
+		t.Fatalf("blocked lesson-attendance mutation changed history: attendance=%d/%d history=%d/%d", attendanceBefore, attendanceAfter, historyBefore, historyAfter)
 	}
 }
 

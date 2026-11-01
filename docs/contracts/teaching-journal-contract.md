@@ -1,20 +1,20 @@
 # Kontrak Bisnis Jurnal Mengajar — Fase 9A
 
-Status dokumen: kontrak bisnis FINAL D-048, keputusan arsitektur FINAL D-049, serta kontrak teknis Fase 9B. Catatan implementasi dan penyempurnaan UAT terbaru berada di HANDOVER.
+Status dokumen: kontrak bisnis FINAL D-048 dan D-050, keputusan arsitektur FINAL D-049, serta kontrak teknis Fase 9B. Catatan implementasi dan penyempurnaan UAT terbaru berada di HANDOVER.
 
 ## 1. Landasan dan status aturan
 
 ### FINAL dari PRD
 
-- Jadwal adalah rencana; jurnal mencatat kegiatan aktual. Perubahan jadwal tidak menulis ulang jurnal masa lalu.
-- Jurnal memuat konteks kelas, mata pelajaran, blok pelajaran aktual, guru pengampu resmi yang berwenang, waktu, dan materi.
+- Jadwal adalah rencana; jurnal mencatat kegiatan pada occurrence jadwal resmi. Perubahan jadwal tidak menulis ulang jurnal masa lalu.
+- Jurnal memuat konteks kelas, mata pelajaran, blok JP resmi, guru pengampu resmi yang berwenang, waktu resmi per JP, dan materi.
 - Guru yang berwenang dapat menyimpan Draf dan memfinalisasi sendiri. Jurnal Final tidak diedit diam-diam; koreksi wajib beralasan dan menyimpan riwayat versi. Tidak ada inbox approval atau persetujuan rutin Kepala Sekolah.
 - Tidak ada Guru Pengganti/Cadangan, penugasan sementara, atau jurnal atas nama orang lain. Ketidakhadiran guru tidak membuat jurnal otomatis.
-- Perbedaan jadwal, presensi guru, absensi pelajaran, dan jurnal hanya menjadi indikator untuk ditinjau. Perbedaan bukan bukti pelanggaran dan tidak mengubah sumber lain.
+- D-050 mensyaratkan bukti presensi guru yang memenuhi syarat sebelum guru memutasi Jurnal Mengajar. Gate ini adalah prasyarat operasional, bukan indikator pelanggaran dan bukan perubahan status jurnal.
 - Guru di luar penugasan resmi ditolak. Pertemuan yang tidak terlaksana tidak otomatis memiliki jurnal Final.
 - Materi pembelajaran maksimal 500 karakter wajib untuk Final pembelajaran terlaksana. Catatan kegiatan opsional maksimal 2.000 karakter. Draf boleh belum lengkap.
 - Penanda **Tidak Terlaksana** memerlukan alasan dan tidak boleh menyatakan pembelajaran terlaksana. Ketiadaan presensi guru tidak mengisi penanda itu.
-- Waktu aktual disimpan terpisah dari waktu jadwal bila berbeda. Blok resmi menyimpan urutan nomor JP dan waktu tiap JP, konteks kelas/mapel/pengampu, serta snapshot revisi. Guru tidak mengubah JP resmi.
+- Seluruh nomor JP dan waktu yang digunakan jurnal berasal dari snapshot jadwal resmi yang efektif pada tanggal occurrence WIB. Guru tidak menginput atau mengoreksi waktu pelaksanaan. Revisi jadwal tidak menulis ulang snapshot pada versi jurnal yang sudah ada. Revisi FINAL D-048 tanggal 1 November 2026 menggantikan ketentuan sebelumnya yang memperbolehkan input waktu aktual terpisah.
 - Draf terdampak revisi ditandai **Perlu Ditinjau** dan tetap pada occurrence lama; Final mempertahankan snapshot historis.
 - Satu occurrence memiliki satu jurnal lintas revisi; pemetaan ambigu tidak diterka. Guru lama yang akunnya dan role yang diperlukan masih aktif dapat membaca/mengoreksi jurnal historis miliknya; guru baru tidak mewarisi hak mutasi.
 - Jurnal Saya mendukung ekspor PDF dan XLSX seluruh hasil filter. Draf diberi label. Ekspor agregat role lain tidak diberikan otomatis.
@@ -43,7 +43,7 @@ Dasar: PRD utama §6 dan §8; PRD Frontend §3.4 dan §3.6; D-020, D-033, D-048;
 
 1. Guru membuka Jadwal Saya, memilih tanggal/pertemuan dari jadwal terbit, lalu memilih **Isi Jurnal**.
 2. Server memverifikasi akun aktif, role Guru Mapel, identitas guru aktif yang tertaut, penugasan resmi pada tanggal pertemuan, semester/kalender, serta versi jadwal yang efektif.
-3. Form menampilkan sebagai konteks baca-saja: tahun ajaran, semester, tanggal WIB, kelas, mapel, guru pengampu resmi, blok/nomor jam dan waktu rencana.
+3. Form menampilkan sebagai konteks baca-saja: tahun ajaran, semester, tanggal WIB, kelas, mapel, guru pengampu resmi, serta nomor dan waktu resmi setiap JP.
 4. Guru mengisi kegiatan aktual dan dapat menyimpan Draf atau memfinalisasi sesuai kontrak final D-048.
 5. Jurnal Draf dapat dilanjutkan oleh pelaku yang sah. Jurnal Final tampil di riwayat; koreksi dilakukan melalui **Koreksi dengan Alasan** dan tidak memerlukan persetujuan Kepala Sekolah.
 6. Jika data jadwal berubah setelah form dibuka, sistem meminta tinjau ulang. Sistem tidak memindahkan isi ke pertemuan baru secara diam-diam.
@@ -57,8 +57,7 @@ Tidak ada POST atau finalisasi otomatis dari membuka link, mengisi absensi siswa
 | ID jurnal, pelaku, waktu simpan/final/koreksi, versi | Database dan akun terautentikasi | Dibuat server; tidak dapat dipalsukan dari klien |
 | Tahun ajaran, semester, tanggal WIB | Semester/kalender resmi dan tanggal pertemuan yang dipilih | Konteks terikat pada tanggal; aturan fallback tanggal sekolah ikut kalender |
 | Kelas, mapel, guru, penugasan | Jadwal terbit efektif serta penugasan resmi pada tanggal itu | Ditampilkan baca-saja dan disimpan sebagai referensi + snapshot |
-| Blok/jam dan waktu rencana | Entri jadwal terbit, `weekly_timetable_periods`, snapshot revisi | Snapshot daftar JP berurutan dengan nomor dan waktu per JP; waktu resmi baca-saja |
-| Waktu aktual | Isian guru bila berbeda dari jadwal | Disimpan terpisah; rentang yang diisi harus valid |
+| Nomor JP dan waktu JP | Revision jadwal resmi efektif pada tanggal occurrence WIB | Prefill baca-saja; seluruh nomor/waktu JP disimpan dalam snapshot setiap versi |
 | Materi | Isian guru | Maksimal 500 karakter; wajib sebelum Final jika pembelajaran terlaksana |
 | Catatan kegiatan | Isian guru | Opsional, maksimal 2.000 karakter |
 | Tidak Terlaksana | Penanda eksplisit guru | Alasan wajib; tidak dibuat otomatis oleh absensi/presensi |
@@ -70,7 +69,7 @@ Kelas, mapel, guru, dan jadwal yang sudah diketahui tidak diketik ulang atau dap
 
 ## 4. Status dan perubahan
 
-Transisi FINAL: `Draf → Draf` (melanjutkan), `Draf → Final` (finalisasi mandiri), dan `Final → Final versi baru` melalui koreksi beralasan. Koreksi Final dapat memperbaiki outcome dari Terlaksana menjadi Tidak Terlaksana atau sebaliknya; status jurnal tetap Final dan alasan koreksi wajib. Tidak ada penghapusan atau penimpaan versi terdahulu. Draf boleh tidak memiliki materi/catatan. Jika ditandai Tidak Terlaksana, alasan wajib saat penanda disimpan. Materi dan catatan kegiatan tetap opsional; pada outcome Tidak Terlaksana, materi hanya konteks/rencana dan tidak boleh ditafsirkan sebagai bukti materi diajarkan. Waktu aktual tidak berlaku untuk outcome Tidak Terlaksana. Final Terlaksana memerlukan materi; waktu aktual dicatat terpisah hanya bila berbeda.
+Transisi FINAL: `Draf → Draf` (melanjutkan), `Draf → Final` (finalisasi mandiri), dan `Final → Final versi baru` melalui koreksi beralasan. Koreksi Final dapat memperbaiki outcome dari Terlaksana menjadi Tidak Terlaksana atau sebaliknya; status jurnal tetap Final dan alasan koreksi wajib. Tidak ada penghapusan atau penimpaan versi terdahulu. Draf boleh tidak memiliki materi/catatan. Jika ditandai Tidak Terlaksana, alasan wajib saat penanda disimpan. Materi dan catatan kegiatan tetap opsional; pada outcome Tidak Terlaksana, materi hanya konteks/rencana dan tidak boleh ditafsirkan sebagai bukti materi diajarkan. Final Terlaksana memerlukan materi. Tidak ada input waktu pelaksanaan aktual untuk kedua outcome.
 
 Status hanya menyatakan keadaan jurnal, bukan bukti kehadiran guru atau siswa. “Belum ada jurnal Final” tidak sama dengan “tidak mengajar”, “Alpa”, atau pelanggaran.
 
@@ -91,8 +90,11 @@ Guru historis yang menjadi pemilik jurnal dapat membaca dan mengoreksi jurnalnya
 
 - Jurnal tidak dibuat/final otomatis dari presensi guru, QR/absensi harian, atau absensi per pelajaran.
 - Absensi pelajaran tetap catatan per siswa/per pertemuan; jurnal adalah catatan kegiatan mengajar. Kedua domain memiliki status dan histori sendiri.
-- Perbedaan jadwal rencana dengan waktu aktual, absensi pelajaran yang belum dicatat, presensi guru, atau ketiadaan jurnal dapat ditandai netral “Perlu ditinjau”. Tidak boleh mengubah sumber, mengisi nilai/status, menyebut pelanggaran, atau memberi sanksi otomatis.
-- Indikator hanya menyampaikan perbedaan sumber kepada pihak yang memang berhak atas sumber masing-masing; indikator bukan kesimpulan pelanggaran dan tidak memberi akses tambahan. Implementasi aturan akses tiap sumber tetap diverifikasi.
+- D-050 adalah gate mutasi. Hanya Guru Mapel yang berwenang pada occurrence dapat menyimpan/memfinalisasi/mengoreksi jurnal bila bukti presensi guru untuk tanggal WIB memenuhi syarat. Penugasan, revision efektif, JP/snapshot, lineage, dan otorisasi tetap diperiksa terpisah.
+- Hari ini, Check-In yang sah cukup jika tidak ada laporan aktif atau bukti yang bertentangan. Tanggal lampau mensyaratkan Check-In dan Check-Out yang sah serta konsisten. Tidak ada Check-In, bukti hilang/tidak jelas/bertentangan, laporan Izin/Sakit aktif, atau Dinas Luar aktif (diblokir secara default) menahan mutasi. Check-Out sebelum waktu selesai occurrence berdasarkan snapshot juga menahan occurrence tersebut. Tidak ada ambang keterlambatan baru.
+- Evaluasi yang sama ditampilkan ketika form dibuka dan dijalankan ulang di transaksi penyimpanan. Request HTTP langsung tidak dapat melewati gate. Pesan blokir harus menyebut langkah koreksi yang sesuai secara netral dan mempertahankan isian yang belum disimpan.
+- Setelah koreksi resmi presensi/laporan memenuhi syarat, akses terbuka kembali otomatis. Jika bukti kemudian tidak lagi memenuhi syarat, jurnal, status, seluruh versi, histori dan snapshot tetap utuh; hanya mutasi baru yang diblokir. Hak baca tidak berubah.
+- D-050 bukan indikator Perlu Ditinjau dan tidak menyimpulkan pelanggaran. Indikator Perlu Ditinjau yang tetap berlaku di sini adalah indikator Draf akibat revisi jadwal/lineage menurut D-048/D-049. Tidak ada indikator tambahan presensi/absensi tanpa keputusan produk baru.
 
 ### Implementasi indikator revisi jadwal (9B-04A)
 
@@ -101,6 +103,10 @@ Penanda yang diwajibkan D-048 untuk Draf dihitung saat dibaca, bukan disimpan se
 Final tidak diberi penanda ini dan tidak berubah akibat revision; versi historis tetap membaca snapshot tersimpan. Outcome Tidak Terlaksana sendiri bukan pemicu. Jika tidak ada revision efektif yang dapat dibandingkan, indikator tidak menyimpulkan perubahan. Pemeriksaan hanya membaca jurnal milik Guru Mapel yang terautentikasi; lineage pending diberi alasan netral tanpa membuka data jurnal orang lain. Perhitungan tidak mengubah jurnal, jadwal, absensi, presensi, atau histori.
 
 Pembacaan penanda tidak menggantikan validasi mutasi: layanan simpan mengunci operasi jurnal dan menolak pembuatan atau perubahan occurrence ketika revision published yang efektif masih berstatus lineage pending. Penolakan tidak menambah versi atau histori; setelah keputusan lineage diselesaikan, operasi dapat dicoba kembali dengan pemeriksaan otorisasi dan versi yang sama seperti alur jurnal lainnya. Ini menerapkan batas operasi D-049, bukan status atau workflow bisnis baru.
+
+### Batas indikator lintas sumber
+
+D-050 menggantikan usulan lama untuk membandingkan presensi sebagai indikator: bukti presensi adalah syarat mutasi Jurnal dan Absensi Pelajaran sesuai aturan eksplisit di atas. Gate tidak mengubah atau memberi kesimpulan terhadap catatan absensi siswa. Indikator Draf yang tersisa hanya perubahan revision/lineage/konteks jadwal D-048/D-049. Tidak ada perbandingan waktu aktual guru karena input waktu aktual sudah dihapus oleh revisi D-048. Ketiadaan jurnal atau absensi siswa bukan bukti ketidakhadiran atau pelanggaran.
 
 ## 7. Kasus khusus
 
@@ -117,6 +123,7 @@ Pembacaan penanda tidak menggantikan validasi mutasi: layanan simpan mengunci op
 | Kirim ganda | Idempotensi mengembalikan hasil yang sama atau menunjukkan konflik; tidak membuat jurnal/versi ganda |
 | Versi usang | HTTP konflik yang aman, tampilkan versi terbaru dan minta pengguna tinjau ulang; jangan auto-submit |
 | Tidak cocok dengan absensi/presensi | Tampilkan selisih netral hanya sesuai hak akses sumber; sumber tidak berubah |
+| Presensi belum memenuhi D-050 | Form menunjukkan alasan spesifik; mutasi ditolak tanpa versi/histori parsial, lalu dapat dicoba kembali setelah sumber resmi dikoreksi |
 
 ## 8. Status pembuktian teknis Fase 9B-01
 
@@ -146,13 +153,14 @@ Untuk XLSX, implementasi menulis teks pengguna secara eksplisit dengan `SetCellS
 - Data kelas, mapel, guru, tanggal, semester, dan jadwal berasal dari sumber resmi dan tidak dapat diganti melalui request.
 - Guru dapat menyimpan/melanjutkan Draf dan memfinalisasi sendiri tanpa approval rutin.
 - Final terlaksana mensyaratkan materi maksimal 500 karakter; catatan opsional maksimal 2.000 karakter. Draf boleh belum lengkap.
-- Final Tidak Terlaksana memerlukan alasan; materi/catatan opsional ditandai sebagai konteks dan bukan bukti pembelajaran berlangsung, serta waktu aktual tidak dicatat. Status tidak dipicu otomatis oleh presensi.
-- Blok resmi menampilkan dan menyimpan urutan JP serta waktu tiap JP dari revisi yang berlaku; waktu aktual berbeda tercatat terpisah.
+- Final Tidak Terlaksana memerlukan alasan; materi/catatan opsional ditandai sebagai konteks dan bukan bukti pembelajaran berlangsung. Status tidak dipicu otomatis oleh presensi.
+- Blok resmi menampilkan dan menyimpan urutan JP serta waktu tiap JP dari snapshot revision yang berlaku. Tidak ada input waktu aktual oleh guru; bukti waktu yang telanjur tersimpan pada versi lama tetap dipertahankan dan dibaca sebagai catatan historis.
 - Jurnal Final tidak berubah kecuali melalui koreksi dengan alasan; versi, pelaku, waktu WIB, dan before/after dipertahankan.
 - Simpan ganda tidak menggandakan jurnal atau histori; konflik versi tidak menimpa perubahan baru; satu slot+tanggal hanya mempunyai satu jurnal lintas revisi.
 - Revisi jadwal/pengampu tidak mengubah snapshot jurnal terdahulu; Draf terdampak ditandai Perlu Ditinjau tanpa pemindahan otomatis.
 - Guru historis yang akun dan role yang diperlukan aktif dapat membaca/mengoreksi jurnal miliknya; guru baru tidak mewarisi akses mutasi.
 - Tidak ada jurnal atau absensi yang dihasilkan otomatis dari presensi/absensi lain.
+- Mutasi guru pada Jurnal Mengajar mensyaratkan bukti presensi D-050 pada tanggal occurrence; GET dan pembacaan historis tidak menulis atau mengubah catatan.
 - Jadwal tanpa jurnal Final tidak disimpulkan sebagai Alpa/pelanggaran.
 - Akses historis dan role gabungan diuji sesuai keputusan produk yang telah ditetapkan.
 - Daftar jurnal menggunakan Instant Search HTMX, batas role server, pagination yang konsisten, dan navigasi D-047; desktop serta ponsel dapat digunakan.

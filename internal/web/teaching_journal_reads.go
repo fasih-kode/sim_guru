@@ -14,30 +14,31 @@ import (
 )
 
 type teachingJournalForm struct {
-	LogicalLessonID                                         int64
-	Date, RequestKey                                        string
-	ExpectedVersion                                         int
-	State, Outcome, Material, ActivityNotes                 string
-	NotHeldReason, ActualStart, ActualEnd, CorrectionReason string
+	LogicalLessonID                         int64
+	Date, RequestKey                        string
+	ExpectedVersion                         int
+	State, Outcome, Material, ActivityNotes string
+	NotHeldReason, CorrectionReason         string
 }
 
 type teachingJournalView struct {
-	BasePath       string
-	Filter         academic.TeachingJournalReadFilter
-	Page           academic.TeachingJournalPage
-	FilterOptions  academic.TeachingJournalFilterOptions
-	Detail         *academic.TeachingJournalDetail
-	Selected       *academic.TeachingJournalVersionRecord
-	History        academic.TeachingJournalHistory
-	Occurrences    []academic.TeachingJournalOccurrenceOption
-	Occurrence     *academic.TeachingJournalOccurrenceOption
-	Form           *teachingJournalForm
-	PreviousURL    string
-	NextURL        string
-	PDFExportURL   string
-	XLSXExportURL  string
-	PendingLineage bool
-	CanEdit        bool
+	BasePath          string
+	Filter            academic.TeachingJournalReadFilter
+	Page              academic.TeachingJournalPage
+	FilterOptions     academic.TeachingJournalFilterOptions
+	Detail            *academic.TeachingJournalDetail
+	Selected          *academic.TeachingJournalVersionRecord
+	History           academic.TeachingJournalHistory
+	Occurrences       []academic.TeachingJournalOccurrenceOption
+	Occurrence        *academic.TeachingJournalOccurrenceOption
+	Form              *teachingJournalForm
+	PreviousURL       string
+	NextURL           string
+	PDFExportURL      string
+	XLSXExportURL     string
+	PendingLineage    bool
+	CanEdit           bool
+	AttendanceBlocked string
 }
 
 func parseJournalFilter(r *http.Request) (academic.TeachingJournalReadFilter, error) {
@@ -229,6 +230,7 @@ func (a *application) teachingJournalNew(w http.ResponseWriter, r *http.Request)
 		for i := range options {
 			if options[i].LogicalLessonID == lessonID {
 				v.Occurrence = &options[i]
+				v.AttendanceBlocked = options[i].AttendanceReason
 				form.LogicalLessonID = lessonID
 				break
 			}
@@ -245,7 +247,7 @@ func formFromVersion(detail academic.TeachingJournalDetail, key string) *teachin
 	return &teachingJournalForm{LogicalLessonID: detail.LogicalLessonID, Date: detail.MeetingDate, RequestKey: key,
 		ExpectedVersion: detail.CurrentVersion.Number, State: detail.CurrentVersion.State, Outcome: detail.CurrentVersion.Outcome,
 		Material: detail.CurrentVersion.Material, ActivityNotes: detail.CurrentVersion.ActivityNotes,
-		NotHeldReason: detail.CurrentVersion.NotHeldReason, ActualStart: detail.CurrentVersion.ActualStart, ActualEnd: detail.CurrentVersion.ActualEnd}
+		NotHeldReason: detail.CurrentVersion.NotHeldReason}
 }
 
 func journalEditTitle(state string) string {
@@ -276,11 +278,31 @@ func (a *application) teachingJournalEdit(w http.ResponseWriter, r *http.Request
 		a.journalFailure(w, r, err)
 		return
 	}
-	a.render(w, r, "page", http.StatusOK, view{Page: "teaching-journal-form", Title: journalEditTitle(detail.CurrentVersion.State), TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Detail: &detail, Selected: &detail.CurrentVersion, History: history, Form: formFromVersion(detail, key), Occurrence: &academic.TeachingJournalOccurrenceOption{LogicalLessonID: detail.LogicalLessonID, SemesterID: detail.SemesterID, RevisionID: detail.RevisionID, EntryID: detail.EntryID, Date: detail.MeetingDate, SemesterSnapshot: detail.SemesterSnapshot, RevisionNumber: detail.RevisionNumber, ClassSnapshot: detail.ClassSnapshot, SubjectSnapshot: detail.SubjectSnapshot, TeacherSnapshot: detail.TeacherSnapshot, Periods: detail.CurrentVersion.Periods}, CanEdit: true}})
+	eligibility, err := a.options.Academics.TeacherLessonEligibilityForDate(r.Context(), principal(r).ID, detail.MeetingDate, journalPeriodEnd(detail.CurrentVersion.Periods))
+	if err != nil {
+		a.journalFailure(w, r, err)
+		return
+	}
+	blocked := ""
+	if !eligibility.Allowed {
+		blocked = eligibility.Reason
+	}
+	a.render(w, r, "page", http.StatusOK, view{Page: "teaching-journal-form", Title: journalEditTitle(detail.CurrentVersion.State), TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Detail: &detail, Selected: &detail.CurrentVersion, History: history, Form: formFromVersion(detail, key), Occurrence: &academic.TeachingJournalOccurrenceOption{LogicalLessonID: detail.LogicalLessonID, SemesterID: detail.SemesterID, RevisionID: detail.RevisionID, EntryID: detail.EntryID, Date: detail.MeetingDate, SemesterSnapshot: detail.SemesterSnapshot, RevisionNumber: detail.RevisionNumber, ClassSnapshot: detail.ClassSnapshot, SubjectSnapshot: detail.SubjectSnapshot, TeacherSnapshot: detail.TeacherSnapshot, Periods: detail.CurrentVersion.Periods}, CanEdit: true, AttendanceBlocked: blocked}})
+}
+
+func journalPeriodEnd(periods []academic.TeachingJournalPeriodSnapshot) string {
+	if len(periods) == 0 {
+		return ""
+	}
+	return periods[len(periods)-1].EndsAt
 }
 
 func (a *application) teachingJournalSave(w http.ResponseWriter, r *http.Request) {
 	if !parseForm(w, r) {
+		return
+	}
+	if strings.TrimSpace(r.PostForm.Get("actual_start")) != "" || strings.TrimSpace(r.PostForm.Get("actual_end")) != "" {
+		a.journalFailure(w, r, academic.ValidationError("Nomor dan waktu JP mengikuti snapshot jadwal resmi; waktu aktual tidak dapat diinput."))
 		return
 	}
 	action := r.PostForm.Get("action")
@@ -313,7 +335,7 @@ func (a *application) teachingJournalSave(w http.ResponseWriter, r *http.Request
 	input := academic.TeachingJournalInput{LogicalLessonID: logicalID, OccurrenceDate: occurrenceDate,
 		RequestKey: r.PostForm.Get("request_key"), State: state, Outcome: r.PostForm.Get("outcome"),
 		Material: r.PostForm.Get("material"), ActivityNotes: r.PostForm.Get("activity_notes"),
-		NotHeldReason: r.PostForm.Get("not_held_reason"), ActualStart: r.PostForm.Get("actual_start"), ActualEnd: r.PostForm.Get("actual_end"),
+		NotHeldReason:    r.PostForm.Get("not_held_reason"),
 		CorrectionReason: r.PostForm.Get("correction_reason"), ExpectedVersion: expected}
 	var current *academic.TeachingJournalDetail
 	if rawID := r.PathValue("id"); rawID != "" {
@@ -361,7 +383,7 @@ func (a *application) teachingJournalSave(w http.ResponseWriter, r *http.Request
 }
 
 func formFromInput(input academic.TeachingJournalInput) *teachingJournalForm {
-	return &teachingJournalForm{LogicalLessonID: input.LogicalLessonID, Date: input.OccurrenceDate.In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02"), RequestKey: input.RequestKey, ExpectedVersion: input.ExpectedVersion, State: input.State, Outcome: input.Outcome, Material: input.Material, ActivityNotes: input.ActivityNotes, NotHeldReason: input.NotHeldReason, ActualStart: input.ActualStart, ActualEnd: input.ActualEnd, CorrectionReason: input.CorrectionReason}
+	return &teachingJournalForm{LogicalLessonID: input.LogicalLessonID, Date: input.OccurrenceDate.In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02"), RequestKey: input.RequestKey, ExpectedVersion: input.ExpectedVersion, State: input.State, Outcome: input.Outcome, Material: input.Material, ActivityNotes: input.ActivityNotes, NotHeldReason: input.NotHeldReason, CorrectionReason: input.CorrectionReason}
 }
 
 func (a *application) renderJournalNewError(w http.ResponseWriter, r *http.Request, date string, input academic.TeachingJournalInput, cause error) {
@@ -378,7 +400,11 @@ func (a *application) renderJournalNewError(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	code, message := academicError(cause)
-	a.render(w, r, "page", code, view{Page: "teaching-journal-form", Title: "Isi Jurnal Mengajar", Error: message, TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Occurrences: options, Occurrence: selected, PendingLineage: pending, Form: formFromInput(input)}})
+	blocked := ""
+	if isTeacherAttendanceBlocked(cause) {
+		blocked = cause.Error()
+	}
+	a.render(w, r, "page", code, view{Page: "teaching-journal-form", Title: "Isi Jurnal Mengajar", Error: message, TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Occurrences: options, Occurrence: selected, PendingLineage: pending, Form: formFromInput(input), AttendanceBlocked: blocked}})
 }
 
 func (a *application) renderJournalEditError(w http.ResponseWriter, r *http.Request, detail academic.TeachingJournalDetail, input academic.TeachingJournalInput, cause error) {
@@ -395,7 +421,15 @@ func (a *application) renderJournalEditError(w http.ResponseWriter, r *http.Requ
 	code, message := academicError(cause)
 	form := formFromInput(input)
 	form.ExpectedVersion = latest.CurrentVersion.Number
-	a.render(w, r, "page", code, view{Page: "teaching-journal-form", Title: journalEditTitle(latest.CurrentVersion.State), Error: message, TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Detail: &latest, Selected: &latest.CurrentVersion, History: history, Occurrence: &academic.TeachingJournalOccurrenceOption{LogicalLessonID: latest.LogicalLessonID, SemesterID: latest.SemesterID, RevisionID: latest.RevisionID, EntryID: latest.EntryID, Date: latest.MeetingDate, SemesterSnapshot: latest.SemesterSnapshot, RevisionNumber: latest.RevisionNumber, ClassSnapshot: latest.ClassSnapshot, SubjectSnapshot: latest.SubjectSnapshot, TeacherSnapshot: latest.TeacherSnapshot, Periods: latest.CurrentVersion.Periods}, Form: form, CanEdit: true}})
+	blocked := ""
+	if isTeacherAttendanceBlocked(cause) {
+		blocked = cause.Error()
+	}
+	a.render(w, r, "page", code, view{Page: "teaching-journal-form", Title: journalEditTitle(latest.CurrentVersion.State), Error: message, TeachingJournal: &teachingJournalView{BasePath: "/jurnal-saya", Detail: &latest, Selected: &latest.CurrentVersion, History: history, Occurrence: &academic.TeachingJournalOccurrenceOption{LogicalLessonID: latest.LogicalLessonID, SemesterID: latest.SemesterID, RevisionID: latest.RevisionID, EntryID: latest.EntryID, Date: latest.MeetingDate, SemesterSnapshot: latest.SemesterSnapshot, RevisionNumber: latest.RevisionNumber, ClassSnapshot: latest.ClassSnapshot, SubjectSnapshot: latest.SubjectSnapshot, TeacherSnapshot: latest.TeacherSnapshot, Periods: latest.CurrentVersion.Periods}, Form: form, CanEdit: true, AttendanceBlocked: blocked}})
+}
+
+func isTeacherAttendanceBlocked(err error) bool {
+	return errors.Is(err, academic.ErrTeacherLessonIneligible)
 }
 
 func (a *application) journalFailure(w http.ResponseWriter, r *http.Request, err error) {

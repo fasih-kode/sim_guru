@@ -1,6 +1,6 @@
 # Fase 9A — Audit dan Rancangan Jurnal Mengajar
 
-Status: audit aktual, kontrak bisnis FINAL D-048, dan cutover arsitektur FINAL D-049. Baseline yang diaudit: `7c9212437275da90f9c00377dc5eca412590422d` pada `review/sim-guru-checkpoint`. Tidak ada implementasi jurnal pada baseline ini.
+Status: rancangan awal yang mengaudit baseline `7c9212437275da90f9c00377dc5eca412590422d` pada `review/sim-guru-checkpoint`, sebelum implementasi jurnal. Bagian waktu aktual telah disupersesi oleh revisi FINAL D-048 tanggal 1 November 2026: guru tidak menginput waktu aktual, semua nomor/waktu JP mengikuti snapshot jadwal resmi, dan nilai versi lama dipertahankan sebagai bukti historis. Tidak ada dokumen atau referensi D-050 di repository ini; usulan membandingkan waktu aktual dengan jadwal dihapus dari kontrak operasional.
 
 ## 1. Ringkasan keputusan
 
@@ -36,7 +36,7 @@ teaching_journals (identitas occurrence dan konteks jurnal terkini)
 Kolom logis yang perlu dipertimbangkan (bukan skema final):
 
 - jurnal: ID permanen; `logical_lesson_id`; entri jadwal/revision; penugasan; semester/tahun; tanggal WIB; class/subject/teacher IDs; snapshot label; waktu rencana dan outcome `held/not_held`; status Draf/Final dengan flag tampilan terpisah `needs_review`; version dan metadata pelaku/waktu.
-- versi: journal ID; nomor versi; status/outcome; waktu aktual bila berbeda; materi ≤500 karakter; catatan opsional ≤2.000; alasan Tidak Terlaksana; pelaku; timestamp server; alasan koreksi; snapshot versi lengkap; idempotency token.
+- versi: journal ID; nomor versi; status/outcome; materi ≤500 karakter; catatan opsional ≤2.000; alasan Tidak Terlaksana; pelaku; timestamp server; alasan koreksi; snapshot versi lengkap; idempotency token. Kolom waktu aktual dari rancangan awal hanya dipertahankan sebagai bukti lama; tidak diisi oleh versi baru.
 - snapshot blok: rekomendasikan tabel detail per versi `teaching_journal_version_periods(version_id, ordinal, weekday, period_no, starts_at, ends_at)` dengan kunci `(version_id, ordinal)` dan konsistensi weekday pada occurrence. Ini mempertahankan nomor JP berurutan serta waktu setiap JP tanpa mereduksi ke rentang awal/akhir; segmen jeda diturunkan dari gap waktu snapshot. Relasi ke revision/entry tetap pada versi jurnal.
 - constraint: satu journal per `(logical_lesson_id, meeting_date)`, versi monoton, dan validasi Final menurut outcome. `not_held` wajib alasan tanpa isi yang menyatakan pembelajaran terlaksana; `held` wajib materi sebelum Final.
 
@@ -58,7 +58,7 @@ Migration 00031–00034 memakai struktur berikut; domain jadwal lama tidak diuba
 2. `app.logical_lessons`: ID permanen per semester, aktor dan waktu penciptaan. Trigger menolak update/delete; FK histori memakai RESTRICT.
 3. `app.teaching_journal_lineage_transitions` dan `..._decisions`: transition mengikat revision sumber/tujuan, semester, tanggal efektif dan aktor/alasan; decisions mengikat composite FK entry+revision dan logical lesson+semester. Keputusan final append-only (`cutover`, `continue`, `new`, `stop`). `pending` tidak disimpan sebagai event yang dapat berkontradiksi: view `teaching_journal_lineage_status` menghitung revision terbit pasca-cutover yang belum memiliki transition lengkap. Deferred constraint trigger memeriksa cakupan penuh semua entry sumber/tujuan sekali saat commit.
 4. `app.teaching_journals`: satu occurrence `(logical_lesson_id, meeting_date)` dengan UNIQUE constraint, tanggal sebagai `date` kalender WIB, owner guru historis dan snapshot revision/entry/assignment/kelas/mapel/guru. Composite FK revision-semester, entry-revision dan logical-semester bersifat RESTRICT. `current_version_no` hanya boleh bertambah satu dan FK deferred menunjuk versi yang ikut disimpan dalam transaksi.
-5. `app.teaching_journal_versions`: row immutable per versi dengan state/outcome, materi/catatan, waktu aktual, alasan tidak terlaksana/koreksi, actor, waktu server, request key dan payload hash. Unique `(journal_id, version_no)` dan `(journal_id, request_key)`.
+5. `app.teaching_journal_versions`: row immutable per versi dengan state/outcome, materi/catatan, kolom waktu aktual legacy, alasan tidak terlaksana/koreksi, actor, waktu server, request key dan payload hash. Kolom legacy dipertahankan, tetapi versi baru tidak menulis nilainya. Unique `(journal_id, version_no)` dan `(journal_id, request_key)`.
 6. `app.teaching_journal_version_periods`: satu row per JP per versi, ordinal, nomor, waktu mulai/selesai dari `weekly_timetable_periods`. PK `(version_id, ordinal)` dan unique `(version_id, period_no)` mempertahankan urutan/snapshot.
 7. `app.teaching_journal_history`: event `created`, `saved_draft`, `finalized`, `corrected_final` terikat ke versi dan aktor. Append-only. Deferred trigger mewajibkan setiap versi memiliki histori serta snapshot JP, dan actor harus owner jurnal.
 
@@ -91,9 +91,9 @@ Setiap mutasi perlu satu transaksi: validasi role+akun+identitas+penugasan pada 
 
 - **Jadwal Saya:** tautan “Isi/Lanjutkan Jurnal” per occurrence bertanggal yang sah; pisahkan status jadwal dan jurnal. Tampilkan kelas, mapel, guru, revisi, nomor JP terurut dan waktu per JP sebagai konteks resmi baca-saja.
 - **Jurnal Mengajar:** kelompok D-047 dengan tab Jurnal Saya dan Riwayat Koreksi jika dipisah menjadi halaman. Daftar SSR berisi tanggal WIB, kelas, mapel, urutan JP, status Draf/Final, indikator Perlu Ditinjau, waktu update dan outcome. Instant Search/filter tahun, semester, tanggal, kelas, mapel, status; pagination mengikuti pola aplikasi.
-- **Form:** konteks jadwal/penugasan baca-saja; materi maks. 500, catatan opsional maks. 2.000. Waktu aktual terpisah dan hanya diisi jika beda. Draf boleh belum lengkap. Penanda Tidak Terlaksana memerlukan alasan; saat Final alasan wajib dan form tidak menyajikan materi/waktu aktual seolah pembelajaran terlaksana. Submit POST ber-CSRF.
+- **Form:** konteks jadwal/penugasan baca-saja, termasuk snapshot nomor dan waktu resmi per JP; materi maks. 500, catatan opsional maks. 2.000. Tidak ada input waktu aktual. Draf boleh belum lengkap. Penanda Tidak Terlaksana memerlukan alasan; saat Final alasan wajib. Submit POST ber-CSRF.
 - **Perlu Ditinjau:** revisi terbit yang mengubah occurrence terkait memberi flag terpisah, tidak mengubah status Draf/Final, isi, pemilik, snapshot atau ID jurnal. Guru meninjau dan mengonfirmasi tindakan; tidak ada pemindahan data otomatis.
-- **Detail/riwayat:** tampilkan snapshot semua nomor JP dan waktunya; waktu aktual; outcome; status; versi, alasan koreksi, pelaku dan waktu WIB. Koreksi hanya muncul untuk pemilik historis sesuai guard D-048.
+- **Detail/riwayat:** tampilkan snapshot semua nomor JP dan waktunya; outcome; status; versi, alasan koreksi, pelaku dan waktu WIB. Nilai waktu aktual dari versi lama, jika ada, hanya dibaca sebagai catatan historis terpisah dari snapshot resmi. Koreksi hanya muncul untuk pemilik historis sesuai guard D-048.
 - **Ekspor Jurnal Saya:** dua link/download PDF dan XLSX membawa filter saat ini ke seluruh hasil, bukan halaman aktif. PDF memuat nomor, tanggal WIB, kelas, mapel, JP, materi, catatan, outcome/status dan alasan Tidak Terlaksana; ulangi header di setiap halaman dan wrap teks. XLSX satu baris per jurnal dengan header, tanggal WIB, daftar JP terurut, materi/catatan/outcome/status dan label Draf. Role baca lain tidak otomatis dapat ekspor agregat.
 - **Keamanan ekspor:** query server menerapkan cakupan pengguna/filter yang sama dengan daftar; jangan percaya filter ID kelas/mapel tanpa memvalidasi cakupannya. Gunakan Excelize yang sudah ada pada repository dengan `SetCellStr` untuk nilai pengguna. Uji string berawalan formula. PDF: rekomendasi pustaka Go `github.com/signintech/gopdf`; pin versi, gunakan font Unicode lokal yang dilisensikan dan uji wrapping/paginasi/memori sebelum adopsi. Dependency belum ditambahkan.
 - **Mobile:** form satu kolom, tombol terjangkau, hasil daftar berupa kartu atau tabel responsif, histori/ekspor tidak memaksa overflow. Ikuti D-047 dan komponen TailAdmin.
@@ -102,8 +102,8 @@ Setiap mutasi perlu satu transaksi: validasi role+akun+identitas+penugasan pada 
 
 1. Penugasan resmi, revisi dan kalender efektif mengizinkan Guru Mapel pemilik; guru lain, role gabungan tanpa penugasan, identitas tak sah dan URL/ID silang ditolak.
 2. Draf belum lengkap dapat disimpan/dilanjutkan; materi dan catatan tervalidasi batas karakter yang disetujui.
-3. Final terlaksana mensyaratkan materi ≤500; catatan ≤2.000 opsional; waktu aktual terpisah hanya bila berbeda.
-4. Draf/Final Tidak Terlaksana memerlukan alasan saat marker disimpan/final; Final tidak menyatakan ada materi/waktu pelaksanaan.
+3. Final terlaksana mensyaratkan materi ≤500; catatan ≤2.000 opsional; seluruh waktu JP berasal dari snapshot jadwal resmi.
+4. Draf/Final Tidak Terlaksana memerlukan alasan saat marker disimpan/final; Final tidak menyatakan materi diajarkan.
 5. Snapshot nomor JP/waktu per revisi tepat saat lintas istirahat; perubahan `lesson_periods` atau revisi berikutnya tidak mengubah data historis.
 6. Uji lineage migration: mapping satu-ke-satu yang pasti, slot baru, kandidat ambigu, mapping duplikat, split/merge, revisi jadwal sebelum/sesudah jurnal; ambiguitas tidak diputuskan otomatis dan konflik mencegah duplikasi.
 7. Finalisasi/koreksi atomik; alasan wajib; expected-version usang menghasilkan konflik aman; histori before/after tidak hilang.

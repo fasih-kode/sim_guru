@@ -49,7 +49,8 @@
   </section>
   {{if .ModalOpen}}
   <dialog id="lesson-attendance-correction-modal" class="form-modal" data-form-modal data-modal-open-on-load data-modal-return="/jadwal-saya/absensi/catatan/{{$record.ID}}" aria-labelledby="lesson-correction-title"><div class="form-modal-card"><div class="form-modal-heading"><h2 id="lesson-correction-title">{{if $record.Administrative}}Koreksi administratif{{else}}Koreksi absensi{{end}} · {{$record.StudentName}}</h2><a class="form-modal-close" href="/jadwal-saya/absensi/catatan/{{$record.ID}}" aria-label="Tutup">×</a></div>{{if .Error}}{{template "notification-error" .Error}}{{end}}<p class="mb-4 text-sm">{{$record.Date}} · {{$record.ClassName}} · {{$record.SubjectName}}. Status sebelumnya: <strong>{{$record.Status}}</strong>.</p>
-    <form method="post" action="/jadwal-saya/absensi/catatan/{{$record.ID}}/koreksi" class="space-y-4">{{.CSRF}}<input type="hidden" name="attendance_id" value="{{$record.ID}}"><input type="hidden" name="expected_version" value="{{$record.Version}}"><div><label for="lesson-correction-status">Status baru</label><select id="lesson-correction-status" name="new_status" required><option value="">Pilih status</option><option value="hadir" {{if eq $.LessonAttendance.CorrectionStatus "hadir"}}selected{{end}}>Hadir</option><option value="sakit" {{if eq $.LessonAttendance.CorrectionStatus "sakit"}}selected{{end}}>Sakit</option><option value="izin" {{if eq $.LessonAttendance.CorrectionStatus "izin"}}selected{{end}}>Izin</option><option value="alpa" {{if eq $.LessonAttendance.CorrectionStatus "alpa"}}selected{{end}}>Alpa</option></select></div><div><label for="lesson-correction-reason">Alasan koreksi</label><textarea id="lesson-correction-reason" name="reason" maxlength="500" required>{{.LessonAttendance.CorrectionReason}}</textarea><p class="mt-1 text-sm text-gray-500">Wajib 1–500 karakter. Histori lama tetap tersimpan.</p></div><div class="form-modal-actions"><div class="button-group button-group--primary"><a class="button-secondary" href="/jadwal-saya/absensi/catatan/{{$record.ID}}">Tutup</a><button class="button-primary" type="submit">{{template "icon-save" .}}Simpan koreksi</button></div></div></form></div></dialog>
+    {{if $.LessonAttendance.AttendanceBlocked}}<div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert"><strong>Koreksi absensi terkunci oleh pemeriksaan presensi.</strong><p class="mt-1">{{$.LessonAttendance.AttendanceBlocked}}</p><p class="mt-2">Isian koreksi tetap ditampilkan. Setelah presensi diperiksa petugas berwenang, buka kembali koreksi.</p></div>{{end}}
+    <form method="post" action="/jadwal-saya/absensi/catatan/{{$record.ID}}/koreksi" class="space-y-4">{{.CSRF}}<input type="hidden" name="attendance_id" value="{{$record.ID}}"><input type="hidden" name="expected_version" value="{{$record.Version}}"><div><label for="lesson-correction-status">Status baru</label><select id="lesson-correction-status" name="new_status" required {{if $.LessonAttendance.AttendanceBlocked}}disabled{{end}}><option value="">Pilih status</option><option value="hadir" {{if eq $.LessonAttendance.CorrectionStatus "hadir"}}selected{{end}}>Hadir</option><option value="sakit" {{if eq $.LessonAttendance.CorrectionStatus "sakit"}}selected{{end}}>Sakit</option><option value="izin" {{if eq $.LessonAttendance.CorrectionStatus "izin"}}selected{{end}}>Izin</option><option value="alpa" {{if eq $.LessonAttendance.CorrectionStatus "alpa"}}selected{{end}}>Alpa</option></select></div><div><label for="lesson-correction-reason">Alasan koreksi</label><textarea id="lesson-correction-reason" name="reason" maxlength="500" required {{if $.LessonAttendance.AttendanceBlocked}}disabled{{end}}>{{.LessonAttendance.CorrectionReason}}</textarea><p class="mt-1 text-sm text-gray-500">Wajib 1–500 karakter. Histori lama tetap tersimpan.</p></div><div class="form-modal-actions"><div class="button-group button-group--primary"><a class="button-secondary" href="/jadwal-saya/absensi/catatan/{{$record.ID}}">Tutup</a>{{if $.LessonAttendance.AttendanceBlocked}}<button class="button-primary" type="button" disabled>Presensi belum memenuhi syarat</button>{{else}}<button class="button-primary" type="submit">{{template "icon-save" .}}Simpan koreksi</button>{{end}}</div></div></form></div></dialog>
   {{end}}
   {{else if .LessonAttendance.Lesson}}
   {{$lesson := .LessonAttendance.Lesson}}
@@ -77,6 +78,8 @@
       <input type="hidden" name="entry_id" value="{{$lesson.ID}}">
       <input type="hidden" name="fingerprint" value="{{.LessonAttendance.Fingerprint}}">
 
+      {{if .LessonAttendance.AttendanceBlocked}}<div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert"><strong>Absensi pertemuan terkunci oleh pemeriksaan presensi.</strong><p class="mt-1">{{.LessonAttendance.AttendanceBlocked}}</p><p class="mt-2">Pilihan yang sudah diisi tetap terlihat dan tidak disimpan. Setelah presensi diperiksa atau dikoreksi petugas berwenang, muat ulang pertemuan ini.</p><a class="button-secondary mt-3" href="/jadwal-saya/absensi?date={{.LessonAttendance.Date}}&amp;entry_id={{$lesson.ID}}">Periksa kembali</a></div>{{end}}
+
       <div class="table-heading mb-4">
         <div>
           <h3 class="font-semibold">Daftar siswa · {{len .LessonAttendance.Students}} siswa</h3>
@@ -87,7 +90,7 @@
             <label class="sr-only" for="lesson-attendance-search">Cari siswa</label>
             <input id="lesson-attendance-search" type="search" placeholder="Cari nama / NIS" data-table-search="#lesson-attendance-table">
           </div>
-          {{if not .LessonAttendance.Stale}}
+          {{if and (not .LessonAttendance.Stale) (not .LessonAttendance.AttendanceBlocked)}}
           <button class="button-secondary" type="button" data-attendance-mark-all> Tandai semua Hadir</button>
           {{end}}
         </div>
@@ -119,7 +122,7 @@
                 {{else}}
                 <input type="hidden" name="student_ids" value="{{$student.ID}}">
                 <label class="sr-only" for="lesson-status-{{$student.ID}}">Status {{$student.Name}}</label>
-                <select id="lesson-status-{{$student.ID}}" name="status_{{$student.ID}}" data-attendance-status>
+                  <select id="lesson-status-{{$student.ID}}" name="status_{{$student.ID}}" data-attendance-status {{if $.LessonAttendance.AttendanceBlocked}}disabled{{end}}>
                   <option value="" {{if not $student.Status}}selected{{end}}>Belum Dicatat</option>
                   <option value="hadir" {{if eq $student.Status "hadir"}}selected{{end}}>Hadir</option>
                   <option value="sakit" {{if eq $student.Status "sakit"}}selected{{end}}>Sakit</option>
@@ -138,6 +141,8 @@
       <div class="mt-5 flex flex-wrap items-center gap-3">
         {{if .LessonAttendance.Stale}}
         <a class="button-secondary" href="/jadwal-saya/absensi?date={{.LessonAttendance.Date}}&amp;entry_id={{$lesson.ID}}">Muat ulang konteks</a>
+        {{else if .LessonAttendance.AttendanceBlocked}}
+        <button class="button-primary" type="button" disabled>Presensi belum memenuhi syarat</button>
         {{else}}
         <button class="button-primary" type="submit" data-attendance-save>{{template "icon-save" .}}Simpan absensi</button>
         {{end}}
@@ -155,11 +160,11 @@
           {{range $i,$lesson := .LessonAttendance.Lessons}}
           <tr>
             <td data-row-number>{{rowNumber 1 $i}}</td>
-            <td>{{$lesson.ClassName}}</td>
-            <td>{{$lesson.SubjectName}}</td>
-            <td>{{$lesson.PeriodStart}}{{if ne $lesson.PeriodStart $lesson.PeriodEnd}}–{{$lesson.PeriodEnd}}{{end}}</td>
-            <td>{{$lesson.TimeSegments}}</td>
-            <td><a class="button-secondary" href="/jadwal-saya/absensi?date={{$.LessonAttendance.Date}}&amp;entry_id={{$lesson.ID}}">Buka roster</a></td>
+            <td>{{$lesson.Lesson.ClassName}}</td>
+            <td>{{$lesson.Lesson.SubjectName}}</td>
+            <td>{{$lesson.Lesson.PeriodStart}}{{if ne $lesson.Lesson.PeriodStart $lesson.Lesson.PeriodEnd}}–{{$lesson.Lesson.PeriodEnd}}{{end}}</td>
+            <td>{{$lesson.Lesson.TimeSegments}}</td>
+            <td>{{if $lesson.AttendanceReason}}<p class="mb-2 text-sm text-amber-800">{{$lesson.AttendanceReason}}</p><a class="button-secondary" href="/jadwal-saya/absensi?date={{$.LessonAttendance.Date}}&amp;entry_id={{$lesson.Lesson.ID}}">Lihat alasan</a>{{else}}<a class="button-secondary" href="/jadwal-saya/absensi?date={{$.LessonAttendance.Date}}&amp;entry_id={{$lesson.Lesson.ID}}">Buka roster</a>{{end}}</td>
           </tr>
           {{end}}
         </tbody>

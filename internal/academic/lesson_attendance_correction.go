@@ -116,6 +116,14 @@ func (s *Store) CorrectLessonAttendance(ctx context.Context, actor int64, input 
 			return result, ErrNotFound
 		}
 		result.Administrative = true
+	} else {
+		eligibility, gateErr := teacherLessonEligibilityTx(ctx, tx, ownTeacherID, current.Date, current.EndsAt)
+		if gateErr != nil {
+			return result, gateErr
+		}
+		if gateErr = teacherLessonEligibilityError(eligibility); gateErr != nil {
+			return result, gateErr
+		}
 	}
 	if current.Version != input.ExpectedVersion {
 		return result, ErrConflict
