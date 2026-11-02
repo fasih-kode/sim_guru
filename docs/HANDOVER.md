@@ -1,5 +1,13 @@
 # Handover
 
+## CP10-05 — Nilai awal Formatif/Sumatif per TP (2 November 2026)
+
+Implementasi lokal siap untuk review kode independen; **belum UAT dan belum CLOSED**. Cakupan hanya input nilai awal per siswa/TP untuk kegiatan CP10-04. Nilai menggunakan rentang 0–100 dengan maksimal dua desimal dan disimpan sebagai `numeric`, input kosong tidak membuat record, pengiriman ulang nilai identik bersifat idempoten, dan nilai berbeda tidak dapat menimpa catatan awal. Roster ditentukan dari penempatan resmi pada tanggal kegiatan; placement dengan tanggal mulai tidak diketahui tidak dimasukkan. Service memeriksa identitas Guru Mapel, penugasan resmi, hubungan TP-kegiatan, dan penempatan bertanggal pada GET maupun transaksi POST. Tidak ada nilai rekomendasi/final, perhitungan, status kelengkapan, atau perubahan kegiatan.
+
+Migration aditif `00040_assessment_initial_scores.sql` menambahkan tabel nilai awal dan relasi unik/FK ke konteks kegiatan, TP, siswa, serta placement. Migration telah dijalankan melalui tes migration hanya pada `sim_guru_test` (40/40); integration test mengonfirmasi constraint uniqueness dan lima foreign key. `sim_guru_dev` dan `sim_guru_ci_test` tidak diubah. Tes race terfokus lulus untuk service CP10-05 bersama regresi CP10-02/03/CP10-01 (`TestAssessmentActivitiesAreScopedAndAtomicIntegration`, `TestLearningObjectivesAreScopedToOfficialTeacherAssignmentIntegration`, `TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegration`, `TestAssessmentWeightsAuthorizationValidationAndAuditIntegration`) dan HTTP (`TestLearningObjectiveHTTPAssignmentAuthorizationIntegration`, `TestAssessmentWeightsHTTPAuthorizationAndUATFlowIntegration`).
+
+Halaman input berada di `/guru/kegiatan-penilaian/{activityID}/nilai`, ditautkan dari daftar kegiatan dan memakai navigasi tab D-047 yang sama. HTTP integration membuktikan CSRF, input sah, baca ulang nilai, konflik penimpaan, dan penolakan guru lain. Belum dilakukan pemeriksaan visual browser atau UAT pengguna. CP10-05 menunggu review independen sebelum preview/UAT; CP10-06 belum dimulai. Perhitungan/rekomendasi nilai, perubahan nilai tersimpan, finalisasi, remedial, serta status kelengkapan tetap di luar cakupan.
+
 ## CP10-04 — FINAL GATE PASS, layak CLOSED (2 November 2026)
 
 Review independen PASS untuk implementasi `fe7dc08a5f0cadce5ed8b1f314cf6d9450531d07`; Product Owner menerima UAT PASS 2/2. UAT `sim_guru_ci_test` terverifikasi 39/39. Pada kelas `7P204608`, Semester 1, mapel `Mapel Preview Jurnal`, terdapat tepat dua kegiatan dan tiga relasi TP: `Praktik Sumatif Multi-TP` tanggal 2 November 2026 berjenis Sumatif dengan TP 1 dan 3, serta `Observasi Latihan Formatif` pada tanggal yang sama dengan satu TP (ID 1). Kedua kegiatan dibuat oleh akun sintetis `preview9b04a`, terkait guru pemilik yang sama, serta seluruh relasi TP cocok dengan konteks kelas/mapel/semester. Jumlah tetap dua setelah pengguna refresh; tidak ada duplikasi. Penugasan resmi guru masih aktif dan mapel aktif.
@@ -8,7 +16,7 @@ Migration UAT 00039 diterapkan pada `sim_guru_ci_test` setelah backup awal 38/39
 
 DEV berjalan kembali melalui `make run` pada `127.0.0.1:18743` (PID 66135); koneksi aktual terverifikasi ke `sim_guru_dev` pada PostgreSQL `127.0.0.1:55436`. Health live/ready dan `/login` HTTP 200; storage foto guru/pegawai serta worker retensi aktif. UAT tetap berjalan pada `localhost:18744` (PID 63707), koneksi aktual terverifikasi ke `sim_guru_ci_test`; health live/ready dan `/login` HTTP 200, storage foto nonaktif. Halaman Kegiatan Penilaian DEV tidak diuji dengan role terautentikasi karena tidak tersedia kredensial atau sesi development yang sah; jangan mengubah akun demi pengujian.
 
-Lingkup CP10-04 berhenti pada pencatatan kegiatan dan relasi ke satu/lebih TP. UAT-03 kontrak belum PASS penuh sampai nilai per siswa/TP tersedia. Skor, perhitungan, edit/hapus, remedial, Finalisasi, dan CP10-05 belum dibuat; CP10-05 belum dimulai. Status CP10-04 layak CLOSED setelah checkpoint dokumentasi ini dipublikasikan. Tidak ada merge atau deployment.
+Lingkup CP10-04 berhenti pada pencatatan kegiatan dan relasi ke satu/lebih TP. UAT-03 kontrak belum PASS penuh sampai nilai per siswa/TP tersedia. Pada saat final gate CP10-04, skor, perhitungan, edit/hapus, remedial, dan Finalisasi belum dibuat. Status CP10-04 layak CLOSED setelah checkpoint dokumentasi ini dipublikasikan. Tidak ada merge atau deployment.
 
 ## D-051 — perbaikan review status migrasi dinamis (2 November 2026)
 

@@ -1,0 +1,46 @@
+{{define "assessment-activity-scores"}}
+<section class="panel mb-5">
+  <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/kegiatan-penilaian?semester_id={{.AssessmentScores.Sheet.Activity.SemesterID}}&class_id={{.AssessmentScores.Sheet.Activity.ClassID}}&subject_id={{.AssessmentScores.Sheet.Activity.SubjectID}}">← Kembali ke Kegiatan Penilaian</a>
+  <div class="mt-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+      <h2 class="text-xl font-semibold text-gray-900">{{.AssessmentScores.Sheet.Activity.Name}}</h2>
+      <p class="mt-1 text-sm text-gray-600">{{if eq .AssessmentScores.Sheet.Activity.Type "formatif"}}Formatif{{else}}Sumatif{{end}} · {{.AssessmentScores.Sheet.Activity.Date}}</p>
+      <p class="mt-1 text-sm text-gray-500">{{.AssessmentScores.Sheet.Activity.SemesterName}} · {{.AssessmentScores.Sheet.Activity.ClassName}} · {{.AssessmentScores.Sheet.Activity.SubjectName}}</p>
+    </div>
+  </div>
+  <p class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Nilai dicatat per siswa dan per TP. Nilai kosong belum dinilai; 0 adalah nilai sah. Nilai yang tersimpan tidak dapat ditimpa melalui formulir input awal.</p>
+  {{if gt .AssessmentScores.Sheet.UnknownPlacementCount 0}}
+  <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{.AssessmentScores.Sheet.UnknownPlacementCount}} data penempatan tidak disertakan karena tanggal mulai penempatannya belum diketahui.</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  {{if .Error}}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{{.Error}}</div>{{end}}
+  {{if .Message}}<div class="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" role="status">{{.Message}}</div>{{end}}
+  {{if .AssessmentScores.Sheet.Students}}
+  <form method="post" action="/guru/kegiatan-penilaian/{{.AssessmentScores.Sheet.Activity.ID}}/nilai" class="space-y-5">
+    {{.CSRF}}
+    <div class="overflow-x-auto rounded-lg border border-gray-200">
+      <table class="app-table min-w-[680px]">
+        <thead><tr><th scope="col">Siswa</th><th scope="col">NIS</th>{{range .AssessmentScores.Sheet.Activity.Objectives}}<th scope="col" class="min-w-[180px]">TP {{.ID}}<span class="mt-1 block max-w-xs whitespace-normal font-normal">{{.Definition}}</span></th>{{end}}</tr></thead>
+        <tbody>
+          {{range .AssessmentScores.Sheet.Students}}
+          {{ $student := . }}
+          <tr><th scope="row" class="font-medium">{{.Name}}</th><td>{{if .NIS}}{{.NIS}}{{else}}—{{end}}</td>
+            {{range .Scores}}<td>
+              {{if .Recorded}}<span class="font-semibold text-gray-900">{{.Value}}</span><span class="mt-1 block text-xs text-gray-500">Tersimpan</span>
+              {{else}}<label class="sr-only" for="score-{{$student.ID}}-{{.ObjectiveID}}">Nilai TP {{.ObjectiveID}} untuk {{$student.Name}}</label><input id="score-{{$student.ID}}-{{.ObjectiveID}}" name="score_{{$student.ID}}_{{.ObjectiveID}}" type="text" inputmode="decimal" value="{{.Value}}" placeholder="Kosong = belum dinilai" autocomplete="off">{{end}}
+            </td>{{end}}
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-sm text-gray-500">Gunakan angka 0–100 dengan maksimal dua angka desimal. Contoh: 82,50. Input kosong tidak membuat catatan nilai.</p>
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan Nilai</button>
+  </form>
+  {{else}}
+  <p class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">Belum ada siswa dengan penempatan yang dapat dipastikan pada tanggal kegiatan ini.</p>
+  {{end}}
+</section>
+{{end}}

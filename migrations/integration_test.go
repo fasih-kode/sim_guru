@@ -57,7 +57,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target != 39 {
+	if err != nil || current != target || target < 40 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -92,6 +92,13 @@ func TestMigrationsIntegration(t *testing.T) {
 	var activitySchema bool
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activities') IS NOT NULL AND to_regclass('app.assessment_activity_objectives') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='learning_objectives_id_context_unique' AND contype='u') AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_activities_id_context_unique' AND contype='u') AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_objectives'::regclass AND contype='f')`).Scan(&activitySchema); err != nil || !activitySchema {
 		t.Fatal("missing CP10-04 activity tables, context keys, or composite foreign keys")
+	}
+	var scoreSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_initial_scores') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_initial_scores_occurrence_student_unique' AND contype='u')
+		AND (SELECT count(*)=5 FROM pg_constraint WHERE conrelid='app.assessment_activity_initial_scores'::regclass AND contype='f')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_placements_id_student_year_unique' AND contype='u')`).Scan(&scoreSchema); err != nil || !scoreSchema {
+		t.Fatal("missing CP10-05 initial score table, uniqueness, or composite foreign keys")
 	}
 	var historicalMappingTable, historicalMappingUnique, historicalMappingAppendOnly bool
 	if err = db.QueryRowContext(ctx, `SELECT

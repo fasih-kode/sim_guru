@@ -15,6 +15,7 @@ const maxAssessmentActivityName = 200
 type AssessmentActivity struct {
 	ID, SemesterID, ClassID, SubjectID, TeacherID, CreatedBy int64
 	Name, Type, Date, CreatedAt                              string
+	SemesterName, ClassName, SubjectName                     string
 	Objectives                                               []LearningObjective
 }
 
