@@ -25,6 +25,7 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"kepala sekolah satu halaman", "/absensi/harian", "", "", "attendance", []string{"kepala_sekolah"}, 0},
 		{"role gabungan tanpa duplikasi", "/absensi/harian", "Kehadiran Siswa", "daily-attendance", "attendance", []string{"petugas_absensi", "kesiswaan", "wali_kelas"}, 4},
 		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Guru Mapel", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 3},
+		{"bobot Kurikulum", "/akademik/bobot-penilaian", "Struktur Kurikulum", "curriculum-assessment-weights", "curriculum-subjects", []string{"kurikulum"}, 3},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,6 +62,10 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 			case "attendance":
 				if !strings.Contains(body, `nav-link nav-student-attendance-parent is-active`) {
 					t.Fatal("parent Kehadiran Siswa tidak ditandai aktif")
+				}
+			case "curriculum-subjects":
+				if !strings.Contains(body, `nav-link nav-curriculum-parent is-active`) {
+					t.Fatal("parent Struktur Kurikulum tidak ditandai aktif")
 				}
 			}
 		})

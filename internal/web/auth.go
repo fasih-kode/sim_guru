@@ -226,6 +226,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "lesson-periods", "curriculum-schedule"
 	case path == "/akademik/struktur-kurikulum":
 		return "curriculum-structure", "curriculum-subjects"
+	case path == "/akademik/bobot-penilaian":
+		return "assessment-weights", "curriculum-subjects"
 	case path == "/akademik/batasan-jadwal":
 		return "schedule-constraints", "curriculum-schedule"
 	case path == "/akademik/waktu-sekolah":

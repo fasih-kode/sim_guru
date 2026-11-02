@@ -106,6 +106,8 @@ func curriculumNavigationState(path string, user *auth.User) (section, active st
 		return "Struktur Kurikulum", "curriculum-structure"
 	case path == "/master/subjects":
 		return "Struktur Kurikulum", "curriculum-subjects"
+	case path == "/akademik/bobot-penilaian":
+		return "Struktur Kurikulum", "curriculum-assessment-weights"
 	case path == "/akademik/waktu-sekolah":
 		return "Pengaturan Jadwal", "curriculum-school-time"
 	case path == "/akademik/batasan-jadwal":
@@ -158,6 +160,7 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 		tabs = []navigationTab{
 			{ID: "curriculum-structure", Label: "Struktur Kurikulum", Href: "/akademik/struktur-kurikulum", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h8" stroke-linecap="round" stroke-linejoin="round"/>`},
 			{ID: "curriculum-subjects", Label: "Mata Pelajaran", Href: "/master/subjects", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v18H7.5A2.5 2.5 0 0 0 5 22V4.5ZM5 5h12m-8 4h7m-7 4h7" stroke-linecap="round" stroke-linejoin="round"/>`},
+			{ID: "curriculum-assessment-weights", Label: "Bobot Penilaian", Href: "/akademik/bobot-penilaian", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19h16M6 16V9m6 7V5m6 11v-4" stroke-linecap="round"/><circle cx="6" cy="7" r="1.5"/><circle cx="12" cy="3" r="1.5"/><circle cx="18" cy="10" r="1.5"/></svg>`},
 		}
 	case "Pengaturan Jadwal":
 		tabs = []navigationTab{

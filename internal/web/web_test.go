@@ -31,6 +31,7 @@ func TestRoutes(t *testing.T) {
 		{name: "htmx session expired", path: "/", method: "GET", hx: "true", status: 401, excludes: "<!doctype html>"},
 		{name: "liveness independent", path: "/health/live", method: "GET", failed: true, status: 200, contains: "ok"},
 		{name: "ready", path: "/health/ready", method: "GET", status: 200, contains: "ready"},
+		{name: "bobot penilaian perlu sesi", path: "/akademik/bobot-penilaian?semester_id=1", method: "GET", status: http.StatusSeeOther, contains: ""},
 		{name: "unready redacts errors", path: "/health/ready", method: "GET", failed: true, status: 503, contains: "belum siap", excludes: "secret"},
 		{name: "unknown", path: "/students", method: "GET", status: 404},
 		{name: "missing csrf", path: "/login", method: "POST", status: 403},
