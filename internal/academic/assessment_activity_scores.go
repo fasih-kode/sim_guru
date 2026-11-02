@@ -18,9 +18,11 @@ type AssessmentScoreInput struct {
 }
 
 type AssessmentScoreCell struct {
-	ObjectiveID int64
-	Value       string
-	Recorded    bool
+	ObjectiveID    int64
+	InitialScoreID int64
+	Value          string
+	Recorded       bool
+	CanCorrect     bool
 }
 
 type AssessmentScoreStudent struct {
@@ -34,6 +36,7 @@ type AssessmentScoreSheet struct {
 	Students              []AssessmentScoreStudent
 	UnknownPlacementCount int
 	CanRecord             bool
+	HasBlankScores        bool
 }
 
 // AssessmentActivityScoreSheet menampilkan roster menurut penempatan pada tanggal kegiatan.
@@ -107,12 +110,15 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		AND app.student_placement_class_at(p.id,$3::date)=$2`, yearID, out.Activity.ClassID, out.Activity.Date).Scan(&out.UnknownPlacementCount); err != nil {
 		return AssessmentScoreSheet{}, err
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,s.name,coalesce(s.nis,''),lo.id,sc.score::text
+	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,s.name,coalesce(s.nis,''),lo.id,sc.id,
+		coalesce(latest.after_score,sc.score)::text,sc.recorded_by
 		FROM app.student_placements p JOIN app.students s ON s.id=p.student_id
 		CROSS JOIN app.assessment_activity_objectives ao
 		JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
 		LEFT JOIN app.assessment_activity_initial_scores sc ON sc.assessment_activity_id=ao.activity_id
 			AND sc.learning_objective_id=ao.learning_objective_id AND sc.student_id=p.student_id
+		LEFT JOIN LATERAL (SELECT c.after_score FROM app.assessment_activity_score_corrections c
+			WHERE c.initial_score_id=sc.id ORDER BY c.version DESC LIMIT 1) latest ON true
 		WHERE ao.activity_id=$1 AND p.school_year_id=$2 AND p.starts_on IS NOT NULL AND p.starts_on<=$4::date
 		AND app.student_placement_class_at(p.id,$4::date)=$3
 		ORDER BY s.name,p.student_id,lo.id`, activityID, yearID, out.Activity.ClassID, out.Activity.Date)
@@ -124,8 +130,9 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 	for rows.Next() {
 		var studentID, objectiveID int64
 		var name, nis string
+		var scoreID, recordedBy sql.NullInt64
 		var score sql.NullString
-		if err = rows.Scan(&studentID, &name, &nis, &objectiveID, &score); err != nil {
+		if err = rows.Scan(&studentID, &name, &nis, &objectiveID, &scoreID, &score, &recordedBy); err != nil {
 			return AssessmentScoreSheet{}, err
 		}
 		idx, ok := byStudent[studentID]
@@ -135,8 +142,14 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 			out.Students = append(out.Students, AssessmentScoreStudent{ID: studentID, Name: name, NIS: nis})
 		}
 		cell := AssessmentScoreCell{ObjectiveID: objectiveID}
+		if scoreID.Valid {
+			cell.InitialScoreID = scoreID.Int64
+			cell.CanCorrect = out.Activity.TeacherID == teacherID && recordedBy.Valid && recordedBy.Int64 == actor
+		}
 		if score.Valid {
 			cell.Value, cell.Recorded = score.String, true
+		} else if out.CanRecord {
+			out.HasBlankScores = true
 		}
 		out.Students[idx].Scores = append(out.Students[idx].Scores, cell)
 	}

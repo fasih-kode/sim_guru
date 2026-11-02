@@ -24,10 +24,12 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"wali kelas satu halaman", "/absensi/harian", "", "", "attendance", []string{"wali_kelas"}, 0},
 		{"kepala sekolah satu halaman", "/absensi/harian", "", "", "attendance", []string{"kepala_sekolah"}, 0},
 		{"role gabungan tanpa duplikasi", "/absensi/harian", "Kehadiran Siswa", "daily-attendance", "attendance", []string{"petugas_absensi", "kesiswaan", "wali_kelas"}, 4},
-		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Guru Mapel", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Guru Mapel", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"kegiatan Guru Mapel", "/guru/kegiatan-penilaian", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 5},
+		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Guru Mapel", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Guru Mapel", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"kegiatan Guru Mapel", "/guru/kegiatan-penilaian", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"nilai historis milik guru", "/guru/nilai-awal-saya", "Guru Mapel", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"koreksi nilai historis", "/guru/nilai-awal/123/koreksi", "Guru Mapel", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 6},
 		{"bobot Kurikulum", "/akademik/bobot-penilaian", "Struktur Kurikulum", "curriculum-assessment-weights", "curriculum-subjects", []string{"kurikulum"}, 3},
 	}
 	for _, tc := range tests {

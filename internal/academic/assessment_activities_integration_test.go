@@ -4,6 +4,8 @@ package academic
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -55,16 +57,23 @@ func TestAssessmentActivitiesAreScopedAndAtomicIntegration(t *testing.T) {
 		t.Fatal("penugasan pembanding", err)
 	}
 	t.Cleanup(func() {
+		var immutableCorrections int
+		if cleanupErr := db.QueryRow(`SELECT count(*) FROM app.assessment_activity_score_corrections c
+			JOIN app.assessment_activity_initial_scores sc ON sc.id=c.initial_score_id
+			JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id WHERE a.school_year_id=$1`, yearID).Scan(&immutableCorrections); cleanupErr != nil {
+			t.Errorf("periksa histori koreksi fixture: %v", cleanupErr)
+			return
+		}
+		if immutableCorrections > 0 {
+			t.Log("fixture dipertahankan karena histori koreksi append-only")
+			return
+		}
+		_, _ = db.Exec(`DELETE FROM app.assessment_activity_score_corrections WHERE initial_score_id IN (SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id IN (SELECT id FROM app.assessment_activities WHERE school_year_id=$1))`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.assessment_activity_initial_scores WHERE assessment_activity_id IN (SELECT id FROM app.assessment_activities WHERE school_year_id=$1)`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id IN (SELECT id FROM app.assessment_activities WHERE school_year_id=$1)`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE school_year_id=$1`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
-		for _, placement := range []int64{placementID, placementBID} {
-			if placement > 0 {
-				_, _ = db.Exec(`DELETE FROM app.student_class_moves WHERE placement_id=$1`, placement)
-				_, _ = db.Exec(`DELETE FROM app.student_placements WHERE id=$1`, placement)
-			}
-		}
+		_, _ = db.Exec(`DELETE FROM app.student_class_moves WHERE placement_id IN (SELECT id FROM app.student_placements WHERE student_id=ANY($1::bigint[]))`, []int64{studentID, studentBID, futureStudentID, unknownStudentID, foreignStudentID})
 		for _, id := range []int64{studentID, studentBID, futureStudentID, unknownStudentID, foreignStudentID} {
 			if id > 0 {
 				_, _ = db.Exec(`DELETE FROM app.student_placements WHERE student_id=$1`, id)
@@ -111,7 +120,7 @@ func TestAssessmentActivitiesAreScopedAndAtomicIntegration(t *testing.T) {
 	if err = store.CreateAssessmentActivity(ctx, teacher.ID, semesterID, classID, subjectID, "Tes formatif — sesi 1", "formatif", activityDate, []int64{objectives[0].ID, objectives[1].ID}); err != nil {
 		t.Fatalf("buat kegiatan formatif multi-TP: %v", err)
 	}
-	if err = store.CreateAssessmentActivity(ctx, teacher.ID, semesterID, classID, subjectID, "Proyek sumatif", "sumatif", "2026-11-03", []int64{objectives[0].ID}); err != nil {
+	if err = store.CreateAssessmentActivity(ctx, teacher.ID, semesterID, classID, subjectID, "Proyek sumatif", "sumatif", activityDate, []int64{objectives[0].ID}); err != nil {
 		t.Fatalf("buat kegiatan sumatif: %v", err)
 	}
 	var activityID int64
@@ -151,6 +160,13 @@ func TestAssessmentActivitiesAreScopedAndAtomicIntegration(t *testing.T) {
 	}
 	if err = store.SaveAssessmentActivityInitialScores(ctx, teacher.ID, activityID, []AssessmentScoreInput{{StudentID: studentID, ObjectiveID: objectives[0].ID, Value: "0"}, {StudentID: studentID, ObjectiveID: objectives[1].ID, Value: "82,50"}}); err != nil {
 		t.Fatal("simpan nilai multi-TP", err)
+	}
+	var sumativeActivityID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1 AND name='Proyek sumatif'`, yearID).Scan(&sumativeActivityID); err != nil {
+		t.Fatal("baca kegiatan Sumatif", err)
+	}
+	if err = store.SaveAssessmentActivityInitialScores(ctx, teacher.ID, sumativeActivityID, []AssessmentScoreInput{{StudentID: studentID, ObjectiveID: objectives[0].ID, Value: "75.00"}}); err != nil {
+		t.Fatal("simpan nilai awal Sumatif", err)
 	}
 	var scoreCount int
 	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1`, activityID).Scan(&scoreCount); err != nil || scoreCount != 2 {
@@ -274,6 +290,111 @@ func TestAssessmentActivitiesAreScopedAndAtomicIntegration(t *testing.T) {
 			var actual string
 			if err = db.QueryRow(`SELECT score::text FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, activityID, studentID, objectiveID).Scan(&actual); err != nil || actual != expected {
 				t.Fatalf("nilai lama berubah: siswa=%d TP=%d nilai=%q ingin=%q err=%v", studentID, objectiveID, actual, expected, err)
+			}
+		}
+	}
+	var sumativeScoreID, formatifScoreID, concurrentScoreID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, sumativeActivityID, studentID, objectives[0].ID).Scan(&sumativeScoreID); err != nil {
+		t.Fatal("baca nilai awal Sumatif", err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, activityID, studentID, objectives[1].ID).Scan(&formatifScoreID); err != nil {
+		t.Fatal("baca nilai awal Formatif", err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, activityID, studentBID, objectives[1].ID).Scan(&concurrentScoreID); err != nil {
+		t.Fatal("baca nilai pembanding untuk uji konkurensi", err)
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, sumativeScoreID, 0, "86,00", "Kesalahan input Sumatif"); err != nil {
+		t.Fatalf("pemilik historis aktif harus dapat mengoreksi nilai Sumatif: %v", err)
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, sumativeScoreID, 1, "88.25", "Koreksi kedua"); err != nil {
+		t.Fatalf("koreksi berulang harus menambahkan versi: %v", err)
+	}
+	for _, invalid := range []struct {
+		version       int64
+		value, reason string
+	}{{2, "91.234", "Alasan"}, {2, "101", "Alasan"}, {2, "92", "  "}} {
+		if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, sumativeScoreID, invalid.version, invalid.value, invalid.reason); err == nil {
+			t.Fatalf("nilai/alasan tidak valid harus ditolak: %+v", invalid)
+		}
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, sumativeScoreID, 1, "92", "Versi kedaluwarsa"); err != ErrConflict {
+		t.Fatalf("versi lama harus ditolak sebagai konflik, got %v", err)
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, formatifScoreID, 0, "90", "Koreksi Formatif"); err != nil {
+		t.Fatalf("koreksi Formatif harus bekerja: %v", err)
+	}
+	var sumativeInitial, formatifInitial string
+	if err = db.QueryRow(`SELECT score::text FROM app.assessment_activity_initial_scores WHERE id=$1`, sumativeScoreID).Scan(&sumativeInitial); err != nil || sumativeInitial != "75.00" {
+		t.Fatalf("nilai awal tidak boleh ditimpa: %q err=%v", sumativeInitial, err)
+	}
+	if err = db.QueryRow(`SELECT score::text FROM app.assessment_activity_initial_scores WHERE id=$1`, formatifScoreID).Scan(&formatifInitial); err != nil || formatifInitial != "82.50" {
+		t.Fatalf("nilai Formatif asli berubah: %q err=%v", formatifInitial, err)
+	}
+	var correctionCount int
+	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activity_score_corrections WHERE initial_score_id=$1`, sumativeScoreID).Scan(&correctionCount); err != nil || correctionCount != 2 {
+		t.Fatalf("koreksi Sumatif harus append-only dua versi: %d err=%v", correctionCount, err)
+	}
+	var latest string
+	if err = db.QueryRow(`SELECT after_score::text FROM app.assessment_activity_score_corrections WHERE initial_score_id=$1 ORDER BY version DESC LIMIT 1`, sumativeScoreID).Scan(&latest); err != nil || latest != "88.25" {
+		t.Fatalf("nilai berlaku terbaru salah: %q err=%v", latest, err)
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, otherTeacher.ID, sumativeScoreID, 2, "89", "Guru baru"); err != ErrForbidden {
+		t.Fatalf("guru pengampu baru tidak boleh mengoreksi nilai lama, got %v", err)
+	}
+	if _, err = store.AssessmentScoreCorrectionDetail(ctx, otherTeacher.ID, sumativeScoreID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("guru baru tidak boleh menemukan form koreksi lama: %v", err)
+	}
+	if _, err = store.OwnedAssessmentInitialScores(ctx, teacher.ID, AssessmentOwnedScoreFilter{Search: "Nilai eligible", Page: 1}); err != nil {
+		t.Fatalf("pemilik historis harus dapat menemukan nilai sendiri: %v", err)
+	}
+	var wgCorrections sync.WaitGroup
+	correctionErrors := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wgCorrections.Add(1)
+		go func(value int) {
+			defer wgCorrections.Done()
+			correctionErrors <- store.CorrectAssessmentInitialScore(ctx, teacher.ID, concurrentScoreID, 0, fmt.Sprintf("%d", 71+value), "Koreksi konkuren")
+		}(i)
+	}
+	wgCorrections.Wait()
+	close(correctionErrors)
+	correctionSuccess, staleCount := 0, 0
+	for correctionErr := range correctionErrors {
+		switch {
+		case correctionErr == nil:
+			correctionSuccess++
+		case errors.Is(correctionErr, ErrConflict):
+			staleCount++
+		default:
+			t.Errorf("hasil koreksi konkuren tidak terduga: %v", correctionErr)
+		}
+	}
+	if correctionSuccess != 1 || staleCount != 7 {
+		t.Fatalf("koreksi dengan versi sama harus menghasilkan 1 sukses/7 konflik; %d/%d", correctionSuccess, staleCount)
+	}
+	if _, err = db.Exec(`UPDATE app.assessment_activity_score_corrections SET reason='diubah' WHERE initial_score_id=$1`, sumativeScoreID); err == nil {
+		t.Fatal("database harus menolak perubahan histori koreksi")
+	}
+	if _, err = db.Exec(`DELETE FROM app.assessment_activity_score_corrections WHERE initial_score_id=$1`, sumativeScoreID); err == nil {
+		t.Fatal("database harus menolak penghapusan histori koreksi")
+	}
+	if _, err = db.Exec(`UPDATE app.teachers SET active=false WHERE id=$1`, teacherIdentity.ID); err != nil {
+		t.Fatal("nonaktifkan identitas untuk tes penolakan", err)
+	}
+	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, sumativeScoreID, 2, "89", "Identitas nonaktif"); err != ErrForbidden {
+		t.Fatalf("identitas guru nonaktif harus ditolak: %v", err)
+	}
+	if _, err = db.Exec(`UPDATE app.teachers SET active=true WHERE id=$1`, teacherIdentity.ID); err != nil {
+		t.Fatal("pulihkan identitas fixture", err)
+	}
+	correctedSheet, err := store.AssessmentActivityScoreSheet(ctx, otherTeacher.ID, activityID)
+	if err != nil || correctedSheet.CanRecord {
+		t.Fatalf("pengampu baru tetap hanya baca: canRecord=%v err=%v", correctedSheet.CanRecord, err)
+	}
+	for _, student := range correctedSheet.Students {
+		for _, cell := range student.Scores {
+			if student.ID == studentID && cell.ObjectiveID == objectives[1].ID && cell.Value != "90.00" {
+				t.Fatalf("lembar kegiatan harus menampilkan nilai berlaku hasil koreksi, got %s", cell.Value)
 			}
 		}
 	}

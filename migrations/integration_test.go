@@ -57,7 +57,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 40 {
+	if err != nil || current != target || target < 41 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -99,6 +99,13 @@ func TestMigrationsIntegration(t *testing.T) {
 		AND (SELECT count(*)=5 FROM pg_constraint WHERE conrelid='app.assessment_activity_initial_scores'::regclass AND contype='f')
 		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_placements_id_student_year_unique' AND contype='u')`).Scan(&scoreSchema); err != nil || !scoreSchema {
 		t.Fatal("missing CP10-05 initial score table, uniqueness, or composite foreign keys")
+	}
+	var scoreCorrections bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_corrections') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_score_corrections_version_unique' AND contype='u')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_corrections_append_only' AND NOT tgisinternal)
+		AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_score_corrections'::regclass AND contype='f')`).Scan(&scoreCorrections); err != nil || !scoreCorrections {
+		t.Fatal("missing CP10-06 append-only corrections, version uniqueness, or foreign keys")
 	}
 	var historicalMappingTable, historicalMappingUnique, historicalMappingAppendOnly bool
 	if err = db.QueryRowContext(ctx, `SELECT

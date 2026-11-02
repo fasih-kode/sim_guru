@@ -1,5 +1,13 @@
 # Handover
 
+## CP10-06 — Implementasi koreksi nilai awal, siap review independen (2 November 2026)
+
+Implementasi lokal CP10-06 menambahkan koreksi beralasan untuk nilai awal Formatif dan Sumatif tanpa menimpa nilai asli. Migration aditif `00041_assessment_score_corrections.sql` menambahkan histori koreksi append-only dengan nilai sebelum/sesudah, alasan, pelaku, waktu, versi unik per nilai awal, FK, batas rentang, dan trigger penolak UPDATE/DELETE. Nilai efektif berasal dari koreksi sah terbaru. Service memeriksa role/identitas aktif serta kepemilikan pencatatan awal, mengunci baris dan memeriksa expected version di dalam transaksi; pemilik historis yang masih aktif dapat menemukan dan mengoreksi nilai miliknya tanpa assignment aktif, sedangkan guru baru, guru lain, dan akun nonaktif ditolak. Tidak ada bypass Kurikulum BK-05.
+
+UI menyediakan daftar nilai awal milik sendiri, detail/form koreksi dengan nilai asli, nilai berlaku, alasan dan riwayat kronologis. Pada lembar nilai, aksi Koreksi hanya muncul pada sel milik pengguna; pengampu baru tetap baca-saja dan tombol Simpan Nilai awal disembunyikan bila tidak ada sel kosong yang sah. Route menggunakan CSRF dan memeriksa akses di server. CP10-05 tetap mendukung penyimpanan bertahap. Tidak ada perubahan migration 00001–00040 atau perubahan bisnis pada kegiatan, siswa, TP, tanggal, maupun penempatan.
+
+Verifikasi pada `sim_guru_test`: migration integrasi 00041 lulus dan database test mencapai 41/41; integration race terfokus akademik lulus untuk koreksi Formatif/Sumatif, koreksi berulang, kepemilikan historis, penolakan guru baru/nonaktif, input/alasan invalid, versi basi, atomicity dan konflik serentak; integration race HTTP lulus untuk CSRF, otorisasi GET/POST, koreksi, riwayat serta konflik. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, serta diff-check lulus. Integration menggunakan database test dan dapat meninggalkan fixture sintetis append-only yang memang tidak dapat dihapus; tidak ada data DEV/UAT yang diubah. DEV/UAT tetap 40/40 dan server preview tidak direstart. Pemeriksaan visual browser belum dilakukan; UAT pengguna belum dimulai dan wajib menunggu review independen PASS. CP10-06 belum CLOSED; CP10-07 belum dimulai. Belum ada commit atau push.
+
 ## CP10-05 — FINAL GATE PASS (2 November 2026)
 
 Review independen pada commit `9d4a4fa062a58743ca074e2fcaea7808473780ce` PASS dan UAT Product Owner diterima. Klarifikasi bisnis final: nilai Formatif maupun Sumatif boleh disimpan bertahap; tidak ada kewajiban mengisi seluruh siswa setiap kali menyimpan. Tidak ada perubahan kode fitur atau data UAT dalam final gate.
