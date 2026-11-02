@@ -238,4 +238,57 @@ func TestAssessmentActivitiesAreScopedAndAtomicIntegration(t *testing.T) {
 		SELECT a.id,lo.id,a.school_year_id,a.semester_id,lo.class_id,lo.subject_id FROM app.assessment_activities a CROSS JOIN app.learning_objectives lo WHERE a.school_year_id=$1 AND lo.id=$2 LIMIT 1`, yearID, foreignObjectiveID); err == nil {
 		t.Fatal("composite FK database harus menolak TP beda konteks")
 	}
+	// Pengampu baru boleh membaca kegiatan lama, tetapi tidak boleh menambah
+	// nilai awal yang menjadi milik guru sebelumnya.
+	reassignmentDate := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -1)
+	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, otherIdentity.ID, reassignmentDate); err != nil {
+		t.Fatal("ganti pengampu resmi", err)
+	}
+	formerActivity, err := store.AssessmentActivityScoreSheet(ctx, otherTeacher.ID, activityID)
+	if err != nil || formerActivity.CanRecord || formerActivity.Activity.TeacherID != teacherIdentity.ID {
+		t.Fatalf("pengampu baru harus mendapat baca-saja pada kegiatan lama: canRecord=%v owner=%d err=%v", formerActivity.CanRecord, formerActivity.Activity.TeacherID, err)
+	}
+	if len(formerActivity.Students) != 2 {
+		t.Fatalf("roster kegiatan lama tidak dapat dibaca: %d siswa", len(formerActivity.Students))
+	}
+	oldValues := make(map[int64]map[int64]string)
+	for _, student := range formerActivity.Students {
+		oldValues[student.ID] = make(map[int64]string)
+		for _, score := range student.Scores {
+			if score.Recorded {
+				oldValues[student.ID][score.ObjectiveID] = score.Value
+			}
+		}
+	}
+	if err = store.SaveAssessmentActivityInitialScores(ctx, otherTeacher.ID, activityID, []AssessmentScoreInput{{StudentID: studentBID, ObjectiveID: objectives[0].ID, Value: "25"}}); err != ErrForbidden {
+		t.Fatalf("pengampu baru tidak boleh menambah nilai kegiatan lama: %v", err)
+	}
+	if err = store.SaveAssessmentActivityInitialScores(ctx, teacher.ID, activityID, []AssessmentScoreInput{{StudentID: studentBID, ObjectiveID: objectives[0].ID, Value: "25"}}); err != ErrForbidden {
+		t.Fatalf("pemilik lama tanpa penugasan aktif tidak boleh menambah nilai: %v", err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1`, activityID).Scan(&scoreCount); err != nil || scoreCount != 3 {
+		t.Fatalf("penolakan mutasi kegiatan lama mengubah jumlah nilai=%d err=%v", scoreCount, err)
+	}
+	for studentID, scores := range oldValues {
+		for objectiveID, expected := range scores {
+			var actual string
+			if err = db.QueryRow(`SELECT score::text FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, activityID, studentID, objectiveID).Scan(&actual); err != nil || actual != expected {
+				t.Fatalf("nilai lama berubah: siswa=%d TP=%d nilai=%q ingin=%q err=%v", studentID, objectiveID, actual, expected, err)
+			}
+		}
+	}
+	if err = store.CreateAssessmentActivity(ctx, otherTeacher.ID, semesterID, classID, subjectID, "Kegiatan milik guru B", "sumatif", activityDate, []int64{objectives[0].ID}); err != nil {
+		t.Fatalf("guru pengampu baru membuat kegiatan sendiri: %v", err)
+	}
+	var teacherBActivityID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1 AND name='Kegiatan milik guru B'`, yearID).Scan(&teacherBActivityID); err != nil {
+		t.Fatal("baca kegiatan guru B", err)
+	}
+	if err = store.SaveAssessmentActivityInitialScores(ctx, otherTeacher.ID, teacherBActivityID, []AssessmentScoreInput{{StudentID: studentBID, ObjectiveID: objectives[0].ID, Value: "75"}}); err != nil {
+		t.Fatalf("guru pengampu baru mencatat nilai kegiatannya sendiri: %v", err)
+	}
+	newOwnerSheet, err := store.AssessmentActivityScoreSheet(ctx, otherTeacher.ID, teacherBActivityID)
+	if err != nil || !newOwnerSheet.CanRecord {
+		t.Fatalf("kegiatan milik pengampu baru tidak dapat dicatat: canRecord=%v err=%v", newOwnerSheet.CanRecord, err)
+	}
 }

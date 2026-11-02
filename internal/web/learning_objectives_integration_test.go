@@ -428,6 +428,71 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&count); err != nil || count != 3 {
 		t.Fatalf("request ditolak tidak boleh membuat TP tambahan: count=%d err=%v", count, err)
 	}
+	// Pengampu baru boleh membaca kegiatan lama secara baca-saja, tetapi nilai
+	// awal tetap hanya dapat dicatat oleh pemilik kegiatan yang masih ditugaskan.
+	reassignmentDate := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -1)
+	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, otherIdentity.ID, reassignmentDate); err != nil {
+		t.Fatal("ganti pengampu resmi", err)
+	}
+	readOnlyPage, err := otherClient.Get(scoreURL)
+	if err != nil || readOnlyPage.StatusCode != http.StatusOK {
+		t.Fatalf("pengampu baru harus dapat membaca kegiatan lama: response=%v err=%v", readOnlyPage, err)
+	}
+	readOnlyBody := readBody(readOnlyPage)
+	if !strings.Contains(readOnlyBody, "Kegiatan ini milik guru sebelumnya") || !strings.Contains(readOnlyBody, "82.50") || strings.Contains(readOnlyBody, `action="`+strings.TrimPrefix(scoreURL, server.URL)+`"`) || strings.Contains(readOnlyBody, "Simpan Nilai") {
+		t.Fatal("kegiatan lama harus tampil baca-saja tanpa form simpan")
+	}
+	newTeacherPost := url.Values{
+		"gorilla.csrf.Token": {otherCSRF},
+		"score_" + strconv.FormatInt(scoreStudentID, 10) + "_" + strconv.FormatInt(sourceObjectiveID, 10): {"91"},
+	}
+	deniedOldActivity, err := otherClient.PostForm(scoreURL, newTeacherPost)
+	if err != nil || deniedOldActivity.StatusCode != http.StatusForbidden {
+		t.Fatalf("pengampu baru tidak boleh menambah nilai pada kegiatan lama: response=%v err=%v", deniedOldActivity, err)
+	}
+	_ = deniedOldActivity.Body.Close()
+	oldOwnerPost := url.Values{
+		"gorilla.csrf.Token": {teacherCSRF},
+		"score_" + strconv.FormatInt(scoreStudentID, 10) + "_" + strconv.FormatInt(sourceObjectiveID, 10): {"92"},
+	}
+	deniedFormerOwner, err := teacherClient.PostForm(scoreURL, oldOwnerPost)
+	if err != nil || deniedFormerOwner.StatusCode != http.StatusForbidden {
+		t.Fatalf("pemilik tanpa penugasan aktif tidak boleh menambah nilai: response=%v err=%v", deniedFormerOwner, err)
+	}
+	_ = deniedFormerOwner.Body.Close()
+	var unchangedScoreCount int
+	var unchangedScore string
+	if err = db.QueryRow(`SELECT count(*),max(score)::text FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1`, activityID).Scan(&unchangedScoreCount, &unchangedScore); err != nil || unchangedScoreCount != 1 || unchangedScore != "82.50" {
+		t.Fatalf("POST ditolak mengubah nilai kegiatan lama: count=%d score=%q err=%v", unchangedScoreCount, unchangedScore, err)
+	}
+	newActivityValues := url.Values{
+		"gorilla.csrf.Token": {otherCSRF}, "semester_id": {strconv.FormatInt(semesterID, 10)},
+		"class_id": {strconv.FormatInt(classID, 10)}, "subject_id": {strconv.FormatInt(subjectID, 10)},
+		"name": {"Kegiatan Guru Pengampu Baru"}, "activity_type": {"sumatif"},
+		"activity_date": {activityDate}, "objective_ids": {strconv.FormatInt(sourceObjectiveID, 10)},
+	}
+	newActivityPost, err := otherClient.PostForm(server.URL+"/guru/kegiatan-penilaian", newActivityValues)
+	if err != nil || newActivityPost.StatusCode != http.StatusSeeOther {
+		t.Fatalf("guru baru membuat kegiatan sendiri: response=%v err=%v", newActivityPost, err)
+	}
+	_ = newActivityPost.Body.Close()
+	var newActivityID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1 AND name='Kegiatan Guru Pengampu Baru'`, yearID).Scan(&newActivityID); err != nil {
+		t.Fatal("baca kegiatan guru baru", err)
+	}
+	newScoreURL := server.URL + "/guru/kegiatan-penilaian/" + strconv.FormatInt(newActivityID, 10) + "/nilai"
+	newScorePost, err := otherClient.PostForm(newScoreURL, url.Values{
+		"gorilla.csrf.Token": {otherCSRF},
+		"score_" + strconv.FormatInt(scoreStudentID, 10) + "_" + strconv.FormatInt(sourceObjectiveID, 10): {"75"},
+	})
+	if err != nil || newScorePost.StatusCode != http.StatusSeeOther {
+		t.Fatalf("guru baru mencatat nilai kegiatan sendiri: response=%v err=%v", newScorePost, err)
+	}
+	_ = newScorePost.Body.Close()
+	newScorePage, err := otherClient.Get(newScoreURL + "?saved=1")
+	if err != nil || newScorePage.StatusCode != http.StatusOK || !strings.Contains(readBody(newScorePage), "75.00") {
+		t.Fatalf("nilai kegiatan baru tidak tersimpan: response=%v err=%v", newScorePage, err)
+	}
 }
 
 func serverPathForLocation(location string) string {

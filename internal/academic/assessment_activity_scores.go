@@ -33,6 +33,7 @@ type AssessmentScoreSheet struct {
 	Activity              AssessmentActivity
 	Students              []AssessmentScoreStudent
 	UnknownPlacementCount int
+	CanRecord             bool
 }
 
 // AssessmentActivityScoreSheet menampilkan roster menurut penempatan pada tanggal kegiatan.
@@ -69,6 +70,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 	if !allowed {
 		return AssessmentScoreSheet{}, ErrForbidden
 	}
+	out.CanRecord = teacherID == out.Activity.TeacherID
 	if err = tx.QueryRowContext(ctx, `SELECT y.name || ' · Semester ' || sm.number::text,
 		c.grade::text || c.name,s.name FROM app.semesters sm JOIN app.school_years y ON y.id=sm.school_year_id
 		JOIN app.classes c ON c.id=$2 AND c.school_year_id=sm.school_year_id JOIN app.subjects s ON s.id=$3
@@ -197,6 +199,9 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 		return err
 	}
 	if !allowed {
+		return ErrForbidden
+	}
+	if teacherID != activity.TeacherID {
 		return ErrForbidden
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT learning_objective_id FROM app.assessment_activity_objectives
