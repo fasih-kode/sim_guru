@@ -86,10 +86,8 @@ if ss -H -ltn 'sport = :18744' | grep -q .; then
 fi
 
 cd "$root"
-status="$(go run ./cmd/migrate status)"
-printf '%s\n' "$status"
-if ! grep -Eq 'Versi database: 38; target: 38' <<<"$status"; then
-  echo "Database UAT harus sudah berada pada migration 38/38; tidak ada migration otomatis." >&2
+if ! python3 scripts/check_migration_status.py; then
+  echo "Database UAT harus sudah mencapai target migration source; tidak ada migration otomatis." >&2
   exit 1
 fi
 
