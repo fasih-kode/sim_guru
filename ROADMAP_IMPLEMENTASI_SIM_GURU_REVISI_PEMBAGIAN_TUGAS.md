@@ -1,5 +1,7 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
+> **Status lingkungan aktual (2 November 2026):** atas izin Product Owner, migration development `sim_guru_dev` telah diterapkan dari 36/38 ke 38/38. Migration 00037–00038 menambah fondasi bobot semester dan Tujuan Pembelajaran tanpa nilai default atau data seed; tabel baru kosong. Backup custom-format tervalidasi tersimpan privat di luar repository (lihat HANDOVER). Fingerprint 31 tabel bisnis existing tidak berubah; `sim_guru_ci_test` dan `sim_guru_test` tetap 38/38. Aplikasi development berjalan di `127.0.0.1:18743` dan koneksi proses terverifikasi ke `sim_guru_dev`. Health dan halaman login HTTP 200. Login terautentikasi serta akses halaman Bobot/TP dengan role sah belum diverifikasi karena sesi/kredensial development tidak tersedia; jangan menganggap pemeriksaan route anonim sebagai UAT role. CP10-01/02/03 tetap CLOSED sesuai catatan checkpoint; CP10-04 belum dimulai.
+
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.
 

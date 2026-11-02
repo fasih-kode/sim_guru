@@ -1,5 +1,15 @@
 # Handover
 
+## Aktivasi migration development 37–38 (2 November 2026)
+
+Atas izin Product Owner, `sim_guru_dev` disinkronkan dari 36/38 menjadi **38/38** menggunakan mekanisme migration resmi. Preflight mengonfirmasi branch `review/fase10-checkpoints`, HEAD `ee1c77de2cb03dea162a5e4303c6662cbe4d55ba`, working tree bersih sebelum pembaruan catatan ini, dan `.env` lokal bermode 0600 menunjuk PostgreSQL `127.0.0.1:55436` / `sim_guru_dev`. Status sebelum/sesudah diperiksa dengan `make migrate-status`; tidak ada migration pada `sim_guru_ci_test` atau `sim_guru_test` dalam operasi ini (keduanya tetap 38/38).
+
+Sebelum migration dibuat backup custom-format di luar repository: `/home/fasih/.local/share/sim-guru/backups/cp10-dev-migrations-37-38-20261102-100646/sim_guru_dev.dump`. Direktori 0700, file 0600, ukuran 476.511 byte; `pg_restore --list` berhasil membaca katalog (749 entri). Full restore test tidak dilakukan. Migration resmi menerapkan tepat dua versi. Tabel `semester_assessment_weights`, `semester_assessment_weight_history`, dan `learning_objectives` beserta FK/constraint yang diminta tersedia; ketiga tabel baru masih kosong, sehingga 00037 tidak menetapkan bobot default dan tidak ada seed TP.
+
+Fingerprint dan jumlah 31 tabel data bisnis yang dicatat sebelum migration sama persis sesudahnya; tidak ada perubahan pada data siswa, guru, pegawai, akun, penugasan, jadwal, absensi/presensi, atau jurnal. Cutover dan pemetaan historis jurnal tidak berubah. `.env` tidak diedit. Proses SIM-GURU UAT pada 18743 dihentikan normal dengan SIGTERM, lalu `make run` menjalankan source terbaru pada `127.0.0.1:18743`; koneksi proses dikorelasikan melalui socket PostgreSQL ke `sim_guru_dev` di port 55436. Storage foto guru dan TU aktif. `/health/live`, `/health/ready`, dan `/login` HTTP 200; route Bobot dan Tujuan Pembelajaran tanpa autentikasi diarahkan ke login (HTTP 303).
+
+Login role development **belum diuji**: tidak tersedia kredensial development atau sesi terautentikasi yang sah dalam lingkungan kerja ini, dan tidak ada password/role yang diubah. Karena itu akses halaman oleh role berwenang masih perlu diperiksa pengguna dengan akun development yang sudah ada. Tidak ada akun, penugasan, atau data sintetis yang dibuat. Server development dibiarkan aktif. Backup tersedia untuk pemulihan terkontrol bila kelak diperlukan; tidak melakukan restore atau tindakan destruktif.
+
 ### CP10-02 — tindak lanjut review independen (2 November 2026)
 
 Review supervisor pada Draft PR #1 meminta dua koreksi CP10-02 sebelum UAT: status mapel aktif harus menjadi bagian dari konteks serta otorisasi baca/buat TP, dan batas tanggal penugasan future/expired perlu dibuktikan dengan integration test. Keduanya telah ditangani tanpa migration: daftar konteks hanya memuat mapel aktif; helper otorisasi bersama untuk baca dan buat TP sekarang mensyaratkan mapel aktif serta penugasan berlaku pada tanggal WIB saat ini. Regression PostgreSQL memverifikasi mapel yang dinonaktifkan setelah assignment tidak bisa dibaca/dibuat TP, dan assignment masa depan maupun kedaluwarsa tidak muncul atau memberi akses baca/buat; semua penolakan tidak menambah TP.
