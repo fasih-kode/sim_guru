@@ -30,7 +30,7 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	teacher, teacherPassword := testutil.User(t, db, "guru_mapel")
 	otherTeacher, otherPassword := testutil.User(t, db, "guru_mapel")
 	random := testutil.Random(t)[:10]
-	var yearID, semesterID, classID, otherClassID, subjectID int64
+	var yearID, semesterID, classID, otherClassID, copyClassID, subjectID int64
 	if err := db.QueryRow(`INSERT INTO app.school_years(name) VALUES($1) RETURNING id`, "TP HTTP "+random).Scan(&yearID); err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +41,9 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'B') RETURNING id`, yearID).Scan(&otherClassID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'C') RETURNING id`, yearID).Scan(&copyClassID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "TPH-"+random, "Mapel TP HTTP "+random).Scan(&subjectID); err != nil {
@@ -63,6 +66,9 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, otherClassID, subjectID, otherIdentity.ID, effectiveFrom); err != nil {
 		t.Fatal("penugasan guru pembanding", err)
 	}
+	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, copyClassID, subjectID, teacherIdentity.ID, effectiveFrom); err != nil {
+		t.Fatal("penugasan guru untuk kelas tujuan salin", err)
+	}
 	t.Cleanup(func() {
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id=$1)`, semesterID)
@@ -74,7 +80,7 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code=$1`, "TPH-"+random)
 		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id=$1`, subjectID)
 		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id=$1`, semesterID)
-		_, _ = db.Exec(`DELETE FROM app.classes WHERE id IN ($1,$2)`, classID, otherClassID)
+		_, _ = db.Exec(`DELETE FROM app.classes WHERE id IN ($1,$2,$3)`, classID, otherClassID, copyClassID)
 		_, _ = db.Exec(`DELETE FROM app.school_years WHERE id=$1`, yearID)
 		for _, userID := range []int64{admin.ID, curriculum.ID, teacher.ID, otherTeacher.ID} {
 			for _, q := range []string{`DELETE FROM app.sessions WHERE user_id=$1`, `DELETE FROM app.access_audit WHERE actor_id=$1 OR target_id=$1`, `DELETE FROM app.user_roles WHERE user_id=$1`, `DELETE FROM app.users WHERE id=$1`} {
@@ -158,6 +164,51 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if err != nil || page.StatusCode != http.StatusOK || !strings.Contains(readBody(page), "TP HTTP yang sah") {
 		t.Fatalf("TP tidak muncul kembali setelah refresh: response=%v err=%v", page, err)
 	}
+	page, err = teacherClient.Get(server.URL + contextURL(classID))
+	if err != nil || page.StatusCode != http.StatusOK {
+		t.Fatalf("halaman TP sumber gagal dibuka: response=%v err=%v", page, err)
+	}
+	pageBody := readBody(page)
+	targetContextValue := strconv.FormatInt(semesterID, 10) + ":" + strconv.FormatInt(copyClassID, 10) + ":" + strconv.FormatInt(subjectID, 10)
+	if !strings.Contains(pageBody, "Salin definisi TP") || !strings.Contains(pageBody, "Konteks kelas tujuan") || !strings.Contains(pageBody, "value=\""+targetContextValue+"\"") {
+		t.Fatal("form salin atau konteks tujuan resmi tidak dirender")
+	}
+	var sourceObjectiveID int64
+	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, semesterID, classID, subjectID).Scan(&sourceObjectiveID); err != nil {
+		t.Fatal("baca ID TP sumber fixture", err)
+	}
+	copyValues := url.Values{
+		"source_id":      {strconv.FormatInt(sourceObjectiveID, 10)},
+		"source_context": {strconv.FormatInt(semesterID, 10) + ":" + strconv.FormatInt(classID, 10) + ":" + strconv.FormatInt(subjectID, 10)},
+		"target_context": {strconv.FormatInt(semesterID, 10) + ":" + strconv.FormatInt(copyClassID, 10) + ":" + strconv.FormatInt(subjectID, 10)},
+	}
+	withoutCSRF, err := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+	if err != nil || withoutCSRF.StatusCode != http.StatusForbidden {
+		t.Fatalf("salin tanpa CSRF harus ditolak: response=%v err=%v", withoutCSRF, err)
+	}
+	_ = withoutCSRF.Body.Close()
+	copyValues.Set("gorilla.csrf.Token", teacherCSRF)
+	copied, err := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+	if err != nil || copied.StatusCode != http.StatusSeeOther {
+		t.Fatalf("salin TP ke penugasan sah gagal: response=%v err=%v", copied, err)
+	}
+	copyLocation := serverPathForLocation(copied.Header.Get("Location"))
+	_ = copied.Body.Close()
+	targetPage, err := teacherClient.Get(server.URL + copyLocation)
+	if err != nil || targetPage.StatusCode != http.StatusOK {
+		t.Fatalf("halaman TP tujuan tidak dapat dibuka: response=%v err=%v", targetPage, err)
+	}
+	targetBody := readBody(targetPage)
+	if !strings.Contains(targetBody, "TP HTTP yang sah") || !strings.Contains(targetBody, "Definisi TP berhasil disalin") {
+		t.Fatal("TP hasil salin tidak tampil pada tujuan dengan konfirmasi")
+	}
+	copyValues.Set("gorilla.csrf.Token", teacherCSRF)
+	copyValues.Set("target_context", strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(otherClassID, 10)+":"+strconv.FormatInt(subjectID, 10))
+	deniedCopy, err := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+	if err != nil || deniedCopy.StatusCode != http.StatusForbidden {
+		t.Fatalf("salin ke penugasan guru lain harus ditolak: response=%v err=%v", deniedCopy, err)
+	}
+	_ = deniedCopy.Body.Close()
 	post, err = teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran", url.Values{
 		"gorilla.csrf.Token": {teacherCSRF}, "semester_id": {strconv.FormatInt(semesterID, 10)},
 		"class_id": {strconv.FormatInt(otherClassID, 10)}, "subject_id": {strconv.FormatInt(subjectID, 10)},
@@ -169,6 +220,21 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	_ = post.Body.Close()
 
 	otherClient, otherCSRF := login(otherTeacher, otherPassword)
+	if err = service.CreateLearningObjective(ctx, otherTeacher.ID, semesterID, otherClassID, subjectID, "TP sumber privat guru lain"); err != nil {
+		t.Fatal("buat TP untuk menguji sumber lintas guru", err)
+	}
+	var otherSourceID int64
+	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, semesterID, otherClassID, subjectID).Scan(&otherSourceID); err != nil {
+		t.Fatal("baca TP sumber milik guru lain", err)
+	}
+	copyValues.Set("source_id", strconv.FormatInt(otherSourceID, 10))
+	copyValues.Set("target_context", strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(copyClassID, 10)+":"+strconv.FormatInt(subjectID, 10))
+	copyValues.Set("source_context", strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(otherClassID, 10)+":"+strconv.FormatInt(subjectID, 10))
+	deniedCopy, err = teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+	if err != nil || deniedCopy.StatusCode != http.StatusForbidden {
+		t.Fatalf("salin dari TP guru lain harus ditolak: response=%v err=%v", deniedCopy, err)
+	}
+	_ = deniedCopy.Body.Close()
 	denied, err := otherClient.Get(server.URL + contextURL(classID))
 	if err != nil || denied.StatusCode != http.StatusForbidden {
 		t.Fatalf("GET dengan konteks guru lain harus 403: status=%v err=%v", denied, err)
@@ -184,7 +250,7 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	}
 	_ = denied.Body.Close()
 	var count int
-	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&count); err != nil || count != 1 {
+	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&count); err != nil || count != 3 {
 		t.Fatalf("request ditolak tidak boleh membuat TP tambahan: count=%d err=%v", count, err)
 	}
 }

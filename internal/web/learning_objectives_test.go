@@ -21,3 +21,13 @@ func TestLearningObjectiveSelectionParsing(t *testing.T) {
 		t.Fatalf("deep link konteks tidak terbaca: %d/%d/%d selected=%v err=%v", semester, classID, subject, selected, err)
 	}
 }
+
+func TestLearningObjectiveCopyContextParsing(t *testing.T) {
+	semester, classID, subject, selected, err := parseLearningObjectiveContext("12:34:56")
+	if err != nil || !selected || semester != 12 || classID != 34 || subject != 56 {
+		t.Fatalf("konteks tujuan salin tidak terbaca: %d/%d/%d selected=%v err=%v", semester, classID, subject, selected, err)
+	}
+	if _, _, _, _, err = parseLearningObjectiveContext("12:34"); err == nil {
+		t.Fatal("konteks tujuan yang tidak lengkap harus ditolak")
+	}
+}

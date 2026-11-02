@@ -144,6 +144,73 @@ func (s *Store) CreateLearningObjective(ctx context.Context, actor int64, semest
 	return tx.Commit()
 }
 
+// CopyLearningObjective menyalin uraian TP ke kelas lain yang sedang diampu aktor.
+// Konteks sumber dan tujuan diperiksa kembali dalam transaksi yang sama.
+func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, targetSemesterID, targetClassID, targetSubjectID int64) (int64, error) {
+	if sourceID < 1 || targetSemesterID < 1 || targetClassID < 1 || targetSubjectID < 1 {
+		return 0, ValidationError("Pilih TP sumber dan konteks kelas tujuan yang valid.")
+	}
+	tx, err := s.begin(ctx, actor, "guru_mapel")
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	teacherID, err := learningObjectiveTeacherID(ctx, tx, actor)
+	if err != nil {
+		return 0, err
+	}
+	var sourceSemesterID, sourceClassID, sourceSubjectID int64
+	var definition string
+	err = tx.QueryRowContext(ctx, `
+		SELECT semester_id,class_id,subject_id,definition
+		FROM app.learning_objectives WHERE id=$1 FOR SHARE`, sourceID).
+		Scan(&sourceSemesterID, &sourceClassID, &sourceSubjectID, &definition)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	allowed, err := learningObjectiveAssignment(ctx, tx, teacherID, sourceSemesterID, sourceClassID, sourceSubjectID)
+	if err != nil {
+		return 0, err
+	}
+	if !allowed {
+		return 0, ErrForbidden
+	}
+	if sourceClassID == targetClassID {
+		return 0, ValidationError("Kelas tujuan harus berbeda dari kelas sumber.")
+	}
+	allowed, err = learningObjectiveAssignment(ctx, tx, teacherID, targetSemesterID, targetClassID, targetSubjectID)
+	if err != nil {
+		return 0, err
+	}
+	if !allowed {
+		return 0, ErrForbidden
+	}
+	var targetYearID int64
+	err = tx.QueryRowContext(ctx, `SELECT school_year_id FROM app.semesters WHERE id=$1`, targetSemesterID).Scan(&targetYearID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	var copiedID int64
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO app.learning_objectives(school_year_id,semester_id,class_id,subject_id,definition,created_by)
+		VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+		targetYearID, targetSemesterID, targetClassID, targetSubjectID, definition, actor).Scan(&copiedID)
+	if err != nil {
+		return 0, dbError(err)
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return copiedID, nil
+}
+
 func learningObjectiveTeacherID(ctx context.Context, tx *sql.Tx, actor int64) (int64, error) {
 	var teacherID int64
 	err := tx.QueryRowContext(ctx, `

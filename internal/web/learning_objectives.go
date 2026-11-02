@@ -10,6 +10,7 @@ import (
 
 type learningObjectivesView struct {
 	Contexts    []academic.LearningObjectiveContext
+	CopyTargets []academic.LearningObjectiveContext
 	Objectives  []academic.LearningObjective
 	Selected    academic.LearningObjectiveContext
 	SelectedSet bool
@@ -73,7 +74,47 @@ func (a *application) learningObjectives(w http.ResponseWriter, r *http.Request)
 		a.render(w, r, "page", http.StatusOK, pageWithMessage)
 		return
 	}
+	if r.URL.Query().Get("copied") == "1" {
+		pageWithMessage := view{Page: "learning-objectives", Title: "Tujuan Pembelajaran", Message: "Definisi TP berhasil disalin. TP sumber tetap tidak berubah.", LearningObjectives: data}
+		a.render(w, r, "page", http.StatusOK, pageWithMessage)
+		return
+	}
 	page(http.StatusOK, "")
+}
+
+func (a *application) copyLearningObjective(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	data := &learningObjectivesView{}
+	page := func(status int, message string) {
+		a.render(w, r, "page", status, view{Page: "learning-objectives", Title: "Tujuan Pembelajaran", Error: message, LearningObjectives: data})
+	}
+	contexts, err := a.options.Academics.LearningObjectiveContexts(r.Context(), actor)
+	if err != nil {
+		code, message := academicError(err)
+		page(code, message)
+		return
+	}
+	data.Contexts = contexts
+	if !parseForm(w, r) {
+		return
+	}
+	sourceID, parseErr := strconv.ParseInt(r.PostForm.Get("source_id"), 10, 64)
+	sourceSemesterID, sourceClassID, sourceSubjectID, _, sourceErr := parseLearningObjectiveContext(r.PostForm.Get("source_context"))
+	targetSemesterID, targetClassID, targetSubjectID, _, targetErr := parseLearningObjectiveContext(r.PostForm.Get("target_context"))
+	if parseErr != nil || sourceErr != nil || targetErr != nil || sourceID < 1 {
+		page(http.StatusUnprocessableEntity, "Pilih TP sumber dan konteks kelas tujuan yang valid.")
+		return
+	}
+	_, err = a.options.Academics.CopyLearningObjective(r.Context(), actor, sourceID, targetSemesterID, targetClassID, targetSubjectID)
+	if err != nil {
+		code, message := academicError(err)
+		if loadErr := loadLearningObjectiveContext(r, a, actor, data, sourceSemesterID, sourceClassID, sourceSubjectID); loadErr != nil {
+			code, message = academicError(loadErr)
+		}
+		page(code, message)
+		return
+	}
+	http.Redirect(w, r, learningObjectiveURL(targetSemesterID, targetClassID, targetSubjectID)+"&copied=1", http.StatusSeeOther)
 }
 
 func loadLearningObjectiveContext(r *http.Request, a *application, actor int64, data *learningObjectivesView, semesterID, classID, subjectID int64) error {
@@ -82,6 +123,12 @@ func loadLearningObjectiveContext(r *http.Request, a *application, actor int64, 
 			data.Selected = item
 			data.SelectedSet = true
 			break
+		}
+	}
+	data.CopyTargets = nil
+	for _, item := range data.Contexts {
+		if item.ClassID != classID {
+			data.CopyTargets = append(data.CopyTargets, item)
 		}
 	}
 	objectives, err := a.options.Academics.LearningObjectives(r.Context(), actor, semesterID, classID, subjectID)
@@ -125,6 +172,14 @@ func parseLearningObjectiveIDs(semesterRaw, classRaw, subjectRaw string) (semest
 		return 0, 0, 0, true, academic.ValidationError("Konteks mata pelajaran tidak valid.")
 	}
 	return semesterID, classID, subjectID, true, nil
+}
+
+func parseLearningObjectiveContext(raw string) (semesterID, classID, subjectID int64, selected bool, err error) {
+	parts := strings.Split(raw, ":")
+	if len(parts) != 3 {
+		return 0, 0, 0, true, academic.ValidationError("Konteks penugasan tidak valid.")
+	}
+	return parseLearningObjectiveIDs(parts[0], parts[1], parts[2])
 }
 
 func learningObjectiveURL(semesterID, classID, subjectID int64) string {
