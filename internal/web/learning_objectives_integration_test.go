@@ -1,0 +1,195 @@
+//go:build integration
+
+package web
+
+import (
+	"context"
+	"crypto/rand"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/fasih-kode/sim_guru/internal/academic"
+	"github.com/fasih-kode/sim_guru/internal/auth"
+	"github.com/fasih-kode/sim_guru/internal/master"
+	"github.com/fasih-kode/sim_guru/internal/testutil"
+)
+
+func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	ctx := context.Background()
+	admin, _ := testutil.User(t, db, "admin")
+	curriculum, _ := testutil.User(t, db, "kurikulum")
+	teacher, teacherPassword := testutil.User(t, db, "guru_mapel")
+	otherTeacher, otherPassword := testutil.User(t, db, "guru_mapel")
+	random := testutil.Random(t)[:10]
+	var yearID, semesterID, classID, otherClassID, subjectID int64
+	if err := db.QueryRow(`INSERT INTO app.school_years(name) VALUES($1) RETURNING id`, "TP HTTP "+random).Scan(&yearID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,1) RETURNING id`, yearID).Scan(&semesterID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'A') RETURNING id`, yearID).Scan(&classID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'B') RETURNING id`, yearID).Scan(&otherClassID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "TPH-"+random, "Mapel TP HTTP "+random).Scan(&subjectID); err != nil {
+		t.Fatal(err)
+	}
+	masters := &master.Store{DB: db}
+	teacherIdentity, err := masters.Save(ctx, admin.ID, master.Teachers, 0, master.Input{Record: master.Record{Name: "Guru HTTP TP " + random, UserID: teacher.ID, Active: true}})
+	if err != nil {
+		t.Fatal("identitas Guru Mapel", err)
+	}
+	otherIdentity, err := masters.Save(ctx, admin.ID, master.Teachers, 0, master.Input{Record: master.Record{Name: "Guru HTTP lain " + random, UserID: otherTeacher.ID, Active: true}})
+	if err != nil {
+		t.Fatal("identitas Guru Mapel pembanding", err)
+	}
+	service := &academic.Store{DB: db}
+	effectiveFrom := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -30)
+	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, teacherIdentity.ID, effectiveFrom); err != nil {
+		t.Fatal("penugasan guru pertama", err)
+	}
+	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, otherClassID, subjectID, otherIdentity.ID, effectiveFrom); err != nil {
+		t.Fatal("penugasan guru pembanding", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id=$1)`, semesterID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id=$1`, semesterID)
+		for _, teacherID := range []int64{teacherIdentity.ID, otherIdentity.ID} {
+			_, _ = db.Exec(`DELETE FROM app.teacher_history WHERE entity_id=$1`, teacherID)
+			_, _ = db.Exec(`DELETE FROM app.teachers WHERE id=$1`, teacherID)
+		}
+		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code=$1`, "TPH-"+random)
+		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id=$1`, subjectID)
+		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id=$1`, semesterID)
+		_, _ = db.Exec(`DELETE FROM app.classes WHERE id IN ($1,$2)`, classID, otherClassID)
+		_, _ = db.Exec(`DELETE FROM app.school_years WHERE id=$1`, yearID)
+		for _, userID := range []int64{admin.ID, curriculum.ID, teacher.ID, otherTeacher.ID} {
+			for _, q := range []string{`DELETE FROM app.sessions WHERE user_id=$1`, `DELETE FROM app.access_audit WHERE actor_id=$1 OR target_id=$1`, `DELETE FROM app.user_roles WHERE user_id=$1`, `DELETE FROM app.users WHERE id=$1`} {
+				if _, cleanupErr := db.Exec(q, userID); cleanupErr != nil {
+					t.Errorf("cleanup akun: %v", cleanupErr)
+					return
+				}
+			}
+		}
+	})
+	accounts, err := auth.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := make([]byte, 32)
+	if _, err = rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := New(func(context.Context) error { return nil }, Options{Accounts: accounts, Masters: masters, Academics: service, CSRFKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	csrfPattern := regexp.MustCompile(`name="gorilla.csrf.Token" value="([^"]+)"`)
+	login := func(user auth.User, password string) (*http.Client, string) {
+		t.Helper()
+		jar, jarErr := cookiejar.New(nil)
+		if jarErr != nil {
+			t.Fatal(jarErr)
+		}
+		client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		page, getErr := client.Get(server.URL + "/login")
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		loginBody, readErr := io.ReadAll(page.Body)
+		_ = page.Body.Close()
+		if readErr != nil || page.StatusCode != http.StatusOK {
+			t.Fatalf("login GET gagal: status=%d err=%v", page.StatusCode, readErr)
+		}
+		match := csrfPattern.FindSubmatch(loginBody)
+		if len(match) != 2 {
+			t.Fatal("token CSRF tidak tersedia")
+		}
+		token, loginErr := accounts.Login(ctx, user.Username, password, "")
+		if loginErr != nil {
+			t.Fatal("login fixture gagal", loginErr)
+		}
+		base, _ := url.Parse(server.URL)
+		jar.SetCookies(base, []*http.Cookie{{Name: sessionCookie, Value: token, Path: "/"}})
+		return client, string(match[1])
+	}
+	contextURL := func(class int64) string {
+		return "/guru/tujuan-pembelajaran?semester_id=" + strconv.FormatInt(semesterID, 10) + "&class_id=" + strconv.FormatInt(class, 10) + "&subject_id=" + strconv.FormatInt(subjectID, 10)
+	}
+	readBody := func(response *http.Response) string {
+		t.Helper()
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		return string(body)
+	}
+	teacherClient, teacherCSRF := login(teacher, teacherPassword)
+	page, err := teacherClient.Get(server.URL + "/guru/tujuan-pembelajaran")
+	if err != nil || page.StatusCode != http.StatusOK || !strings.Contains(readBody(page), "Semester · Kelas · Mata pelajaran") {
+		t.Fatalf("Guru Mapel berhak tidak dapat membuka halaman TP: response=%v err=%v", page, err)
+	}
+	post, err := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran", url.Values{
+		"gorilla.csrf.Token": {teacherCSRF}, "semester_id": {strconv.FormatInt(semesterID, 10)},
+		"class_id": {strconv.FormatInt(classID, 10)}, "subject_id": {strconv.FormatInt(subjectID, 10)},
+		"definition": {"TP HTTP yang sah"},
+	})
+	if err != nil || post.StatusCode != http.StatusSeeOther {
+		t.Fatalf("simpan TP pada penugasan sah gagal: status=%v err=%v", post, err)
+	}
+	_ = post.Body.Close()
+	page, err = teacherClient.Get(server.URL + serverPathForLocation(post.Header.Get("Location")))
+	if err != nil || page.StatusCode != http.StatusOK || !strings.Contains(readBody(page), "TP HTTP yang sah") {
+		t.Fatalf("TP tidak muncul kembali setelah refresh: response=%v err=%v", page, err)
+	}
+	post, err = teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran", url.Values{
+		"gorilla.csrf.Token": {teacherCSRF}, "semester_id": {strconv.FormatInt(semesterID, 10)},
+		"class_id": {strconv.FormatInt(otherClassID, 10)}, "subject_id": {strconv.FormatInt(subjectID, 10)},
+		"definition": {"Tidak sah melalui ID"},
+	})
+	if err != nil || post.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST langsung ke kelas guru lain harus 403: status=%v err=%v", post, err)
+	}
+	_ = post.Body.Close()
+
+	otherClient, otherCSRF := login(otherTeacher, otherPassword)
+	denied, err := otherClient.Get(server.URL + contextURL(classID))
+	if err != nil || denied.StatusCode != http.StatusForbidden {
+		t.Fatalf("GET dengan konteks guru lain harus 403: status=%v err=%v", denied, err)
+	}
+	_ = denied.Body.Close()
+	denied, err = otherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran", url.Values{
+		"gorilla.csrf.Token": {otherCSRF}, "semester_id": {strconv.FormatInt(semesterID, 10)},
+		"class_id": {strconv.FormatInt(classID, 10)}, "subject_id": {strconv.FormatInt(subjectID, 10)},
+		"definition": {"Tidak sah oleh guru lain"},
+	})
+	if err != nil || denied.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST langsung oleh guru lain harus 403: status=%v err=%v", denied, err)
+	}
+	_ = denied.Body.Close()
+	var count int
+	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("request ditolak tidak boleh membuat TP tambahan: count=%d err=%v", count, err)
+	}
+}
+
+func serverPathForLocation(location string) string {
+	parsed, _ := url.Parse(location)
+	return parsed.RequestURI()
+}

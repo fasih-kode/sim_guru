@@ -1,0 +1,60 @@
+{{define "learning-objectives"}}
+<section class="panel mb-5 max-w-5xl">
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
+    <p class="mt-1 text-sm leading-6 text-gray-500">Konteks hanya menampilkan semester, kelas, dan mata pelajaran yang sedang menjadi penugasan resmi Anda.</p>
+  </div>
+  {{if .LearningObjectives.Contexts}}
+  <form method="get" action="/guru/tujuan-pembelajaran" class="flex flex-wrap items-end gap-3">
+    <div class="min-w-0 flex-1">
+      <label for="learning-objective-context">Semester · Kelas · Mata pelajaran</label>
+      <select id="learning-objective-context" name="context" required>
+        <option value="">Pilih konteks penugasan</option>
+        {{range .LearningObjectives.Contexts}}
+        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.LearningObjectives.SelectedSet (eq .SemesterID $.LearningObjectives.Selected.SemesterID) (eq .ClassID $.LearningObjectives.Selected.ClassID) (eq .SubjectID $.LearningObjectives.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
+        {{end}}
+      </select>
+    </div>
+    <button class="button-secondary" type="submit">Lihat TP</button>
+  </form>
+  {{else}}
+  <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Belum ada penugasan resmi yang berlaku untuk akun Anda.</p>
+  {{end}}
+</section>
+
+{{if .LearningObjectives.SelectedSet}}
+<section class="panel max-w-5xl">
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-gray-900">{{.LearningObjectives.Selected.ClassName}} · {{.LearningObjectives.Selected.SubjectName}}</h2>
+    <p class="mt-1 text-sm text-gray-500">{{.LearningObjectives.Selected.SemesterName}}</p>
+  </div>
+  <form method="post" action="/guru/tujuan-pembelajaran" class="mb-8 space-y-4">
+    {{.CSRF}}
+    <input type="hidden" name="semester_id" value="{{.LearningObjectives.Selected.SemesterID}}">
+    <input type="hidden" name="class_id" value="{{.LearningObjectives.Selected.ClassID}}">
+    <input type="hidden" name="subject_id" value="{{.LearningObjectives.Selected.SubjectID}}">
+    <div>
+      <label for="learning-objective-definition">Uraian Tujuan Pembelajaran</label>
+      <textarea id="learning-objective-definition" name="definition" rows="4" required>{{.LearningObjectives.Definition}}</textarea>
+    </div>
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan TP</button>
+  </form>
+
+  <div>
+    <h3 class="mb-3 text-base font-semibold text-gray-900">TP yang sudah dibuat</h3>
+    <div class="table-surface">
+      <table class="app-table">
+        <thead><tr><th>No.</th><th>Tujuan Pembelajaran</th><th>Dibuat pada (WIB)</th></tr></thead>
+        <tbody>
+          {{range $i,$objective := .LearningObjectives.Objectives}}
+          <tr><td>{{rowNumber 1 $i}}</td><td class="whitespace-pre-wrap">{{$objective.Definition}}</td><td>{{$objective.CreatedAt}}</td></tr>
+          {{else}}
+          <tr><td colspan="3" class="p-5 text-center text-gray-500">Belum ada TP untuk konteks ini.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

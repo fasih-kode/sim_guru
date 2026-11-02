@@ -83,6 +83,7 @@ type view struct {
 	Transition                          *transitionView
 	LessonAttendance                    *lessonAttendanceView
 	TeachingJournal                     *teachingJournalView
+	LearningObjectives                  *learningObjectivesView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -158,6 +159,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/jurnal-saya" || strings.HasPrefix(path, "/jurnal-saya/"):
 		if user != nil && user.HasRole("guru_mapel") {
 			return "teaching-journal", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/tujuan-pembelajaran":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "learning-objectives", "guru-mapel"
 		}
 		return "", ""
 	case path == "/":
