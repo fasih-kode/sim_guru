@@ -1,0 +1,32 @@
+{{define "assessment-score-remedial"}}
+<section class="panel mb-5">
+  <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/kegiatan-penilaian/{{.AssessmentRemedial.Detail.Score.ActivityID}}/nilai">← Kembali ke lembar nilai</a>
+  <div class="mt-4">
+    <h2 class="text-xl font-semibold text-gray-900">Remedial Sumatif</h2>
+    <p class="mt-1 text-sm text-gray-600">{{.AssessmentRemedial.Detail.Score.ActivityName}} · {{.AssessmentRemedial.Detail.Score.Date}}</p>
+    <p class="mt-1 text-sm text-gray-500">{{.AssessmentRemedial.Detail.Score.SemesterName}} · {{.AssessmentRemedial.Detail.Score.ClassName}} · {{.AssessmentRemedial.Detail.Score.SubjectName}}</p>
+    <p class="mt-1 text-sm text-gray-500">{{.AssessmentRemedial.Detail.Score.StudentName}} · TP {{.AssessmentRemedial.Detail.Score.ObjectiveID}}: {{.AssessmentRemedial.Detail.Score.Objective}}</p>
+  </div>
+</section>
+<section class="panel">
+  {{if .Error}}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{{.Error}}</div>{{end}}
+  {{if .Message}}<div class="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" role="status">{{.Message}}</div>{{end}}
+  <div class="grid gap-3 sm:grid-cols-3">
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3"><span class="block text-xs text-gray-500">Nilai awal asli</span><strong>{{.AssessmentRemedial.Detail.Score.InitialValue}}</strong></div>
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3"><span class="block text-xs text-gray-500">Nilai awal berlaku setelah koreksi</span><strong>{{.AssessmentRemedial.Detail.CorrectedInitial}}</strong></div>
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-3"><span class="block text-xs text-blue-700">Nilai efektif saat ini</span><strong class="text-blue-900">{{.AssessmentRemedial.Detail.Effective}}</strong></div>
+  </div>
+  <form method="post" action="/guru/nilai-awal/{{.AssessmentRemedial.Detail.Score.ID}}/remedial" class="mt-6 grid gap-4 sm:grid-cols-2">
+    {{.CSRF}}
+    <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-value">Nilai remedial</label><input id="remedial-value" name="value" type="text" inputmode="decimal" value="{{.AssessmentRemedial.Value}}" required autocomplete="off"><p class="mt-1 text-xs text-gray-500">Angka 0–100, maksimal dua angka desimal.</p></div>
+    <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-date">Tanggal pelaksanaan</label><input id="remedial-date" name="remedial_date" type="date" value="{{.AssessmentRemedial.Date}}" required></div>
+    <div class="sm:col-span-2"><button class="button-primary" type="submit">Catat Remedial</button></div>
+  </form>
+  <div class="mt-8">
+    <h3 class="text-lg font-semibold text-gray-900">Riwayat Remedial</h3>
+    {{if .AssessmentRemedial.Detail.History}}
+    <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200"><table class="app-table min-w-[560px]"><thead><tr><th>Tanggal</th><th>Nilai</th><th>Dicatat oleh</th><th>Waktu pencatatan</th></tr></thead><tbody>{{range .AssessmentRemedial.Detail.History}}<tr><td>{{.Date}}</td><td class="font-semibold">{{.Value}}</td><td>{{.Actor}}</td><td>{{.Recorded}}</td></tr>{{end}}</tbody></table></div>
+    {{else}}<p class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">Belum ada remedial yang dicatat untuk nilai ini.</p>{{end}}
+  </div>
+</section>
+{{end}}

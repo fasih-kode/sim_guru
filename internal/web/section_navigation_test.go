@@ -30,6 +30,7 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 6},
 		{"nilai historis milik guru", "/guru/nilai-awal-saya", "Guru Mapel", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 6},
 		{"koreksi nilai historis", "/guru/nilai-awal/123/koreksi", "Guru Mapel", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 6},
+		{"remedial pada tab kegiatan", "/guru/nilai-awal/123/remedial", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 6},
 		{"bobot Kurikulum", "/akademik/bobot-penilaian", "Struktur Kurikulum", "curriculum-assessment-weights", "curriculum-subjects", []string{"kurikulum"}, 3},
 	}
 	for _, tc := range tests {

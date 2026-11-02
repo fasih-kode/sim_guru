@@ -57,6 +57,9 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 	if path == "/guru/kegiatan-penilaian" || strings.HasPrefix(path, "/guru/kegiatan-penilaian/") {
 		return "Guru Mapel", "assessment-activities"
 	}
+	if strings.HasPrefix(path, "/guru/nilai-awal/") && strings.HasSuffix(path, "/remedial") {
+		return "Guru Mapel", "assessment-activities"
+	}
 	if path == "/guru/nilai-awal-saya" || strings.HasPrefix(path, "/guru/nilai-awal/") {
 		return "Guru Mapel", "assessment-score-history"
 	}

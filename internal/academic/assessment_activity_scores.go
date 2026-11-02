@@ -23,6 +23,7 @@ type AssessmentScoreCell struct {
 	Value          string
 	Recorded       bool
 	CanCorrect     bool
+	CanRemediate   bool
 }
 
 type AssessmentScoreStudent struct {
@@ -111,7 +112,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		return AssessmentScoreSheet{}, err
 	}
 	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,s.name,coalesce(s.nis,''),lo.id,sc.id,
-		coalesce(latest.after_score,sc.score)::text,sc.recorded_by
+		CASE WHEN sc.id IS NULL THEN NULL ELSE greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))::text END,sc.recorded_by
 		FROM app.student_placements p JOIN app.students s ON s.id=p.student_id
 		CROSS JOIN app.assessment_activity_objectives ao
 		JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
@@ -119,6 +120,8 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 			AND sc.learning_objective_id=ao.learning_objective_id AND sc.student_id=p.student_id
 		LEFT JOIN LATERAL (SELECT c.after_score FROM app.assessment_activity_score_corrections c
 			WHERE c.initial_score_id=sc.id ORDER BY c.version DESC LIMIT 1) latest ON true
+		LEFT JOIN LATERAL (SELECT max(r.score) AS best_score FROM app.assessment_activity_score_remedials r
+			WHERE r.initial_score_id=sc.id) remedial ON true
 		WHERE ao.activity_id=$1 AND p.school_year_id=$2 AND p.starts_on IS NOT NULL AND p.starts_on<=$4::date
 		AND app.student_placement_class_at(p.id,$4::date)=$3
 		ORDER BY s.name,p.student_id,lo.id`, activityID, yearID, out.Activity.ClassID, out.Activity.Date)
@@ -145,6 +148,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		if scoreID.Valid {
 			cell.InitialScoreID = scoreID.Int64
 			cell.CanCorrect = out.Activity.TeacherID == teacherID && recordedBy.Valid && recordedBy.Int64 == actor
+			cell.CanRemediate = out.Activity.Type == "sumatif" && out.Activity.TeacherID == teacherID && recordedBy.Valid && recordedBy.Int64 == actor
 		}
 		if score.Valid {
 			cell.Value, cell.Recorded = score.String, true

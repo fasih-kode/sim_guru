@@ -88,6 +88,7 @@ type view struct {
 	AssessmentScores                    *assessmentScoresView
 	AssessmentOwnedScores               *assessmentOwnedScoresView
 	AssessmentCorrection                *assessmentCorrectionView
+	AssessmentRemedial                  *assessmentRemedialView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -176,6 +177,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 				return "assessment-activity-scores", "guru-mapel"
 			}
 			return "assessment-activities", "guru-mapel"
+		}
+		return "", ""
+	case strings.HasPrefix(path, "/guru/nilai-awal/") && strings.HasSuffix(path, "/remedial"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "assessment-activity-scores", "guru-mapel"
 		}
 		return "", ""
 	case path == "/guru/nilai-awal-saya" || strings.HasPrefix(path, "/guru/nilai-awal/"):

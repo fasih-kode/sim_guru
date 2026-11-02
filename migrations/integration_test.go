@@ -57,7 +57,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 41 {
+	if err != nil || current != target || target < 42 {
 		t.Fatal("unexpected migration version")
 	}
 	var exists bool
@@ -106,6 +106,14 @@ func TestMigrationsIntegration(t *testing.T) {
 		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_corrections_append_only' AND NOT tgisinternal)
 		AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_score_corrections'::regclass AND contype='f')`).Scan(&scoreCorrections); err != nil || !scoreCorrections {
 		t.Fatal("missing CP10-06 append-only corrections, version uniqueness, or foreign keys")
+	}
+	var scoreRemedials bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_remedials') IS NOT NULL
+		AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_score_remedials'::regclass AND contype='f')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_remedials_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_remedials_sumatif_guard' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_activity_score_remedials_score_check' AND contype='c')`).Scan(&scoreRemedials); err != nil || !scoreRemedials {
+		t.Fatal("missing CP10-07 remedial table, constraints, or immutable/sumatif triggers")
 	}
 	var historicalMappingTable, historicalMappingUnique, historicalMappingAppendOnly bool
 	if err = db.QueryRowContext(ctx, `SELECT
