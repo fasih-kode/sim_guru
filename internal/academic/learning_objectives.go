@@ -39,7 +39,7 @@ func (s *Store) LearningObjectiveContexts(ctx context.Context, actor int64) ([]L
 		JOIN app.semesters sm ON sm.id=a.semester_id
 		JOIN app.school_years y ON y.id=sm.school_year_id
 		JOIN app.classes c ON c.id=a.class_id AND c.school_year_id=sm.school_year_id
-		JOIN app.subjects s ON s.id=a.subject_id
+		JOIN app.subjects s ON s.id=a.subject_id AND s.active
 		WHERE a.teacher_id=$1
 		  AND a.effective_from <= (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date
 		  AND (a.effective_until IS NULL OR a.effective_until > (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date)
@@ -165,6 +165,7 @@ func learningObjectiveAssignment(ctx context.Context, tx *sql.Tx, teacherID, sem
 			SELECT 1 FROM app.teaching_assignments a
 			JOIN app.semesters sm ON sm.id=a.semester_id
 			JOIN app.classes c ON c.id=a.class_id AND c.school_year_id=sm.school_year_id
+			JOIN app.subjects s ON s.id=a.subject_id AND s.active
 			WHERE a.teacher_id=$1 AND a.semester_id=$2 AND a.class_id=$3 AND a.subject_id=$4
 			  AND a.effective_from <= (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date
 			  AND (a.effective_until IS NULL OR a.effective_until > (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date)

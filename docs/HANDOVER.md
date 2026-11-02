@@ -1,5 +1,13 @@
 # Handover
 
+### CP10-02 — tindak lanjut review independen (2 November 2026)
+
+Review supervisor pada Draft PR #1 meminta dua koreksi CP10-02 sebelum UAT: status mapel aktif harus menjadi bagian dari konteks serta otorisasi baca/buat TP, dan batas tanggal penugasan future/expired perlu dibuktikan dengan integration test. Keduanya telah ditangani tanpa migration: daftar konteks hanya memuat mapel aktif; helper otorisasi bersama untuk baca dan buat TP sekarang mensyaratkan mapel aktif serta penugasan berlaku pada tanggal WIB saat ini. Regression PostgreSQL memverifikasi mapel yang dinonaktifkan setelah assignment tidak bisa dibaca/dibuat TP, dan assignment masa depan maupun kedaluwarsa tidak muncul atau memberi akses baca/buat; semua penolakan tidak menambah TP.
+
+Catatan alur publikasi lama pada kontrak/prompt telah diselaraskan: checkpoint dapat di-commit dan di-push normal ke branch review sebelum review independen/UAT bila perintah checkpoint mengizinkan; merge dan deploy tetap memerlukan instruksi eksplisit. D-048/D-049 dan kontrak bisnis Fase 10 tidak berubah. Temuan supervisor tentang alasan, pemeriksaan dampak, audit, dan preservasi Final lama saat koreksi bobot setelah Final adalah gerbang sebelum Final diimplementasikan; sengaja tidak dikerjakan pada CP10-02.
+
+Verifikasi aktual patch: `go test ./internal/academic ./internal/web -count=1`, integration race `TestLearningObjectivesAreScopedToOfficialTeacherAssignmentIntegration`, `TestLearningObjectiveHTTPAssignmentAuthorizationIntegration`, `TestAssessmentWeightsAuthorizationValidationAndAuditIntegration`, dan `TestAssessmentWeightsHTTPAuthorizationAndUATFlowIntegration` PASS serial. Integration helper menegakkan target database berakhiran `_test`; database development dan UAT tidak digunakan untuk tes ini. UAT CP10-02 belum diizinkan: tunggu review ulang supervisor atas commit patch ini sebelum memberikan panduan atau menjalankan UAT pengguna. CP10-03 tidak dimulai.
+
 ## Fase 10 CP10-02 — Pengelolaan TP dasar (2 November 2026)
 
 CP10-02 tersedia secara lokal dan **siap untuk UAT pengguna; UAT belum diterima**. Lingkup hanya membuat dan membaca definisi Tujuan Pembelajaran per kelas, mata pelajaran, dan semester. Guru Mapel memilih salah satu konteks penugasan resmi yang berlaku, membuat uraian TP, lalu melihat daftar pada konteks tersebut. Tidak ada penyalinan TP, edit/koreksi TP, kegiatan asesmen, nilai, remedial, finalisasi, atau fitur checkpoint berikutnya.

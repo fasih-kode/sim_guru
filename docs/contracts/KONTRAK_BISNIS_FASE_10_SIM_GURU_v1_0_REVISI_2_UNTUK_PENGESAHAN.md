@@ -216,7 +216,7 @@ Isu bisnis pada draf sebelumnya telah diputuskan secara eksplisit:
 | Susulan pada tanggal berbeda | Tetap satu kegiatan, ada tanggal nyata per siswa; siswa pindahan yang tidak otomatis wajib ditugaskan susulan secara eksplisit | KR-07 s.d. KR-11 |
 | Komponen berbobot 0% termasuk NH | Tidak masuk rekomendasi, tidak menghambat Final normal, tidak menjadi bukti minimum pengecualian; nilai dan remedial tetap dapat dicatat | BT-05 s.d. BT-05b |
 
-**Tidak ada isu bisnis OPEN yang sengaja ditinggalkan dari daftar sebelumnya.** Dokumen ini **masih memerlukan pengesahan pengguna sebagai satu naskah** sebelum dijadikan sumber instruksi implementasi. Jika saat desain teknis ditemukan kebutuhan untuk menambah atau mengubah kewajiban akademik, jangan putuskan sendiri: kembalikan sebagai satu keputusan bisnis terfokus.
+**Tidak ada isu bisnis OPEN yang sengaja ditinggalkan dari daftar sebelumnya.** Isi bisnis Revisi 2 berstatus **FINAL dan disahkan pengguna pada 1 November 2026**. Jika saat desain teknis ditemukan kebutuhan untuk menambah atau mengubah kewajiban akademik, jangan putuskan sendiri: kembalikan sebagai satu keputusan bisnis terfokus.
 
 Detail teknis yang **bukan perubahan kebijakan** dan wajib diuji: cara menyimpan tanggal pelaksanaan per siswa dan identitas sumber penilaian, validasi penugasan resmi di server, mekanisme atomik perubahan Final, pemeriksaan dampak Kurikulum lintas kelas, penanda Perlu Ditinjau, dan pencegahan konfirmasi berbasis data kedaluwarsa.
 
@@ -224,10 +224,10 @@ Detail teknis yang **bukan perubahan kebijakan** dan wajib diuji: cara menyimpan
 
 ## 15. Gerbang pekerjaan dan larangan implementasi prematur
 
-1. Minta pengesahan pengguna atas naskah kontrak bisnis Revisi 2 yang telah dikonsolidasikan.
-2. Baru susun prompt Codex lengkap berdasarkan dokumen yang sudah disahkan.
-3. Codex melakukan audit repositori dan implementasi **lokal**, dengan pengujian sesuai acceptance criteria.
-4. Pengguna melakukan UAT langsung dan memberikan keputusan penerimaan.
-5. Setelah lulus gerbang akhir, baru commit dan push sesuai alur proyek.
+1. Kontrak Revisi 2 sudah disahkan; keputusan bisnis di dalamnya menjadi batas implementasi dan tidak boleh diubah tanpa keputusan baru.
+2. Setiap perintah hanya mengizinkan satu checkpoint kecil dengan 1–2 skenario UAT terkait. Audit, implementasi, dan pengujian dibatasi pada checkpoint yang diminta.
+3. Setelah tes checkpoint lulus, commit dan push normal ke branch review yang ditetapkan dapat dilakukan **sebelum** review kode independen dan UAT pengguna, apabila diizinkan oleh instruksi checkpoint. Tujuannya agar supervisor dapat meninjau kode sebelum UAT.
+4. Setelah publikasi checkpoint, berhenti untuk review independen dan/atau UAT yang diminta. Hasil PASS satu checkpoint tidak mengizinkan checkpoint berikutnya secara otomatis.
+5. Merge dan deployment tetap memerlukan instruksi eksplisit terpisah. Jangan force-push atau mengubah branch dasar tanpa izin.
 
-**Dokumen ini adalah artefak perumusan kontrak bisnis dalam percakapan; belum ada instruksi mengubah kode, skema database, migration, atau repository.**
+**Bagian ini mengatur urutan kerja, bukan kebijakan bisnis. Jika instruksi checkpoint terbaru menetapkan branch review, komit, dan push sebelum UAT, instruksi tersebut menggantikan catatan alur publikasi lama.**

@@ -3,7 +3,7 @@
 
 > **INSTRUKSI UNTUK CODEX DESKTOP**
 >
-> Jalankan pekerjaan di repository lokal SIM-GURU, bukan di lingkungan produksi. Pemilik aplikasi telah mengesahkan **Kontrak Bisnis Fase 10 Revisi 2 pada 1 November 2026**. Tahap diskusi kebijakan bisnis sudah selesai. Kerjakan **HANYA SATU MIKRO-CHECKPOINT PER PERINTAH**, dibatasi **1–2 skenario UAT** yang saling terkait. Setelah UI siap diuji, laporkan dan **BERHENTI untuk UAT pengguna**. Jangan mengerjakan fitur tambahan meskipun bergantung pada area yang sama. Setelah pengguna mengatakan PASS, tetap **BERHENTI**; kerjakan checkpoint berikutnya hanya jika diminta secara eksplisit. **JANGAN COMMIT, PUSH, MERGE, ATAU DEPLOY** sebelum pengguna secara eksplisit menyatakan UAT seluruh Fase 10 PASS dan mengizinkan final gate serta publikasi. Jangan meminta persetujuan ulang atas keputusan FINAL.
+> Jalankan pekerjaan di repository lokal SIM-GURU, bukan di lingkungan produksi. Pemilik aplikasi telah mengesahkan **Kontrak Bisnis Fase 10 Revisi 2 pada 1 November 2026**. Tahap diskusi kebijakan bisnis sudah selesai. Kerjakan **HANYA SATU MIKRO-CHECKPOINT PER PERINTAH**, dibatasi **1–2 skenario UAT** yang saling terkait. Jangan mengerjakan fitur tambahan meskipun bergantung pada area yang sama. Setelah review/UAT yang diminta selesai, tetap **BERHENTI**; kerjakan checkpoint berikutnya hanya jika diminta secara eksplisit. **Alur Git terbaru:** setelah implementasi dan tes checkpoint lulus, commit serta push normal ke branch review dapat diminta sebelum review independen dan UAT. Jangan merge atau deploy tanpa instruksi eksplisit; jangan force-push. Instruksi checkpoint terbaru menentukan apakah publikasi sebelum UAT diizinkan. Jangan meminta persetujuan ulang atas keputusan FINAL.
 
 ---
 
@@ -35,7 +35,7 @@ Target akhir setelah SELURUH checkpoint kelak selesai: modul Penilaian Hasil Bel
 
 **Kontrak Revisi 2 yang disahkan mengungguli isi PRD/roadmap lama apabila menyangkut aturan bisnis penilaian yang sudah diperbarui** (misalnya rumus nilai, ASTS/ASAS, bobot, pengecualian, hak koreksi Final). Jangan mengikuti aturan lama yang menuntut persetujuan Kurikulum atas seluruh koreksi Final guru. Tetap patuhi ketentuan keamanan dan `AGENTS.md`; jika ada kontradiksi keamanan/otorisasi yang benar-benar tidak dapat didamaikan, jelaskan secara spesifik sebelum tindakan berisiko.
 
-**Tugas administrasi dokumentasi di awal:** file kontrak masih bernama `...UNTUK_PENGESAHAN.md` dan mungkin memuat kalimat “belum disahkan”. **Pengguna sudah mengesahkan keseluruhan naskah pada 1 November 2026.** Perbarui **metadata status saja** menjadi `FINAL — DISAHKAN PENGGUNA, 1 November 2026` (dan catatan penunjuk pada `docs/DECISIONS.md`/`docs/HANDOVER.md` bila relevan), **tanpa mengubah pasal bisnis, formula, acceptance criteria, atau UAT**. Pertahankan path kontrak semula agar tautan tidak rusak. Dokumen yang berubah tetap **belum boleh di-commit** sebelum UAT PASS.
+**Tugas administrasi dokumentasi di awal:** file kontrak masih bernama `...UNTUK_PENGESAHAN.md` dan mungkin memuat kalimat “belum disahkan”. **Pengguna sudah mengesahkan keseluruhan naskah pada 1 November 2026.** Perbarui **metadata status saja** menjadi `FINAL — DISAHKAN PENGGUNA, 1 November 2026` (dan catatan penunjuk pada `docs/DECISIONS.md`/`docs/HANDOVER.md` bila relevan), **tanpa mengubah pasal bisnis, formula, acceptance criteria, atau UAT**. Pertahankan path kontrak semula agar tautan tidak rusak. Ikuti aturan publikasi terbaru di awal prompt: checkpoint dapat di-commit/push sebelum UAT jika instruksi checkpoint mengizinkan, sedangkan merge/deploy tetap memerlukan instruksi terpisah.
 
 Jika file kontrak tidak ditemukan atau isinya tidak sesuai, **jangan mengarang pengganti dan jangan lanjut membuat skema penilaian**. Laporkan lokasi yang dicari, hasilnya, dan blocker. Jika ditemukan keputusan lama bertentangan dengan kontrak yang telah disahkan, catat bahwa aturan terkini menang; tidak perlu bertanya ulang.
 
@@ -152,7 +152,7 @@ Siklus untuk setiap checkpoint:
 3. **UJI TERFOKUS:** satu jalur berhasil dan satu jalur gagal terkait UAT aktif, dengan bukti otomatis/browser yang nyata. Jangan menjalankan seluruh paket tes besar berulang kali untuk perubahan kecil.
 4. **SIAP UAT → STOP:** beri alamat preview, akun/role yang sesuai (tanpa rahasia), tiga hingga enam langkah klik, hasil yang diharapkan, serta daftar fitur yang **BELUM dikerjakan**.
 5. **PENGGUNA UAT:** jika FAIL, hanya perbaiki yang gagal, tes ulang, lalu berhenti lagi. Jika PASS, catat PASS untuk checkpoint tersebut **tanpa langsung mulai checkpoint berikutnya**. Tunggu instruksi eksplisit semisal 'lanjut checkpoint berikutnya'.
-6. **GIT:** selama rangkaian checkpoint tidak ada commit, push, merge, atau deploy, kecuali izin eksplisit terpisah; final gate nanti setelah seluruh Fase 10 diterima.
+6. **GIT:** patuhi instruksi checkpoint terbaru. Bila checkpoint mengizinkan publikasi untuk review independen sebelum UAT, commit dan push normal ke branch review setelah tes lulus; merge dan deploy tetap dilarang tanpa instruksi terpisah.
 
 ### Checkpoint yang diizinkan SEKARANG: CP10-01 — Pengaturan bobot dasar oleh Kurikulum
 
@@ -196,21 +196,21 @@ Pada setiap mikro-checkpoint berisi 1–2 UAT:
 1. Siapkan server lokal sehingga UI **betul-betul dapat diakses** melalui `http://127.0.0.1:18743` dengan identitas DB yang sudah diverifikasi dan dilaporkan (`sim_guru_ci_test` untuk contoh sintetis, atau `sim_guru_dev` untuk penggunaan nyata yang memang disetujui pengguna).
 2. Jangan menggunakan guru/siswa riil sebagai fixture tes. Buat data UAT sintetis hanya pada lingkungan yang memang diperuntukkan baginya, melalui mekanisme resmi aplikasi/fixture tes yang aman.
 3. Berikan **skenario klik singkat untuk pengguna**: role login, menu, urutan tindakan, contoh nilai, hasil yang diharapkan. Jelaskan mana yang bisa dicoba sekarang dan mana yang akan hadir di irisan berikutnya.
-4. **Berhenti menunggu keputusan pengguna** pada checkpoint tersebut; jangan commit/push selama UAT berjalan. Bila pengguna menemukan masalah, perbaiki bagian gagal dan jalankan tes terfokus ulang.
-5. Jika pengguna menyatakan checkpoint PASS, **catat PASS, lalu STOP**. **Jangan mulai checkpoint berikutnya tanpa perintah eksplisit pengguna.** PASS satu checkpoint bukan izin commit/push. Izin finalisasi repository hanya setelah pengguna menyatakan **UAT Fase 10 keseluruhan PASS** dan memberi instruksi lanjut final gate/commit/push.
+4. **Berhenti menunggu keputusan pengguna** pada checkpoint tersebut. Commit/push sebelum UAT hanya dilakukan jika instruksi terbaru checkpoint mengizinkannya; saat UAT berlangsung jangan menerbitkan perubahan baru tanpa instruksi. Bila pengguna menemukan masalah, perbaiki bagian gagal dan jalankan tes terfokus ulang.
+5. Jika pengguna menyatakan checkpoint PASS, **catat PASS, lalu STOP**. **Jangan mulai checkpoint berikutnya tanpa perintah eksplisit pengguna.** PASS satu checkpoint tidak otomatis mengizinkan merge/deploy atau checkpoint selanjutnya.
 6. Setelah sesi UAT sintetis selesai, pulihkan preview ke mode DEV sesuai pola proyek dan laporkan target DB; jangan tinggalkan port salah target tanpa penjelasan.
 
 ## 8. Gerbang commit, push, merge dan deploy
 
-**Sebelum UAT seluruh Fase 10 PASS:** dilarang `git commit`, `git push`, force push, PR merge, deployment, atau migrasi produksi. Perubahan tetap lokal, dengan status file yang jelas. Jika muncul alasan khusus butuh commit checkpoint, **minta izin eksplisit pengguna** terlebih dahulu; jangan menganggapnya otomatis.
+**Untuk setiap checkpoint:** ikuti instruksi publikasi pada perintah terbaru. Jika commit/push ke branch review diizinkan sebelum UAT, pastikan tes dan pemeriksaan diff lulus, tinjau file staged, lalu lakukan push normal agar supervisor dapat melakukan review kode independen. Jangan force-push. Merge dan deployment tetap memerlukan instruksi eksplisit.
 
-**Setelah pengguna menyatakan UAT seluruh Fase 10 PASS dan memerintahkan publikasi:**
+**Untuk final publikasi atau integrasi setelah UAT yang disyaratkan:**
 
 1. Lakukan final gate (tes/regresi/SQL/migrasi/review diff) yang relevan; jika FAIL, perbaiki dan lakukan UAT ulang bila perilaku berubah.
 2. Verifikasi `git status`, branch kerja, diff, file sensitif, dan tidak ada test fixture/credential/dump/data pribadi ikut ter-commit.
 3. Buat commit yang logis, dengan pesan jelas bahasa Indonesia atau sesuai konvensi repo; catat SHA.
-4. `git push` biasa ke `origin` branch kerja yang benar (historis `review/sim-guru-checkpoint`), **bukan force push**. Verifikasi remote SHA dan working tree.
-5. **Tidak** merge ke `main` dan **tidak** deploy production tanpa instruksi terpisah dari pengguna.
+4. `git push` biasa ke `origin` branch review yang secara eksplisit ditetapkan untuk pekerjaan; **bukan force push**. Verifikasi remote SHA dan working tree.
+5. **Tidak** merge ke `main` atau branch dasar dan **tidak** deploy production tanpa instruksi terpisah dari pengguna.
 
 ## 9. Format laporan wajib dari Codex (ringkas, faktual)
 
@@ -223,7 +223,7 @@ Setiap checkpoint laporkan dalam bahasa Indonesia:
 5. **Perlindungan data:** DB aktual, backup sebelum migrasi dev (bila diterapkan), dampak terhadap data lama, dan verifikasi tidak ada destructive change.
 6. **Cara UAT oleh pengguna:** tepat 1–2 skenario UAT aktif, menu/role, tiga sampai enam langkah praktis, hasil yang harus dilihat, alamat preview.
 7. **Yang belum dikerjakan / blocker:** sebutkan fitur sengaja ditunda dan kode UAT yang belum dikerjakan; jangan klaim seluruh Fase 10 selesai.
-8. **Git:** branch, `git status`, `HEAD`; tegaskan `belum commit/push/deploy` sampai izin final.
+8. **Git:** branch, `git status`, `HEAD`; laporkan commit/push sesuai izin checkpoint terbaru serta tegaskan tidak ada merge/deploy tanpa instruksi.
 
 ## 10. Instruksi eksekusi SEKARANG — HANYA CP10-01
 
@@ -236,4 +236,4 @@ Setiap checkpoint laporkan dalam bahasa Indonesia:
 5. Sampaikan **SIAP UAT — CP10-01**: alamat preview, identitas database, akun/role, langkah singkat UAT-11 dan UAT-12, hasil otomatis yang telah dijalankan, serta daftar yang belum dikerjakan.
 6. **STOP WAJIB.** Tidak ada langkah otomatis ke CP10-02. Tunggu pengguna mencoba dan memberi tanggapan. Jika PASS, tetap tunggu perintah 'lanjut' sebelum mengerjakan checkpoint berikutnya. Jika FAIL, perbaiki hanya masalah yang terkait.
 
-**Jangan commit/push/merge/deploy. Jangan klaim fitur yang belum dibangun atau UAT pengguna yang belum dilakukan sebagai PASS.**
+**Jangan merge atau deploy. Commit/push hanya jika instruksi checkpoint terbaru mengizinkannya; jangan klaim fitur yang belum dibangun atau UAT pengguna yang belum dilakukan sebagai PASS.**
