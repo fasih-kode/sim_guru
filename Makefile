@@ -1,7 +1,9 @@
-.PHONY: run build assets test integration check migrate-up migrate-status
+.PHONY: run run-uat build assets test integration check migrate-up migrate-status
 
 run:
-	APP_PORT=18743 go run ./cmd/server
+	APP_HOST=127.0.0.1 APP_PORT=18743 go run ./cmd/server
+run-uat:
+	scripts/run-uat.sh
 build:
 	go build -o bin/sim-guru ./cmd/server
 assets:
