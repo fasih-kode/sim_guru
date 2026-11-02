@@ -88,6 +88,8 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 		t.Fatal("penugasan guru pada semester berbeda", err)
 	}
 	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id IN (SELECT id FROM app.assessment_activities WHERE school_year_id=$1)`, yearID)
+		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE school_year_id=$1`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id IN ($1,$2))`, semesterID, otherSemesterID)
 		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id IN ($1,$2)`, semesterID, otherSemesterID)
@@ -191,6 +193,14 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if !strings.Contains(pageBody, "Salin definisi TP") || !strings.Contains(pageBody, "Konteks kelas tujuan") || !strings.Contains(pageBody, "value=\""+targetContextValue+"\"") {
 		t.Fatal("form salin atau konteks tujuan resmi tidak dirender")
 	}
+	activityPage, err := teacherClient.Get(server.URL + "/guru/kegiatan-penilaian?context=" + strconv.FormatInt(semesterID, 10) + ":" + strconv.FormatInt(classID, 10) + ":" + strconv.FormatInt(subjectID, 10))
+	if err != nil || activityPage.StatusCode != http.StatusOK {
+		t.Fatalf("halaman kegiatan penilaian tidak dapat dibuka: response=%v err=%v", activityPage, err)
+	}
+	activityBody := readBody(activityPage)
+	if !strings.Contains(activityBody, "Nama / bentuk kegiatan") || !strings.Contains(activityBody, "Formatif") || !strings.Contains(activityBody, "Sumatif") || !strings.Contains(activityBody, `data-navigation-tab="assessment-activities"`) {
+		t.Fatal("halaman kegiatan atau tab navigasi tidak dirender")
+	}
 	targetSelectStart := strings.Index(pageBody, `id="learning-objective-copy-target"`)
 	if targetSelectStart < 0 {
 		t.Fatal("pilihan kelas tujuan salin tidak ditemukan")
@@ -206,6 +216,41 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	var sourceObjectiveID int64
 	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, semesterID, classID, subjectID).Scan(&sourceObjectiveID); err != nil {
 		t.Fatal("baca ID TP sumber fixture", err)
+	}
+	activityValues := url.Values{
+		"semester_id": {strconv.FormatInt(semesterID, 10)}, "class_id": {strconv.FormatInt(classID, 10)},
+		"subject_id": {strconv.FormatInt(subjectID, 10)}, "name": {"Formatif HTTP"}, "activity_type": {"formatif"},
+		"activity_date": {"2026-11-02"}, "objective_ids": {strconv.FormatInt(sourceObjectiveID, 10)},
+	}
+	activityNoCSRF, err := teacherClient.PostForm(server.URL+"/guru/kegiatan-penilaian", activityValues)
+	if err != nil || activityNoCSRF.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST kegiatan tanpa CSRF harus ditolak: response=%v err=%v", activityNoCSRF, err)
+	}
+	_ = activityNoCSRF.Body.Close()
+	activityValues.Set("gorilla.csrf.Token", teacherCSRF)
+	activityPost, err := teacherClient.PostForm(server.URL+"/guru/kegiatan-penilaian", activityValues)
+	if err != nil || activityPost.StatusCode != http.StatusSeeOther {
+		t.Fatalf("POST kegiatan valid gagal: response=%v err=%v", activityPost, err)
+	}
+	activityLocation := serverPathForLocation(activityPost.Header.Get("Location"))
+	_ = activityPost.Body.Close()
+	activityPage, err = teacherClient.Get(server.URL + activityLocation)
+	if err != nil || activityPage.StatusCode != http.StatusOK || !strings.Contains(readBody(activityPage), "Formatif HTTP") {
+		t.Fatalf("kegiatan tidak tampil setelah redirect/refresh: response=%v err=%v", activityPage, err)
+	}
+	var activityCountBefore int
+	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activities WHERE school_year_id=$1`, yearID).Scan(&activityCountBefore); err != nil || activityCountBefore != 1 {
+		t.Fatalf("jumlah kegiatan sebelum uji lintas assignment=%d err=%v", activityCountBefore, err)
+	}
+	activityValues.Set("class_id", strconv.FormatInt(otherClassID, 10))
+	deniedActivity, err := teacherClient.PostForm(server.URL+"/guru/kegiatan-penilaian", activityValues)
+	if err != nil || deniedActivity.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST kegiatan pada penugasan guru lain harus ditolak: response=%v err=%v", deniedActivity, err)
+	}
+	_ = deniedActivity.Body.Close()
+	var activityCountAfter int
+	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activities WHERE school_year_id=$1`, yearID).Scan(&activityCountAfter); err != nil || activityCountAfter != activityCountBefore {
+		t.Fatalf("POST lintas penugasan meninggalkan kegiatan: sebelum=%d sesudah=%d err=%v", activityCountBefore, activityCountAfter, err)
 	}
 	copyValues := url.Values{
 		"source_id":      {strconv.FormatInt(sourceObjectiveID, 10)},

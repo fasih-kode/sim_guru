@@ -54,6 +54,9 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 	if path == "/guru/tujuan-pembelajaran" {
 		return "Guru Mapel", "learning-objectives"
 	}
+	if path == "/guru/kegiatan-penilaian" {
+		return "Guru Mapel", "assessment-activities"
+	}
 	if path != "/jadwal-saya" && !strings.HasPrefix(path, "/jadwal-saya/") {
 		return "", ""
 	}
@@ -203,6 +206,7 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 			{ID: "lesson-attendance", Label: "Absensi Pelajaran", Href: "/jadwal-saya/absensi", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h5m3 2 1.5 1.5L20 14" stroke-linecap="round" stroke-linejoin="round"/>`},
 			{ID: "teaching-journal", Label: "Jurnal Mengajar", Href: "/jurnal-saya", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v18H7.5A2.5 2.5 0 0 0 5 22V4.5ZM5 5h12m-9 4h8m-8 4h8m-8 4h5" stroke-linecap="round" stroke-linejoin="round"/>`},
 			navigationTab{ID: "learning-objectives", Label: "Tujuan Pembelajaran", Href: "/guru/tujuan-pembelajaran", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke-linecap="round" stroke-linejoin="round"/>`},
+			navigationTab{ID: "assessment-activities", Label: "Kegiatan Penilaian", Href: "/guru/kegiatan-penilaian", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2Zm2 5h8m-8 4h8m-8 4h5" stroke-linecap="round" stroke-linejoin="round"/>`},
 		}
 	case "Penanganan Kehadiran Guru":
 		if user == nil || !user.HasRole("pengelola_kehadiran_guru") {

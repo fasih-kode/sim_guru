@@ -109,6 +109,7 @@ func TestSidebarKeepsActiveRoleMenuExpanded(t *testing.T) {
 		{name: "wali kelas rekap pribadi", path: "/kehadiran-saya/rekap", active: "teacher-recap", group: "teacher-attendance", roles: []string{"wali_kelas"}},
 		{name: "guru mapel jadwal", path: "/jadwal-saya", active: "my-schedule", group: "guru-mapel", roles: []string{"guru_mapel"}},
 		{name: "guru mapel detail absensi", path: "/jadwal-saya/absensi/catatan/3", active: "lesson-attendance", group: "guru-mapel", roles: []string{"guru_mapel"}},
+		{name: "guru mapel kegiatan penilaian", path: "/guru/kegiatan-penilaian", active: "assessment-activities", group: "guru-mapel", roles: []string{"guru_mapel"}},
 		{name: "kurikulum mengoreksi absensi", path: "/jadwal-saya/absensi", active: "lesson-attendance", group: "curriculum-schedule", roles: []string{"kurikulum"}},
 		{name: "kurikulum guru mapel route bersama", path: "/jadwal-saya/absensi", active: "lesson-attendance", group: "guru-mapel", roles: []string{"kurikulum", "guru_mapel"}},
 		{name: "pengelola recap terpisah dari recap pribadi", path: "/tu/kehadiran-guru/rekap", active: "managed-teacher-recap", group: "teacher-attendance-management", roles: []string{"guru_mapel", "pegawai_tu", "pengelola_kehadiran_guru"}},
