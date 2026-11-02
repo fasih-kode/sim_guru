@@ -146,8 +146,8 @@ func (s *Store) CreateLearningObjective(ctx context.Context, actor int64, semest
 
 // CopyLearningObjective menyalin uraian TP ke kelas lain yang sedang diampu aktor.
 // Konteks sumber dan tujuan diperiksa kembali dalam transaksi yang sama.
-func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, targetSemesterID, targetClassID, targetSubjectID int64) (int64, error) {
-	if sourceID < 1 || targetSemesterID < 1 || targetClassID < 1 || targetSubjectID < 1 {
+func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, sourceContextSemesterID, sourceContextClassID, sourceContextSubjectID, targetSemesterID, targetClassID, targetSubjectID int64) (int64, error) {
+	if sourceID < 1 || sourceContextSemesterID < 1 || sourceContextClassID < 1 || sourceContextSubjectID < 1 || targetSemesterID < 1 || targetClassID < 1 || targetSubjectID < 1 {
 		return 0, ValidationError("Pilih TP sumber dan konteks kelas tujuan yang valid.")
 	}
 	tx, err := s.begin(ctx, actor, "guru_mapel")
@@ -172,6 +172,9 @@ func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, targ
 	if err != nil {
 		return 0, err
 	}
+	if sourceSemesterID != sourceContextSemesterID || sourceClassID != sourceContextClassID || sourceSubjectID != sourceContextSubjectID {
+		return 0, ErrForbidden
+	}
 	allowed, err := learningObjectiveAssignment(ctx, tx, teacherID, sourceSemesterID, sourceClassID, sourceSubjectID)
 	if err != nil {
 		return 0, err
@@ -188,6 +191,9 @@ func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, targ
 	}
 	if !allowed {
 		return 0, ErrForbidden
+	}
+	if sourceSemesterID != targetSemesterID || sourceSubjectID != targetSubjectID {
+		return 0, ValidationError("Kelas tujuan harus memakai semester dan mata pelajaran yang sama dengan TP sumber.")
 	}
 	var targetYearID int64
 	err = tx.QueryRowContext(ctx, `SELECT school_year_id FROM app.semesters WHERE id=$1`, targetSemesterID).Scan(&targetYearID)

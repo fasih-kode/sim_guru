@@ -23,7 +23,7 @@ func TestLearningObjectiveDefinitionValidation(t *testing.T) {
 
 func TestCopyLearningObjectiveRejectsIncompleteIdentifiers(t *testing.T) {
 	store := &Store{}
-	if _, err := store.CopyLearningObjective(context.Background(), 1, 0, 2, 3, 4); err == nil {
+	if _, err := store.CopyLearningObjective(context.Background(), 1, 0, 2, 3, 4, 5, 6, 7); err == nil {
 		t.Fatal("ID TP sumber kosong harus ditolak sebelum mengakses database")
 	} else {
 		var validation ValidationError

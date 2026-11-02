@@ -105,7 +105,7 @@ func (a *application) copyLearningObjective(w http.ResponseWriter, r *http.Reque
 		page(http.StatusUnprocessableEntity, "Pilih TP sumber dan konteks kelas tujuan yang valid.")
 		return
 	}
-	_, err = a.options.Academics.CopyLearningObjective(r.Context(), actor, sourceID, targetSemesterID, targetClassID, targetSubjectID)
+	_, err = a.options.Academics.CopyLearningObjective(r.Context(), actor, sourceID, sourceSemesterID, sourceClassID, sourceSubjectID, targetSemesterID, targetClassID, targetSubjectID)
 	if err != nil {
 		code, message := academicError(err)
 		if loadErr := loadLearningObjectiveContext(r, a, actor, data, sourceSemesterID, sourceClassID, sourceSubjectID); loadErr != nil {
@@ -127,7 +127,7 @@ func loadLearningObjectiveContext(r *http.Request, a *application, actor int64, 
 	}
 	data.CopyTargets = nil
 	for _, item := range data.Contexts {
-		if item.ClassID != classID {
+		if item.ClassID != classID && item.SemesterID == semesterID && item.SubjectID == subjectID {
 			data.CopyTargets = append(data.CopyTargets, item)
 		}
 	}

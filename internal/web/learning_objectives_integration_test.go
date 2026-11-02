@@ -30,11 +30,14 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	teacher, teacherPassword := testutil.User(t, db, "guru_mapel")
 	otherTeacher, otherPassword := testutil.User(t, db, "guru_mapel")
 	random := testutil.Random(t)[:10]
-	var yearID, semesterID, classID, otherClassID, copyClassID, subjectID int64
+	var yearID, semesterID, otherSemesterID, classID, otherClassID, copyClassID, differentSubjectClassID, differentSemesterClassID, subjectID, otherSubjectID int64
 	if err := db.QueryRow(`INSERT INTO app.school_years(name) VALUES($1) RETURNING id`, "TP HTTP "+random).Scan(&yearID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,1) RETURNING id`, yearID).Scan(&semesterID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,2) RETURNING id`, yearID).Scan(&otherSemesterID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'A') RETURNING id`, yearID).Scan(&classID); err != nil {
@@ -46,7 +49,16 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'C') RETURNING id`, yearID).Scan(&copyClassID); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'D') RETURNING id`, yearID).Scan(&differentSubjectClassID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,8,'E') RETURNING id`, yearID).Scan(&differentSemesterClassID); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "TPH-"+random, "Mapel TP HTTP "+random).Scan(&subjectID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "TPH2-"+random, "Mapel TP HTTP lain "+random).Scan(&otherSubjectID); err != nil {
 		t.Fatal(err)
 	}
 	masters := &master.Store{DB: db}
@@ -69,18 +81,24 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, copyClassID, subjectID, teacherIdentity.ID, effectiveFrom); err != nil {
 		t.Fatal("penugasan guru untuk kelas tujuan salin", err)
 	}
+	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, differentSubjectClassID, otherSubjectID, teacherIdentity.ID, effectiveFrom); err != nil {
+		t.Fatal("penugasan guru pada mata pelajaran berbeda", err)
+	}
+	if err = service.AssignTeacher(ctx, curriculum.ID, otherSemesterID, differentSemesterClassID, subjectID, teacherIdentity.ID, effectiveFrom); err != nil {
+		t.Fatal("penugasan guru pada semester berbeda", err)
+	}
 	t.Cleanup(func() {
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
-		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id=$1)`, semesterID)
-		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id=$1`, semesterID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id IN ($1,$2))`, semesterID, otherSemesterID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id IN ($1,$2)`, semesterID, otherSemesterID)
 		for _, teacherID := range []int64{teacherIdentity.ID, otherIdentity.ID} {
 			_, _ = db.Exec(`DELETE FROM app.teacher_history WHERE entity_id=$1`, teacherID)
 			_, _ = db.Exec(`DELETE FROM app.teachers WHERE id=$1`, teacherID)
 		}
-		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code=$1`, "TPH-"+random)
-		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id=$1`, subjectID)
-		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id=$1`, semesterID)
-		_, _ = db.Exec(`DELETE FROM app.classes WHERE id IN ($1,$2,$3)`, classID, otherClassID, copyClassID)
+		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code IN ($1,$2)`, "TPH-"+random, "TPH2-"+random)
+		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id IN ($1,$2)`, subjectID, otherSubjectID)
+		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id IN ($1,$2)`, semesterID, otherSemesterID)
+		_, _ = db.Exec(`DELETE FROM app.classes WHERE id IN ($1,$2,$3,$4,$5)`, classID, otherClassID, copyClassID, differentSubjectClassID, differentSemesterClassID)
 		_, _ = db.Exec(`DELETE FROM app.school_years WHERE id=$1`, yearID)
 		for _, userID := range []int64{admin.ID, curriculum.ID, teacher.ID, otherTeacher.ID} {
 			for _, q := range []string{`DELETE FROM app.sessions WHERE user_id=$1`, `DELETE FROM app.access_audit WHERE actor_id=$1 OR target_id=$1`, `DELETE FROM app.user_roles WHERE user_id=$1`, `DELETE FROM app.users WHERE id=$1`} {
@@ -173,6 +191,18 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	if !strings.Contains(pageBody, "Salin definisi TP") || !strings.Contains(pageBody, "Konteks kelas tujuan") || !strings.Contains(pageBody, "value=\""+targetContextValue+"\"") {
 		t.Fatal("form salin atau konteks tujuan resmi tidak dirender")
 	}
+	targetSelectStart := strings.Index(pageBody, `id="learning-objective-copy-target"`)
+	if targetSelectStart < 0 {
+		t.Fatal("pilihan kelas tujuan salin tidak ditemukan")
+	}
+	targetSelectEnd := strings.Index(pageBody[targetSelectStart:], "</select>")
+	if targetSelectEnd < 0 {
+		t.Fatal("pilihan kelas tujuan salin tidak tertutup")
+	}
+	targetSelect := pageBody[targetSelectStart : targetSelectStart+targetSelectEnd]
+	if !strings.Contains(targetSelect, `value="`+targetContextValue+`"`) || strings.Contains(targetSelect, `value="`+strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(differentSubjectClassID, 10)+":"+strconv.FormatInt(otherSubjectID, 10)+`"`) || strings.Contains(targetSelect, `value="`+strconv.FormatInt(otherSemesterID, 10)+":"+strconv.FormatInt(differentSemesterClassID, 10)+":"+strconv.FormatInt(subjectID, 10)+`"`) {
+		t.Fatal("daftar tujuan harus membatasi kelas pada semester dan mata pelajaran sumber")
+	}
 	var sourceObjectiveID int64
 	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, semesterID, classID, subjectID).Scan(&sourceObjectiveID); err != nil {
 		t.Fatal("baca ID TP sumber fixture", err)
@@ -201,6 +231,44 @@ func TestLearningObjectiveHTTPAssignmentAuthorizationIntegration(t *testing.T) {
 	targetBody := readBody(targetPage)
 	if !strings.Contains(targetBody, "TP HTTP yang sah") || !strings.Contains(targetBody, "Definisi TP berhasil disalin") {
 		t.Fatal("TP hasil salin tidak tampil pada tujuan dengan konfirmasi")
+	}
+	var copiedObjectiveID int64
+	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, semesterID, copyClassID, subjectID).Scan(&copiedObjectiveID); err != nil {
+		t.Fatal("baca TP konteks tujuan untuk uji manipulasi sumber", err)
+	}
+	var objectiveCount int
+	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&objectiveCount); err != nil {
+		t.Fatal("hitung TP sebelum uji konteks manipulasi", err)
+	}
+	copyValues.Set("source_id", strconv.FormatInt(copiedObjectiveID, 10))
+	copyValues.Set("target_context", strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(copyClassID, 10)+":"+strconv.FormatInt(subjectID, 10))
+	manipulatedSource, err := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+	if err != nil || manipulatedSource.StatusCode != http.StatusForbidden {
+		t.Fatalf("ID sumber dari konteks lain yang juga dimiliki harus ditolak: response=%v err=%v", manipulatedSource, err)
+	}
+	_ = manipulatedSource.Body.Close()
+	var countAfterSourceMismatch int
+	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&countAfterSourceMismatch); err != nil || countAfterSourceMismatch != objectiveCount {
+		t.Fatalf("ID sumber yang tidak cocok konteks tidak boleh membuat TP: sebelum=%d sesudah=%d err=%v", objectiveCount, countAfterSourceMismatch, err)
+	}
+	copyValues.Set("source_id", strconv.FormatInt(sourceObjectiveID, 10))
+	for _, target := range []struct {
+		name    string
+		context string
+	}{
+		{name: "mata pelajaran berbeda", context: strconv.FormatInt(semesterID, 10) + ":" + strconv.FormatInt(differentSubjectClassID, 10) + ":" + strconv.FormatInt(otherSubjectID, 10)},
+		{name: "semester berbeda", context: strconv.FormatInt(otherSemesterID, 10) + ":" + strconv.FormatInt(differentSemesterClassID, 10) + ":" + strconv.FormatInt(subjectID, 10)},
+	} {
+		copyValues.Set("target_context", target.context)
+		invalidTarget, postErr := teacherClient.PostForm(server.URL+"/guru/tujuan-pembelajaran/salin", copyValues)
+		if postErr != nil || invalidTarget.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("POST tujuan %s harus ditolak sebagai validasi: response=%v err=%v", target.name, invalidTarget, postErr)
+		}
+		_ = invalidTarget.Body.Close()
+		var countAfter int
+		if err = db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&countAfter); err != nil || countAfter != objectiveCount {
+			t.Fatalf("POST tujuan %s tidak boleh membuat TP parsial: sebelum=%d sesudah=%d err=%v", target.name, objectiveCount, countAfter, err)
+		}
 	}
 	copyValues.Set("gorilla.csrf.Token", teacherCSRF)
 	copyValues.Set("target_context", strconv.FormatInt(semesterID, 10)+":"+strconv.FormatInt(otherClassID, 10)+":"+strconv.FormatInt(subjectID, 10))

@@ -20,15 +20,18 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 	teacherUser, _ := testutil.User(t, db, "guru_mapel")
 	otherTeacherUser, _ := testutil.User(t, db, "guru_mapel")
 	suffix := testutil.Random(t)[:10]
-	var yearID, semesterID int64
+	var yearID, semesterID, otherSemesterID int64
 	if err := db.QueryRow(`INSERT INTO app.school_years(name) VALUES($1) RETURNING id`, "Salin TP "+suffix).Scan(&yearID); err != nil {
 		t.Fatal("tahun ajaran sintetis", err)
 	}
 	if err := db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,1) RETURNING id`, yearID).Scan(&semesterID); err != nil {
 		t.Fatal("semester sintetis", err)
 	}
+	if err := db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,2) RETURNING id`, yearID).Scan(&otherSemesterID); err != nil {
+		t.Fatal("semester kedua sintetis", err)
+	}
 	classIDs := map[string]int64{}
-	for _, name := range []string{"Sumber", "Tujuan", "MilikLain", "MasaDepan", "Kedaluwarsa", "MapelNonaktif"} {
+	for _, name := range []string{"Sumber", "Tujuan", "MilikLain", "MasaDepan", "Kedaluwarsa", "MapelNonaktif", "BedaMapel", "BedaSemester"} {
 		var classID int64
 		if err := db.QueryRow(`INSERT INTO app.classes(school_year_id,grade,name) VALUES($1,7,$2) RETURNING id`, yearID, name+suffix).Scan(&classID); err != nil {
 			t.Fatalf("kelas %s: %v", name, err)
@@ -36,7 +39,7 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 		classIDs[name] = classID
 	}
 	subjects := map[string]int64{}
-	for _, name := range []string{"Aktif", "Nonaktif"} {
+	for _, name := range []string{"Aktif", "Nonaktif", "Lain"} {
 		var subjectID int64
 		if err := db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "COPY-"+name+"-"+suffix, "Mapel Salin "+name+" "+suffix).Scan(&subjectID); err != nil {
 			t.Fatalf("mata pelajaran %s: %v", name, err)
@@ -70,6 +73,12 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classIDs["MapelNonaktif"], subjects["Nonaktif"], ownerIdentity.ID, from); err != nil {
 		t.Fatal("penugasan mapel sebelum dinonaktifkan", err)
 	}
+	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classIDs["BedaMapel"], subjects["Lain"], ownerIdentity.ID, from); err != nil {
+		t.Fatal("penugasan beda mata pelajaran", err)
+	}
+	if err = store.AssignTeacher(ctx, curriculum.ID, otherSemesterID, classIDs["BedaSemester"], subjects["Aktif"], ownerIdentity.ID, from); err != nil {
+		t.Fatal("penugasan beda semester", err)
+	}
 	var expiredAssignmentID int64
 	if err = db.QueryRow(`SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2`, semesterID, classIDs["Kedaluwarsa"]).Scan(&expiredAssignmentID); err != nil {
 		t.Fatal("baca assignment kedaluwarsa", err)
@@ -88,16 +97,16 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 	}
 	t.Cleanup(func() {
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
-		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id=$1)`, semesterID)
-		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id=$1`, semesterID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id IN ($1,$2))`, semesterID, otherSemesterID)
+		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id IN ($1,$2)`, semesterID, otherSemesterID)
 		for _, teacherID := range []int64{ownerIdentity.ID, otherIdentity.ID} {
 			_, _ = db.Exec(`DELETE FROM app.teacher_history WHERE entity_id=$1`, teacherID)
 			_, _ = db.Exec(`DELETE FROM app.teachers WHERE id=$1`, teacherID)
 		}
-		_, _ = db.Exec(`DELETE FROM app.subject_history WHERE entity_id=$1`, subjects["Nonaktif"])
-		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code IN ($1,$2)`, "COPY-Aktif-"+suffix, "COPY-Nonaktif-"+suffix)
-		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id IN ($1,$2)`, subjects["Aktif"], subjects["Nonaktif"])
-		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id=$1`, semesterID)
+		_, _ = db.Exec(`DELETE FROM app.subject_history WHERE entity_id IN ($1,$2)`, subjects["Nonaktif"], subjects["Lain"])
+		_, _ = db.Exec(`DELETE FROM app.subject_codes WHERE code IN ($1,$2,$3)`, "COPY-Aktif-"+suffix, "COPY-Nonaktif-"+suffix, "COPY-Lain-"+suffix)
+		_, _ = db.Exec(`DELETE FROM app.subjects WHERE id IN ($1,$2,$3)`, subjects["Aktif"], subjects["Nonaktif"], subjects["Lain"])
+		_, _ = db.Exec(`DELETE FROM app.semesters WHERE id IN ($1,$2)`, semesterID, otherSemesterID)
 		for _, classID := range classIDs {
 			_, _ = db.Exec(`DELETE FROM app.classes WHERE id=$1`, classID)
 		}
@@ -126,7 +135,7 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 	if err != nil || len(otherRows) != 1 {
 		t.Fatalf("baca TP pembanding: rows=%v err=%v", otherRows, err)
 	}
-	copiedID, err := store.CopyLearningObjective(ctx, teacherUser.ID, sourceRows[0].ID, semesterID, classIDs["Tujuan"], subjects["Aktif"])
+	copiedID, err := store.CopyLearningObjective(ctx, teacherUser.ID, sourceRows[0].ID, semesterID, classIDs["Sumber"], subjects["Aktif"], semesterID, classIDs["Tujuan"], subjects["Aktif"])
 	if err != nil || copiedID == sourceRows[0].ID {
 		t.Fatalf("penyalinan sah harus menghasilkan TP baru: id=%d err=%v", copiedID, err)
 	}
@@ -150,25 +159,32 @@ func TestCopyLearningObjectiveUsesOnlyDefinitionAndChecksBothAssignmentsIntegrat
 	}
 
 	for _, denied := range []struct {
-		name            string
-		sourceID        int64
-		targetClassID   int64
-		targetSubjectID int64
-		wantValidation  bool
+		name             string
+		sourceID         int64
+		sourceSemesterID int64
+		sourceClassID    int64
+		sourceSubjectID  int64
+		targetSemesterID int64
+		targetClassID    int64
+		targetSubjectID  int64
+		wantValidation   bool
 	}{
-		{name: "sumber guru lain", sourceID: otherRows[0].ID, targetClassID: classIDs["Tujuan"], targetSubjectID: subjects["Aktif"]},
-		{name: "tujuan guru lain", sourceID: sourceRows[0].ID, targetClassID: classIDs["MilikLain"], targetSubjectID: subjects["Aktif"]},
-		{name: "penugasan masa depan", sourceID: sourceRows[0].ID, targetClassID: classIDs["MasaDepan"], targetSubjectID: subjects["Aktif"]},
-		{name: "penugasan kedaluwarsa", sourceID: sourceRows[0].ID, targetClassID: classIDs["Kedaluwarsa"], targetSubjectID: subjects["Aktif"]},
-		{name: "mata pelajaran nonaktif", sourceID: sourceRows[0].ID, targetClassID: classIDs["MapelNonaktif"], targetSubjectID: subjects["Nonaktif"]},
-		{name: "kelas tujuan sama", sourceID: sourceRows[0].ID, targetClassID: classIDs["Sumber"], targetSubjectID: subjects["Aktif"], wantValidation: true},
+		{name: "sumber guru lain", sourceID: otherRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["MilikLain"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["Tujuan"], targetSubjectID: subjects["Aktif"]},
+		{name: "ID sumber dari konteks lain yang juga dimiliki", sourceID: copiedID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["Tujuan"], targetSubjectID: subjects["Aktif"]},
+		{name: "tujuan guru lain", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["MilikLain"], targetSubjectID: subjects["Aktif"]},
+		{name: "penugasan masa depan", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["MasaDepan"], targetSubjectID: subjects["Aktif"]},
+		{name: "penugasan kedaluwarsa", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["Kedaluwarsa"], targetSubjectID: subjects["Aktif"]},
+		{name: "mata pelajaran nonaktif", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["MapelNonaktif"], targetSubjectID: subjects["Nonaktif"]},
+		{name: "tujuan beda mata pelajaran", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["BedaMapel"], targetSubjectID: subjects["Lain"], wantValidation: true},
+		{name: "tujuan beda semester", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: otherSemesterID, targetClassID: classIDs["BedaSemester"], targetSubjectID: subjects["Aktif"], wantValidation: true},
+		{name: "kelas tujuan sama", sourceID: sourceRows[0].ID, sourceSemesterID: semesterID, sourceClassID: classIDs["Sumber"], sourceSubjectID: subjects["Aktif"], targetSemesterID: semesterID, targetClassID: classIDs["Sumber"], targetSubjectID: subjects["Aktif"], wantValidation: true},
 	} {
 		t.Run(denied.name, func(t *testing.T) {
 			var before int
 			if err := db.QueryRow(`SELECT count(*) FROM app.learning_objectives WHERE school_year_id=$1`, yearID).Scan(&before); err != nil {
 				t.Fatal(err)
 			}
-			_, copyErr := store.CopyLearningObjective(ctx, teacherUser.ID, denied.sourceID, semesterID, denied.targetClassID, denied.targetSubjectID)
+			_, copyErr := store.CopyLearningObjective(ctx, teacherUser.ID, denied.sourceID, denied.sourceSemesterID, denied.sourceClassID, denied.sourceSubjectID, denied.targetSemesterID, denied.targetClassID, denied.targetSubjectID)
 			if denied.wantValidation {
 				var validation ValidationError
 				if !errors.As(copyErr, &validation) {
