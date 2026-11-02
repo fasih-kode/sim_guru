@@ -1,0 +1,101 @@
+{{define "teacher-attendance"}}
+{{if not .TeacherAttendance.PersonalOnly}}<div class="mb-5 flex flex-wrap gap-3"><a class="button-primary" href="/kehadiran-saya/laporan?new=1">Buat Laporan</a><a class="button-secondary" href="/kehadiran-saya/laporan">Riwayat Laporan Saya</a></div>{{end}}
+<section data-teacher-attendance data-response-error="{{.Error}}" data-response-message="{{.Message}}">
+  <section class="panel mb-5" data-teacher-attendance-context>
+    <h2 class="mb-2 text-xl font-semibold">{{.TeacherAttendance.Day.TeacherName}}</h2>
+    <p class="text-sm text-gray-500">{{.TeacherAttendance.Day.Date}} · WIB</p>
+    {{with .TeacherAttendance.Evaluation}}
+    <div class="mt-5" aria-label="Ringkasan status hari ini">
+      <h2 class="text-lg font-semibold">Status hari ini</h2>
+      <p class="mt-3">{{template "teacher-recap-status" .}}</p>
+      {{if .Required}}<p class="mt-3">Kewajiban mengajar: {{.StartsAt.Format "15:04"}}–{{.EndsAt.Format "15:04"}} WIB</p>{{end}}
+      <p class="mt-3 text-sm text-gray-500">{{.Explanation}}</p>
+      {{if .NeedsReview}}<p class="mt-3">Perlu pemeriksaan administratif: bukti dan laporan tetap tersimpan.</p>{{end}}
+      <a class="button-secondary mt-4" href="/kehadiran-saya/rekap">Lihat rekap dan dasar penilaian</a>
+    </div>
+    {{end}}
+    <p class="mt-4 text-sm text-gray-500">Catat Masuk dan Pulang dengan lokasi serta selfie langsung. Jika GPS atau kamera bermasalah, minta bantuan TU Pengelola Kehadiran Guru.</p>
+    {{if not .TeacherAttendance.Available}}<p class="mt-4 text-sm text-error-600" role="alert">Kehadiran mandiri belum tersedia. Hubungi TU Pengelola Kehadiran Guru.</p>{{end}}
+    {{if not .TeacherAttendance.PersonalOnly}}<a class="button-secondary mt-4" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi</a>{{end}}
+  </section>
+  <p class="mb-4 text-sm" role="status" data-attendance-result hidden></p>
+  <div class="mb-5 grid gap-5 sm:grid-cols-2" data-teacher-attendance-status tabindex="-1" aria-label="Status kehadiran terbaru">
+    <section class="panel" id="attendance-check-in" tabindex="-1">
+      <h2 class="mb-4 text-lg font-semibold">Masuk</h2>
+      {{with .TeacherAttendance.CheckIn}}
+        <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
+        <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat TU{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
+      {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
+      <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_in" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckIn}}disabled{{end}}>Catat Masuk</button>
+    </section>
+    <section class="panel" id="attendance-check-out" tabindex="-1">
+      <h2 class="mb-4 text-lg font-semibold">Pulang</h2>
+      {{with .TeacherAttendance.CheckOut}}
+        <p class="mb-3"><span class="status-badge status-badge--active">Sudah Dicatat</span></p>
+        <p class="text-2xl font-semibold">{{.OccurredAt.Format "15:04"}} <span class="text-sm">WIB</span></p>
+        <p class="mt-2 text-sm text-gray-500">{{if eq .Source "manual"}}Dicatat TU{{else}}GPS dan selfie{{end}}</p>
+        <p class="mt-2 text-xs text-gray-500">Waktu rekam: {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>
+      {{else}}<p class="mb-4"><span class="status-badge status-badge--inactive">Belum Dicatat</span></p>{{end}}
+      <button type="button" class="button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50" data-attendance-action="check_out" {{if or (not .TeacherAttendance.Available) .TeacherAttendance.CheckOut}}disabled{{end}}>Catat Pulang</button>
+    </section>
+  </div>
+  <p class="mb-5 text-sm text-gray-500">Pulang tetap dapat dicatat meskipun Masuk belum dicatat. Waktu mengikuti server dan ditampilkan dalam WIB.</p>
+  <noscript><p role="alert">Aktifkan JavaScript untuk menggunakan GPS dan kamera, atau hubungi TU Pengelola Kehadiran Guru.</p></noscript>
+  <dialog class="form-modal" id="teacher-attendance-modal" aria-labelledby="teacher-attendance-heading" data-teacher-attendance-modal>
+    <div class="form-modal-card">
+      <div class="form-modal-heading">
+        <h2 id="teacher-attendance-heading" data-attendance-heading>Catat Kehadiran</h2>
+        <button class="form-modal-close" type="button" data-attendance-cancel aria-label="Tutup dialog kehadiran">×</button>
+      </div>
+      <form method="post" action="/kehadiran-saya" enctype="multipart/form-data" data-attendance-form>
+        {{.CSRF}}
+        <p class="mb-4 text-sm text-gray-500">Pastikan Anda berada di sekolah. Foto diambil sekarang dan dikirim setelah Anda menekan Konfirmasi.</p>
+        <div class="mb-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-red-900" role="alert" aria-live="assertive" data-attendance-error hidden>
+          <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-red-100 text-red-700" aria-hidden="true">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v5m0 3h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div class="min-w-0">
+            <p class="font-semibold" data-attendance-error-title>Absensi belum dapat dicatat</p>
+            <p class="mt-1 text-sm" data-attendance-error-message></p>
+            <p class="mt-2 text-sm" data-attendance-error-guidance hidden></p>
+          </div>
+        </div>
+        <div class="mb-4 flex flex-wrap gap-3">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-location>Ambil lokasi</button>
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-camera>Buka kamera</button>
+        </div>
+        <p class="mb-3 text-sm text-gray-500" role="status" aria-live="polite" data-attendance-location-status>Lokasi belum diambil.</p>
+        <video class="mb-4 max-h-64 w-full rounded-xl bg-gray-900 object-contain" autoplay playsinline muted data-attendance-video hidden></video>
+        <canvas class="mb-4 max-h-64 w-full rounded-xl bg-gray-900 object-contain" data-attendance-preview hidden aria-label="Pratinjau selfie Anda"></canvas>
+        <div class="mb-4 flex flex-wrap gap-3">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-take disabled>Ambil Foto</button>
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-retake disabled>Ulangi Foto</button>
+        </div>
+        <p class="mb-4 text-sm text-gray-500" role="status" aria-live="polite" data-attendance-progress>Selfie belum diambil.</p>
+        <div class="form-modal-actions">
+          <button type="button" class="button-secondary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-cancel>Batal</button>
+          <button type="submit" class="button-primary disabled:cursor-not-allowed disabled:opacity-50" data-attendance-confirm disabled>Konfirmasi</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  {{if .TeacherAttendance.RequestOpen}}
+  <dialog class="form-modal" id="teacher-attendance-request-modal" data-form-modal data-modal-open-on-load aria-labelledby="teacher-attendance-request-title">
+    <div class="form-modal-card"><div class="form-modal-heading"><h2 id="teacher-attendance-request-title">Permintaan pelengkapan / koreksi</h2><a class="form-modal-close" href="/kehadiran-saya" aria-label="Tutup dialog">×</a></div>
+      {{if .Error}}{{template "notification-error" .Error}}{{end}}
+      <p class="mb-4 text-sm text-gray-500">Permintaan hanya dikirim kepada TU. Catatan kehadiran tidak berubah sampai TU melakukan tindakan yang berwenang.</p>
+      <form method="post" action="/kehadiran-saya/permintaan" class="space-y-4">{{.CSRF}}
+        <div><label for="attendance-request-date">Tanggal kejadian</label><input id="attendance-request-date" type="date" name="on_date" value="{{.TeacherAttendance.RequestDate}}" required></div>
+        <div><label for="attendance-request-action">Bagian kehadiran</label><select id="attendance-request-action" name="action" required><option value="check_in" {{if eq .TeacherAttendance.RequestAction "check_in"}}selected{{end}}>Masuk</option><option value="check_out" {{if eq .TeacherAttendance.RequestAction "check_out"}}selected{{end}}>Pulang</option></select></div>
+        <div><label for="attendance-request-kind">Jenis permintaan</label><select id="attendance-request-kind" name="kind" required><option value="completion" {{if eq .TeacherAttendance.RequestKind "completion"}}selected{{end}}>Pelengkapan catatan</option><option value="correction" {{if eq .TeacherAttendance.RequestKind "correction"}}selected{{end}}>Koreksi catatan</option></select></div>
+        <div><label for="attendance-request-text">Keterangan</label><textarea id="attendance-request-text" name="request_text" maxlength="500" required>{{.TeacherAttendance.RequestText}}</textarea></div>
+        <div class="form-modal-actions"><a class="button-secondary" href="/kehadiran-saya">Batal</a><button class="button-primary" type="submit">Kirim permintaan</button></div>
+      </form>
+    </div>
+  </dialog>
+  {{end}}
+</section>
+{{if .TeacherReports}}{{template "teacher-report-list" .}}{{end}}
+{{end}}

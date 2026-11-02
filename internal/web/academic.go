@@ -27,6 +27,7 @@ type academicView struct {
 	RuleForm                                             academic.CurriculumRule
 	BlockForm                                            academic.SchoolTimeBlock
 	RulePattern, PlanDate, GenerateDate, ScheduleWarning string
+	JournalDate                                          string
 
 	Years                                 []academic.Year
 	Semesters                             []academic.Semester
@@ -63,22 +64,27 @@ type academicView struct {
 	EntryClassID, EntrySubjectID          int64
 	EntryWeekday, EntryStart, EntryEnd    int
 	TeacherSchedule                       bool
+	JournalCutoverDate                    string
+	JournalHistoricalDate                 string
+	JournalHistoricalCandidates           []academic.TeachingJournalHistoricalCandidate
 }
 
 type placementView struct {
-	Years         []academic.Year
-	Classes       []academic.Class
-	SelectedClass academic.Class
-	Candidates    []academic.StudentOption
-	Placements    []academic.Placement
-	YearID        int64
-	ClassID       int64
-	Page          int
-	Previous      int
-	Next          int
-	PreviousURL   string
-	NextURL       string
-	Search        string
+	CreateStudentID                   int64
+	CreateStudentName, CreateStartsOn string
+	Years                             []academic.Year
+	Classes                           []academic.Class
+	SelectedClass                     academic.Class
+	Candidates                        []academic.StudentOption
+	Placements                        []academic.Placement
+	YearID                            int64
+	ClassID                           int64
+	Page                              int
+	Previous                          int
+	Next                              int
+	PreviousURL                       string
+	NextURL                           string
+	Search                            string
 }
 
 func academicError(err error) (int, string) {
@@ -90,6 +96,8 @@ func academicError(err error) (int, string) {
 		return http.StatusForbidden, err.Error()
 	case errors.Is(err, academic.ErrNotFound):
 		return http.StatusNotFound, err.Error()
+	case errors.Is(err, academic.ErrTeacherLessonIneligible):
+		return http.StatusConflict, err.Error()
 	case errors.Is(err, academic.ErrConflict):
 		return http.StatusConflict, err.Error()
 	default:
@@ -531,7 +539,8 @@ func (a *application) myTimetable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	classes, subjects := timetableFilterOptions(entries)
-	a.render(w, r, "page", http.StatusOK, view{Page: "my-schedule", Title: "Jadwal Saya", Academic: &academicView{Timetable: rev, TimetableEntries: entries, TimetableClasses: classes, TimetableSubjects: subjects, TeacherSchedule: true}})
+	journalDate := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+	a.render(w, r, "page", http.StatusOK, view{Page: "my-schedule", Title: "Jadwal Saya", Academic: &academicView{Timetable: rev, TimetableEntries: entries, TimetableClasses: classes, TimetableSubjects: subjects, TeacherSchedule: true, JournalDate: journalDate}})
 }
 
 func timetableFilterOptions(entries []academic.TimetableEntry) ([]academic.TeachingOption, []academic.TeachingOption) {
@@ -589,228 +598,6 @@ func (a *application) academicHome(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "page", http.StatusOK, v)
 }
 
-func (a *application) academicYears(w http.ResponseWriter, r *http.Request) {
-	actor := principal(r).ID
-	years, err := a.options.Academics.Years(r.Context(), actor)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	v := view{Page: "academic-years", Title: "Tahun Ajaran", Academic: &academicView{Years: years}}
-	if r.Method == http.MethodPost {
-		if !parseForm(w, r) {
-			return
-		}
-		_, err = a.options.Academics.CreateYear(r.Context(), actor, r.PostForm.Get("name"))
-		if err == nil {
-			http.Redirect(w, r, "/akademik/tahun-ajaran?saved=1", http.StatusSeeOther)
-			return
-		}
-		code, message := academicError(err)
-		v.ModalOpen = true
-		v.Error = message
-		v.Academic.NewYearName = r.PostForm.Get("name")
-		a.render(w, r, "page", code, v)
-		return
-	}
-	if r.URL.Query().Get("saved") == "1" {
-		v.Message = "Tahun ajaran dan dua semesternya tersimpan."
-	}
-	a.render(w, r, "page", http.StatusOK, v)
-}
-
-func (a *application) activateYear(w http.ResponseWriter, r *http.Request) {
-	id, err := parseAcademicID(r)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if err = a.options.Academics.ActivateYear(r.Context(), principal(r).ID, id); err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	http.Redirect(w, r, "/akademik/tahun-ajaran?saved=1", http.StatusSeeOther)
-}
-
-func (a *application) academicSemesters(w http.ResponseWriter, r *http.Request) {
-	terms, err := a.options.Academics.Semesters(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	years, err := a.options.Academics.Years(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	v := view{Page: "academic-semesters", Title: "Semester", Academic: &academicView{Years: years, Semesters: terms}}
-	if r.URL.Query().Get("saved") == "1" {
-		v.Message = "Semester aktif diperbarui dan histori tercatat."
-	}
-	a.render(w, r, "page", http.StatusOK, v)
-}
-
-func (a *application) activateSemester(w http.ResponseWriter, r *http.Request) {
-	id, err := parseAcademicID(r)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if err = a.options.Academics.ActivateSemester(r.Context(), principal(r).ID, id); err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	http.Redirect(w, r, "/akademik/semester?saved=1", http.StatusSeeOther)
-}
-
-func (a *application) academicClasses(w http.ResponseWriter, r *http.Request) {
-	classes, years, err := a.options.Academics.Classes(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	counts, err := a.options.Academics.PlacementCounts(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	var homerooms []academic.HomeroomAssignment
-	if principal(r).HasRole("kurikulum") {
-		homerooms, err = a.options.Academics.HomeroomAssignments(r.Context(), principal(r).ID)
-		if err != nil {
-			a.academicFailure(w, err)
-			return
-		}
-	}
-	byClass := make(map[int64]academic.HomeroomAssignment, len(homerooms))
-	for _, assignment := range homerooms {
-		byClass[assignment.ClassID] = assignment
-	}
-	v := view{Page: "academic-classes", Title: "Kelas", Academic: &academicView{Classes: classes, Years: years, PlacementCounts: counts, Homerooms: homerooms, HomeroomByClass: byClass}}
-	if r.URL.Query().Get("saved") == "1" {
-		v.Message = "Data kelas tersimpan dan tercatat dalam histori."
-	}
-	a.render(w, r, "page", http.StatusOK, v)
-}
-
-func (a *application) classHomeroom(w http.ResponseWriter, r *http.Request) {
-	actor := principal(r).ID
-	id, err := parseAcademicID(r)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	c, err := a.options.Academics.Class(r.Context(), actor, id)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	teachers, err := a.options.Academics.HomeroomTeachers(r.Context(), actor)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	assignments, err := a.options.Academics.HomeroomAssignments(r.Context(), actor)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	av := &academicView{Class: c, HomeroomTeachers: teachers}
-	for _, assignment := range assignments {
-		if assignment.ClassID == id {
-			av.Homeroom = assignment
-			break
-		}
-	}
-	v := view{Page: "homeroom-form", Title: "Penugasan Wali Kelas", Academic: av}
-	if r.Method == http.MethodPost {
-		if !parseForm(w, r) {
-			return
-		}
-		teacherID, parseErr := strconv.ParseInt(r.PostForm.Get("teacher_id"), 10, 64)
-		if parseErr != nil {
-			err = academic.ValidationError("Pilih guru wali kelas yang valid.")
-		} else {
-			err = a.options.Academics.AssignHomeroom(r.Context(), actor, id, teacherID)
-		}
-		if err == nil {
-			http.Redirect(w, r, "/akademik/kelas?saved=1", http.StatusSeeOther)
-			return
-		}
-		code, message := academicError(err)
-		v.Error = message
-		v.ModalOpen = true
-		av.Homeroom.TeacherID = teacherID
-		a.render(w, r, "page", code, v)
-		return
-	}
-	if len(teachers) == 0 {
-		v.Message = "Belum ada guru aktif yang terhubung ke akun aktif dengan role Wali Kelas."
-	}
-	if r.URL.Query().Get("saved") == "1" {
-		v.Message = "Penugasan wali kelas tersimpan dan tercatat dalam histori."
-	}
-	a.render(w, r, "page", http.StatusOK, v)
-}
-
-func (a *application) classHomeroomHistory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseAcademicID(r)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	actor := principal(r).ID
-	c, err := a.options.Academics.Class(r.Context(), actor, id)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	history, err := a.options.Academics.HomeroomAssignmentHistory(r.Context(), actor, id)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	for i := range history {
-		history[i].At = history[i].At.In(time.FixedZone("WIB", 7*3600))
-	}
-	a.render(w, r, "page", http.StatusOK, view{Page: "homeroom-history", Title: "Histori Wali Kelas", Academic: &academicView{Class: c, HomeroomHistory: history}})
-}
-
-func (a *application) myHomerooms(w http.ResponseWriter, r *http.Request) {
-	classes, err := a.options.Academics.MyHomerooms(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	a.render(w, r, "page", http.StatusOK, view{Page: "my-homerooms", Title: "Kelas Saya", Academic: &academicView{Homerooms: classes}})
-}
-
-func (a *application) myHomeroomRoster(w http.ResponseWriter, r *http.Request) {
-	id, err := parseAcademicID(r)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	roster, err := a.options.Academics.HomeroomRoster(r.Context(), principal(r).ID, id)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	classes, err := a.options.Academics.MyHomerooms(r.Context(), principal(r).ID)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	var selected academic.HomeroomAssignment
-	for _, item := range classes {
-		if item.ClassID == id {
-			selected = item
-			break
-		}
-	}
-	a.render(w, r, "page", http.StatusOK, view{Page: "my-homeroom-roster", Title: "Daftar Siswa", Academic: &academicView{Homeroom: selected, HomeroomRoster: roster}})
-}
-
 func placementPage(a *application, r *http.Request, yearID, classID int64, search string, page int) (*placementView, int, error) {
 	if page < 1 {
 		page = 1
@@ -853,6 +640,12 @@ func placementPage(a *application, r *http.Request, yearID, classID int64, searc
 		}
 	}
 	p := &placementView{Years: years, YearID: yearID, ClassID: classID, Page: page, Search: search}
+	if principal(r).HasRole("admin") {
+		p.CreateStartsOn, err = a.options.Academics.SuggestedPlacementStart(r.Context(), principal(r).ID, yearID)
+		if err != nil {
+			return nil, 500, err
+		}
+	}
 	for _, class := range classes {
 		if class.SchoolYearID == yearID {
 			p.Classes = append(p.Classes, class)
@@ -949,7 +742,7 @@ func (a *application) studentPlacements(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "Pilihan tahun atau kelas tidak ditemukan.", code)
 			return
 		}
-		if _, err = a.options.Academics.CreatePlacement(r.Context(), principal(r).ID, studentID, classID); err != nil {
+		if _, err = a.options.Academics.CreatePlacement(r.Context(), principal(r).ID, studentID, classID, r.PostForm.Get("starts_on")); err != nil {
 			p, _, loadErr := placementPage(a, r, yearID, classID, search, page)
 			if loadErr != nil {
 				a.academicFailure(w, loadErr)
@@ -957,7 +750,15 @@ func (a *application) studentPlacements(w http.ResponseWriter, r *http.Request) 
 			}
 			_, message := academicError(err)
 			code, _ := academicError(err)
-			a.render(w, r, "page", code, view{Page: "student-placements", Title: "Penempatan Siswa", Error: message, Placement: p})
+			p.CreateStudentID = studentID
+			p.CreateStartsOn = r.PostForm.Get("starts_on")
+			for _, student := range p.Candidates {
+				if student.ID == studentID {
+					p.CreateStudentName = student.Name
+					break
+				}
+			}
+			a.render(w, r, "page", code, view{Page: "student-placements", Title: "Penempatan Siswa", Error: message, Placement: p, ModalOpen: true, ModalID: "new-placement-modal"})
 			return
 		}
 		query := make(url.Values)
@@ -1007,77 +808,6 @@ func (a *application) placementHistory(w http.ResponseWriter, r *http.Request) {
 		history[i].At = history[i].At.In(time.FixedZone("WIB", 7*3600))
 	}
 	a.render(w, r, "page", http.StatusOK, view{Page: "placement-history", Title: "Histori Penempatan", PlacementHistory: history})
-}
-
-func (a *application) academicClassForm(w http.ResponseWriter, r *http.Request) {
-	actor := principal(r).ID
-	id := int64(0)
-	var err error
-	if r.PathValue("id") != "" {
-		id, err = parseAcademicID(r)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-	}
-	classes, years, err := a.options.Academics.Classes(r.Context(), actor)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	av := &academicView{Classes: classes, Years: years, Editing: id}
-	if id != 0 {
-		av.Class, err = a.options.Academics.Class(r.Context(), actor, id)
-		if err != nil {
-			a.academicFailure(w, err)
-			return
-		}
-	}
-	counts, err := a.options.Academics.PlacementCounts(r.Context(), actor)
-	if err != nil {
-		a.academicFailure(w, err)
-		return
-	}
-	av.PlacementCounts = counts
-	v := view{Page: "academic-classes", Title: "Kelas", Academic: av, ModalOpen: true}
-	if r.Method == http.MethodPost {
-		if !parseForm(w, r) {
-			return
-		}
-		yearID, yearErr := strconv.ParseInt(r.PostForm.Get("school_year_id"), 10, 64)
-		grade, gradeErr := strconv.Atoi(r.PostForm.Get("grade"))
-		version, versionErr := strconv.ParseInt(r.PostForm.Get("version"), 10, 64)
-		if yearErr != nil || gradeErr != nil || versionErr != nil {
-			av.Class.Name = r.PostForm.Get("name")
-			v.Error = "Tingkat, tahun ajaran, atau versi data tidak valid."
-			a.render(w, r, "page", http.StatusUnprocessableEntity, v)
-			return
-		}
-		className, reason := r.PostForm.Get("name"), r.PostForm.Get("reason")
-		av.Class.Name = className
-		av.Class.Grade = grade
-		av.Class.SchoolYearID = yearID
-		if id == 0 {
-			for _, year := range years {
-				if year.ID == yearID {
-					av.Class.YearName = year.Name
-					break
-				}
-			}
-		}
-		submitted := av.Class
-		av.Class, err = a.options.Academics.SaveClass(r.Context(), actor, id, yearID, grade, className, reason, version)
-		if err == nil {
-			http.Redirect(w, r, "/akademik/kelas?saved=1", http.StatusSeeOther)
-			return
-		}
-		av.Class = submitted
-		code, message := academicError(err)
-		v.Error = message
-		a.render(w, r, "page", code, v)
-		return
-	}
-	a.render(w, r, "page", http.StatusOK, v)
 }
 
 func (a *application) academicHistory(w http.ResponseWriter, r *http.Request) {

@@ -185,7 +185,7 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	}
 	login(adminClient, admin.Username, password)
 	dashboard := get(adminClient, "/", 200)
-	if !strings.Contains(dashboard, "Pengguna dan Role") || strings.Contains(dashboard, password) {
+	if !strings.Contains(dashboard, "Siswa aktif") || !strings.Contains(dashboard, "Guru aktif") || !strings.Contains(dashboard, "Pegawai aktif") || !strings.Contains(dashboard, "Kelas pada tahun aktif") || !strings.Contains(dashboard, "Akses cepat") || !strings.Contains(dashboard, `href="/master/students"`) || !strings.Contains(dashboard, `href="/master/teachers"`) || !strings.Contains(dashboard, `href="/admin/users"`) || !strings.Contains(dashboard, `href="/admin/placements"`) || strings.Contains(dashboard, password) {
 		t.Fatal("invalid administrator dashboard")
 	}
 	// A missing session logout is harmless and does not create an audit entry.
@@ -206,6 +206,9 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	if err = db.QueryRowContext(ctx, `SELECT id FROM app.users WHERE username=$1`, username).Scan(&teacherID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.ExecContext(ctx, `INSERT INTO app.teachers(name,user_id,active) VALUES($1,$2,true)`, "Guru dashboard "+suffix, teacherID); err != nil {
+		t.Fatal("cannot create teacher identity for dashboard integration")
+	}
 	teacher, err := accounts.Get(ctx, teacherID)
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +220,8 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 	teacherClient := newClient()
 	login(teacherClient, username, teacherPassword)
 	teacherPage := get(teacherClient, "/", 200)
-	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") {
-		t.Fatal("XSS or admin menu leaked")
+	if strings.Contains(teacherPage, "<script>alert(1)</script>") || strings.Contains(teacherPage, "/admin/users") || strings.Contains(teacherPage, "Ringkasan sekolah") || !strings.Contains(teacherPage, "Ringkasan Guru Mapel") || !strings.Contains(teacherPage, "Jadwal Saya") {
+		t.Fatal("Beranda Guru Mapel tidak sesuai cakupan atau tautan Admin bocor")
 	}
 
 	reqHX, _ := http.NewRequest("GET", server.URL+"/", nil)
@@ -244,12 +247,53 @@ func TestAccountsHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	get(teacherClient, "/akademik", 200)
-	if !strings.Contains(get(teacherClient, "/", 200), "/akademik") {
+	curriculumDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(curriculumDashboard, "/akademik") || !strings.Contains(curriculumDashboard, "Ringkasan akademik") || !strings.Contains(curriculumDashboard, "Semester aktif") || !strings.Contains(curriculumDashboard, "/akademik/jadwal") || strings.Contains(curriculumDashboard, "Ringkasan sekolah") {
 		t.Fatal("new role did not appear in existing session")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel", "wali_kelas"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	combinedDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(combinedDashboard, "Ringkasan Guru Mapel") || !strings.Contains(combinedDashboard, "Ringkasan Wali Kelas") || !strings.Contains(combinedDashboard, "/wali-kelas") || strings.Contains(combinedDashboard, "/admin/users") {
+		t.Fatal("role gabungan tidak menampilkan kedua cakupan Beranda secara terpisah")
 	}
 	// Optimistic version prevents silently overwriting a newer role assignment.
 	if _, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: "stale", Active: true, Roles: []string{"admin"}, Version: teacher.Version}); !errors.Is(err, auth.ErrConflict) {
 		t.Fatal("stale form overwrote access")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel", "kesiswaan"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	teacherKesDashboard := get(teacherClient, "/", 200)
+	if dashboardLinkCount(t, teacherKesDashboard, `/kesiswaan/kasus`) != 1 || !strings.Contains(teacherKesDashboard, "Ringkasan Guru Mapel") {
+		t.Fatal("role gabungan Guru Mapel + Kesiswaan harus mempertahankan prioritas Beranda dan menyediakan satu akses Kasus Siswa")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"bk", "kesiswaan"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	supportDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(supportDashboard, "Ringkasan BK") || !strings.Contains(supportDashboard, "Ringkasan Kesiswaan") || strings.Contains(supportDashboard, "/admin/users") || strings.Count(supportDashboard, `id="overview"`) != 1 {
+		t.Fatal("role gabungan BK + Kesiswaan tidak menampilkan bagian terpisah atau membocorkan navigasi Admin")
+	}
+	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"kepala_sekolah"}, Version: updated.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	headDashboard := get(teacherClient, "/", 200)
+	if !strings.Contains(headDashboard, "Ringkasan sekolah") || !strings.Contains(headDashboard, "Kasus perlu tindak lanjut") || strings.Contains(headDashboard, "/kesiswaan/batas-kedatangan") || strings.Contains(headDashboard, "/admin/users") {
+		t.Fatal("Beranda Kepala Sekolah tidak terbatas pada ringkasan baca-saja")
 	}
 	updated, err = accounts.Update(ctx, admin.ID, teacherID, auth.Input{Username: username, DisplayName: teacher.DisplayName, Active: true, Roles: []string{"guru_mapel"}, Version: updated.Version})
 	if err != nil {

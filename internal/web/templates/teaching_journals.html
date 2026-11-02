@@ -1,0 +1,95 @@
+{{define "teaching-journals"}}
+<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+  <p class="text-sm text-gray-500">Jurnal hanya menampilkan pertemuan yang menjadi penugasan Anda.</p>
+  <a class="button-primary" href="/jurnal-saya/baru">Isi jurnal dari jadwal</a>
+</div>
+  <section class="panel">
+    <div class="table-heading"><div><h2 class="text-lg font-semibold">Jurnal Saya</h2><p class="mt-1 text-sm text-gray-500">Filter diperbarui langsung saat Anda mengetik atau memilih nilai.</p></div></div>
+    <form method="get" action="/jurnal-saya" class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <label class="xl:col-span-2">Cari kelas, mata pelajaran, atau guru<input type="search" name="q" data-instant-search maxlength="120" value="{{.TeachingJournal.Filter.Search}}" placeholder="Mulai mengetik"></label>
+      <label>Semester<select name="semester_id" data-instant-filter><option value="">Semua semester</option>{{range .TeachingJournal.FilterOptions.Semesters}}<option value="{{.ID}}" {{if eq .ID $.TeachingJournal.Filter.SemesterID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Kelas<select name="class_id" data-instant-filter><option value="">Semua kelas</option>{{range .TeachingJournal.FilterOptions.Classes}}<option value="{{.ID}}" {{if eq .ID $.TeachingJournal.Filter.ClassID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Mata pelajaran<select name="subject_id" data-instant-filter><option value="">Semua mata pelajaran</option>{{range .TeachingJournal.FilterOptions.Subjects}}<option value="{{.ID}}" {{if eq .ID $.TeachingJournal.Filter.SubjectID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Tanggal dari (WIB)<input type="date" name="from" data-instant-filter value="{{.TeachingJournal.Filter.FromDate}}"></label>
+      <label>Tanggal sampai (WIB)<input type="date" name="to" data-instant-filter value="{{.TeachingJournal.Filter.ToDate}}"></label>
+      <label>Status jurnal<select name="state" data-instant-filter><option value="">Semua status</option><option value="draft" {{if eq .TeachingJournal.Filter.State "draft"}}selected{{end}}>Draf</option><option value="final" {{if eq .TeachingJournal.Filter.State "final"}}selected{{end}}>Final</option></select></label>
+      <label>Hasil pertemuan<select name="outcome" data-instant-filter><option value="">Semua hasil</option><option value="held" {{if eq .TeachingJournal.Filter.Outcome "held"}}selected{{end}}>Terlaksana</option><option value="not_held" {{if eq .TeachingJournal.Filter.Outcome "not_held"}}selected{{end}}>Tidak Terlaksana</option></select></label>
+      <input type="hidden" name="page" value="{{.TeachingJournal.Filter.Page}}">
+    </form>
+  </section>
+  <section class="panel mt-5">
+    <div class="mb-4 flex flex-wrap justify-end gap-2"><a class="button-secondary" href="{{.TeachingJournal.PDFExportURL}}">{{template "icon-download" .}}Ekspor PDF</a><a class="button-secondary" href="{{.TeachingJournal.XLSXExportURL}}">{{template "icon-download" .}}Ekspor Excel (.xlsx)</a></div>
+    <div class="table-surface hidden sm:block"><table class="app-table min-w-full table-fixed"><caption class="sr-only">Jurnal Mengajar Saya</caption><thead><tr><th class="w-28">Tanggal WIB</th><th class="w-40">Kelas / Mata Pelajaran</th><th class="w-24">Jam ke-</th><th class="w-32">Status / Hasil</th><th class="journal-content-heading">Materi Pembelajaran</th><th class="journal-content-heading">Catatan Kegiatan</th><th class="w-24"></th></tr></thead><tbody>
+      {{range .TeachingJournal.Page.Items}}<tr><td>{{.MeetingDate}}</td><td><span class="block font-medium">{{.ClassSnapshot}}</span><span class="block text-sm text-gray-500">{{.SubjectSnapshot}}</span></td><td class="text-sm">{{if .PeriodLabel}}{{.PeriodLabel}}{{else}}—{{end}}</td><td><span class="status-badge {{if eq .State "final"}}status-badge--active{{else}}status-badge--warning{{end}}">{{if eq .State "final"}}Final{{else}}Draf{{end}}</span><span class="mt-1 block text-sm">{{if eq .Outcome "not_held"}}Tidak Terlaksana{{else}}Terlaksana{{end}}</span>{{if .ReviewReason}}<span class="status-badge status-badge--warning mt-2" role="status">Perlu Ditinjau</span><span class="mt-1 block text-xs text-amber-800">{{.ReviewReason}}</span>{{end}}</td><td class="max-w-0"><span class="line-clamp-2 break-words text-sm" title="{{if .Material}}{{.Material}}{{else}}—{{end}}">{{if .Material}}{{.Material}}{{else}}—{{end}}</span>{{if eq .Outcome "not_held"}}<span class="mt-1 block text-xs text-gray-500">Konteks, bukan bukti pembelajaran</span>{{end}}</td><td class="max-w-0"><span class="line-clamp-2 break-words text-sm" title="{{if .ActivityNotes}}{{.ActivityNotes}}{{else}}—{{end}}">{{if .ActivityNotes}}{{.ActivityNotes}}{{else}}—{{end}}</span>{{if eq .Outcome "not_held"}}<span class="mt-1 block text-xs text-gray-500">Konteks</span>{{end}}</td><td><a class="button-secondary" href="/jurnal-saya/{{.ID}}">Detail</a></td></tr>
+      {{else}}<tr><td colspan="7" class="py-8 text-center text-gray-500">Belum ada jurnal yang sesuai. Anda dapat mulai dari jadwal yang tersedia.</td></tr>{{end}}
+    </tbody></table></div>
+    <div class="grid gap-3 sm:hidden">{{range .TeachingJournal.Page.Items}}<article class="rounded-xl border border-gray-200 p-4"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="break-words font-semibold">{{.ClassSnapshot}} · {{.SubjectSnapshot}}</p><p class="mt-1 text-sm text-gray-500">{{.MeetingDate}} WIB</p><p class="mt-1 text-sm text-gray-600">{{if .PeriodLabel}}{{.PeriodLabel}}{{else}}—{{end}}</p></div><span class="status-badge shrink-0 {{if eq .State "final"}}status-badge--active{{else}}status-badge--warning{{end}}">{{if eq .State "final"}}Final{{else}}Draf{{end}}</span></div><p class="mt-3 text-sm">{{if eq .Outcome "not_held"}}Tidak Terlaksana{{else}}Terlaksana{{end}}</p>{{if .ReviewReason}}<div class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status"><strong>Perlu Ditinjau</strong><p class="mt-1">{{.ReviewReason}}</p></div>{{end}}<dl class="mt-3 space-y-3 text-sm"><div><dt class="font-medium">Materi Pembelajaran</dt>{{if eq .Outcome "not_held"}}<dd class="text-xs text-gray-500">Konteks, bukan bukti pembelajaran</dd>{{end}}<dd class="mt-1 line-clamp-2 break-words" title="{{if .Material}}{{.Material}}{{else}}—{{end}}">{{if .Material}}{{.Material}}{{else}}—{{end}}</dd></div><div><dt class="font-medium">Catatan Kegiatan</dt>{{if eq .Outcome "not_held"}}<dd class="text-xs text-gray-500">Konteks</dd>{{end}}<dd class="mt-1 line-clamp-2 break-words" title="{{if .ActivityNotes}}{{.ActivityNotes}}{{else}}—{{end}}">{{if .ActivityNotes}}{{.ActivityNotes}}{{else}}—{{end}}</dd></div></dl><a class="button-secondary mt-4 block w-full text-center" href="/jurnal-saya/{{.ID}}">Detail</a></article>{{else}}<p class="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">Belum ada jurnal yang sesuai.</p>{{end}}</div>
+    {{if or .TeachingJournal.PreviousURL .TeachingJournal.NextURL}}<nav class="table-pagination mt-4" aria-label="Halaman jurnal">{{if .TeachingJournal.PreviousURL}}<a href="{{.TeachingJournal.PreviousURL}}">← Sebelumnya</a>{{else}}<span></span>{{end}}<span>Halaman {{.TeachingJournal.Filter.Page}}</span>{{if .TeachingJournal.NextURL}}<a href="{{.TeachingJournal.NextURL}}">Berikutnya →</a>{{else}}<span></span>{{end}}</nav>{{end}}
+  </section>
+{{end}}
+
+{{define "teaching-journal-form"}}
+{{$j := .TeachingJournal}}
+<p class="mb-5"><a class="button-secondary" href="{{if $j.Detail}}/jurnal-saya/{{$j.Detail.ID}}{{else}}/jurnal-saya{{end}}">← Kembali</a></p>
+{{if and $j.Detail $j.Detail.ReviewReason}}<div class="mb-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-900" role="status"><strong>Perlu Ditinjau</strong><p class="mt-1">{{$j.Detail.ReviewReason}}</p></div>{{end}}
+{{if and (not $j.Occurrence) (not $j.Detail)}}
+<section class="panel"><h2 class="text-lg font-semibold">Pilih tanggal dan pertemuan</h2><p class="mt-1 text-sm text-gray-500">Pilihan berasal dari jadwal terbit dan penugasan resmi yang berlaku pada tanggal tersebut.</p>
+  <form method="get" action="/jurnal-saya/baru" class="mt-4 flex flex-wrap items-end gap-3"><label class="min-w-52">Tanggal pertemuan (WIB)<input type="date" name="date" value="{{$j.Form.Date}}" required></label><button class="button-secondary" type="submit">Tampilkan jadwal</button></form>
+  {{if $j.PendingLineage}}<p class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status">Jadwal pada tanggal ini masih menunggu penetapan kesinambungan oleh Kurikulum. Jurnal untuk pertemuan tersebut belum dapat dibuat.</p>{{end}}
+  {{if $j.Occurrences}}<div class="mt-5 grid gap-3">{{range $j.Occurrences}}<article class="rounded-xl border border-gray-200 p-4"><h3 class="font-semibold">{{.ClassSnapshot}} · {{.SubjectSnapshot}}</h3><p class="mt-1 text-sm text-gray-500">{{.Date}} WIB · {{.SemesterSnapshot}} · Revisi jadwal ke-{{.RevisionNumber}} · {{.TeacherSnapshot}}</p><ul class="mt-3 flex flex-wrap gap-2 text-sm">{{range .Periods}}<li class="rounded-full bg-gray-50 px-3 py-1">Jam ke-{{.PeriodNo}} · {{.StartsAt}}–{{.EndsAt}}</li>{{end}}</ul>{{if .AttendanceReason}}<p class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">{{.AttendanceReason}}</p><a class="button-secondary mt-3" href="/jurnal-saya/baru?date={{.Date}}&amp;lesson_id={{.LogicalLessonID}}">Lihat status presensi</a>{{else}}<a class="button-primary mt-4" href="/jurnal-saya/baru?date={{.Date}}&amp;lesson_id={{.LogicalLessonID}}">Isi jurnal</a>{{end}}</article>{{end}}</div>{{else}}<p class="mt-5 rounded-lg border border-dashed border-gray-300 p-5 text-sm text-gray-500">Tidak ada pertemuan yang dapat dijurnal pada tanggal ini. Periksa tanggal, jadwal terbit, dan penugasan Anda.</p>{{end}}
+</section>
+{{else if $j.Occurrence}}
+<section class="panel mb-5"><h2 class="text-lg font-semibold">{{$j.Occurrence.ClassSnapshot}} · {{$j.Occurrence.SubjectSnapshot}}</h2><p class="mt-1 text-sm text-gray-500">{{$j.Occurrence.Date}} WIB · {{$j.Occurrence.SemesterSnapshot}} · Revisi jadwal ke-{{$j.Occurrence.RevisionNumber}} · Guru pengampu: {{$j.Occurrence.TeacherSnapshot}}</p><ul class="mt-3 flex flex-wrap gap-2 text-sm">{{range $j.Occurrence.Periods}}<li class="rounded-full bg-gray-50 px-3 py-1">Jam ke-{{.PeriodNo}} · {{.StartsAt}}–{{.EndsAt}}</li>{{end}}</ul></section>
+{{if $j.AttendanceBlocked}}<div class="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert"><strong>Jurnal terkunci oleh pemeriksaan presensi.</strong><p class="mt-1">{{$j.AttendanceBlocked}}</p><p class="mt-2">Isi yang sudah diketik tetap ditampilkan. Setelah presensi diperiksa atau dikoreksi petugas berwenang, buka kembali halaman ini.</p></div>{{end}}
+{{template "teaching-journal-editor" .}}
+{{else}}
+{{template "teaching-journal-evidence" .}}
+<section class="panel mt-5"><p class="text-sm text-gray-600">Jurnal ini tidak dapat diedit dari akun ini.</p></section>
+{{end}}
+{{end}}
+
+{{define "teaching-journal-editor"}}
+{{$j := .TeachingJournal}}{{$f := $j.Form}}
+<section class="panel"><h2 class="text-lg font-semibold" data-journal-editor-title>{{if and $j.Detail (eq $j.Detail.CurrentVersion.State "final")}}Koreksi Jurnal Final{{else if $j.Detail}}Lanjutkan Draf{{else}}Isi Jurnal{{end}}</h2><p class="mt-1 text-sm text-gray-500">Informasi jadwal di atas berasal dari snapshot resmi. Koreksi Final beralasan dan mempertahankan riwayat sebelumnya.</p>
+<form method="post" action="{{if $j.Detail}}/jurnal-saya/{{$j.Detail.ID}}/simpan{{else}}/jurnal-saya{{end}}" class="mt-5">
+  {{.CSRF}}<input type="hidden" name="logical_lesson_id" value="{{$f.LogicalLessonID}}"><input type="hidden" name="meeting_date" value="{{$f.Date}}"><input type="hidden" name="expected_version" value="{{$f.ExpectedVersion}}"><input type="hidden" name="request_key" value="{{$f.RequestKey}}">
+  <fieldset class="min-w-0 space-y-5 border-0 p-0" {{if $j.AttendanceBlocked}}disabled aria-disabled="true"{{end}}>
+  <p class="text-sm text-gray-600">Nomor dan waktu setiap JP berasal dari snapshot jadwal resmi di atas dan tidak diubah melalui jurnal.</p>
+  <label>Hasil pertemuan<select name="outcome" data-journal-outcome required><option value="held" {{if eq $f.Outcome "held"}}selected{{end}}>Terlaksana</option><option value="not_held" {{if eq $f.Outcome "not_held"}}selected{{end}}>Tidak Terlaksana</option></select></label>
+  <label>Materi pembelajaran <span class="text-gray-500" data-journal-material-help data-held-help="Maksimal 500 karakter; wajib untuk Final terlaksana." data-not-held-help="Opsional sebagai konteks/rencana; bukan bukti materi yang diajarkan.">Maksimal 500 karakter; wajib untuk Final terlaksana.</span><textarea name="material" maxlength="500" rows="4">{{$f.Material}}</textarea></label>
+  <label>Catatan kegiatan <span class="text-gray-500">(opsional, maksimal 2.000 karakter)</span><textarea name="activity_notes" maxlength="2000" rows="4">{{$f.ActivityNotes}}</textarea></label>
+  <label data-journal-not-held-field>Alasan pertemuan tidak terlaksana <span class="text-gray-500">(wajib)</span><textarea name="not_held_reason" maxlength="500">{{$f.NotHeldReason}}</textarea></label>
+  {{if and $j.Detail (eq $j.Detail.CurrentVersion.State "final")}}<label>Alasan koreksi <span class="text-gray-500">(wajib; jurnal tetap Final)</span><textarea name="correction_reason" maxlength="500" required>{{$f.CorrectionReason}}</textarea></label>{{end}}
+  <p class="text-sm text-gray-500">Menyimpan atau membuka halaman tidak mencatat kehadiran.</p>
+  <div class="flex flex-wrap gap-3">{{if or (not $j.Detail) (ne $j.Detail.CurrentVersion.State "final")}}<button class="button-secondary" type="submit" name="action" value="save_draft">Simpan Draf</button>{{end}}<button class="button-primary" type="submit" name="action" value="finalize">{{if and $j.Detail (eq $j.Detail.CurrentVersion.State "final")}}Simpan Koreksi Final{{else}}Finalisasi{{end}}</button></div>
+  </fieldset>
+</form></section>
+{{end}}
+
+{{define "teaching-journal-detail"}}
+{{$j := .TeachingJournal}}
+<div class="mb-5 flex flex-wrap gap-3"><a class="button-secondary" href="/jurnal-saya">Kembali ke daftar</a>{{if $j.CanEdit}}<a class="button-primary" href="/jurnal-saya/{{$j.Detail.ID}}/edit">{{if eq $j.Detail.CurrentVersion.State "final"}}Koreksi dengan Alasan{{else}}Lanjutkan Draf{{end}}</a>{{end}}</div>
+{{if $j.Detail.ReviewReason}}<div class="mb-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-900" role="status"><strong>Perlu Ditinjau</strong><p class="mt-1">{{$j.Detail.ReviewReason}}</p></div>{{end}}
+{{template "teaching-journal-evidence" .}}{{template "teaching-journal-history" .}}
+{{end}}
+
+{{define "teaching-journal-version"}}
+<div class="mb-5"><a class="button-secondary" href="/jurnal-saya/{{.TeachingJournal.Detail.ID}}">Kembali ke jurnal</a></div>
+{{template "teaching-journal-evidence" .}}{{template "teaching-journal-history" .}}
+{{end}}
+
+{{define "teaching-journal-evidence"}}
+{{with .TeachingJournal.Detail}}
+<section class="panel"><h2 class="text-lg font-semibold">{{.ClassSnapshot}} · {{.SubjectSnapshot}}</h2><p class="mt-2 text-sm text-gray-500">Tanggal {{.MeetingDate}} WIB · {{.SemesterSnapshot}} · Revisi jadwal ke-{{.RevisionNumber}}</p>
+  <dl class="mt-5 grid gap-4 sm:grid-cols-2"><div><dt class="text-sm text-gray-500">Guru pengampu saat jurnal dibuat</dt><dd>{{.TeacherSnapshot}}</dd></div><div><dt class="text-sm text-gray-500">Riwayat slot jadwal</dt><dd>{{if eq .Lineage.Decision "cutover"}}Identitas pertemuan mulai berlaku{{else if eq .Lineage.Decision "continue"}}Slot jadwal dilanjutkan{{else if eq .Lineage.Decision "new"}}Slot jadwal baru{{else if eq .Lineage.Decision "stop"}}Slot jadwal dihentikan{{else}}Informasi tidak tersedia{{end}}{{if .Lineage.Decision}} · berlaku {{.Lineage.EffectiveFrom.Format "02 Jan 2006"}}{{end}}</dd></div>{{if .Lineage.Reason}}<div><dt class="text-sm text-gray-500">Catatan perubahan jadwal</dt><dd>{{.Lineage.Reason}}</dd></div>{{end}}</dl>
+</section>{{end}}
+{{with .TeachingJournal.Selected}}<section class="panel mt-5"><div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-semibold">Versi {{.Number}} · {{if eq .State "final"}}Final{{else}}Draf{{end}}</h2><span class="status-badge {{if eq .State "final"}}status-badge--active{{else}}status-badge--warning{{end}}">{{if eq .State "final"}}Final{{else}}Draf{{end}}</span></div>
+  <p class="mt-2 text-sm text-gray-500">{{.Event}} · {{.ActorName}} · {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p><p class="mt-4"><strong>Hasil:</strong> {{if eq .Outcome "not_held"}}Tidak Terlaksana{{else}}Terlaksana{{end}}</p>
+  {{if .Material}}<div class="mt-4"><h3 class="font-medium">{{if eq .Outcome "not_held"}}Materi terkait (konteks; bukan materi yang diajarkan){{else}}Materi{{end}}</h3><p class="whitespace-pre-wrap break-words">{{.Material}}</p></div>{{end}}{{if .ActivityNotes}}<div class="mt-4"><h3 class="font-medium">Catatan kegiatan</h3><p class="whitespace-pre-wrap break-words">{{.ActivityNotes}}</p></div>{{end}}{{if .NotHeldReason}}<div class="mt-4"><h3 class="font-medium">Alasan tidak terlaksana</h3><p class="whitespace-pre-wrap break-words">{{.NotHeldReason}}</p></div>{{end}}{{if .CorrectionReason}}<div class="mt-4"><h3 class="font-medium">Alasan koreksi</h3><p class="whitespace-pre-wrap break-words">{{.CorrectionReason}}</p></div>{{end}}{{if .ActualStart}}<p class="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-600"><strong>Catatan historis dari versi lama:</strong> dahulu pernah tersimpan {{.ActualStart}}–{{.ActualEnd}} WIB. Waktu resmi jurnal tetap ditampilkan pada snapshot Jam Pelajaran.</p>{{end}}
+  <h3 class="mt-5 font-medium">Jam pelajaran pada versi ini</h3><ul class="mt-2 space-y-1">{{range .Periods}}<li>Jam ke-{{.PeriodNo}} · {{.StartsAt}}–{{.EndsAt}}</li>{{else}}<li>Snapshot jam tidak tersedia.</li>{{end}}</ul>
+</section>{{end}}
+{{end}}
+
+{{define "teaching-journal-history"}}<section class="panel mt-5"><h2 class="text-lg font-semibold">Riwayat Perubahan</h2><ol class="mt-4 space-y-3">{{range .TeachingJournal.History.Versions}}<li class="rounded-lg border border-gray-200 p-4"><a class="font-medium text-brand-600" href="/jurnal-saya/{{$.TeachingJournal.History.JournalID}}/versi/{{.Number}}">Versi {{.Number}} · {{if eq .State "final"}}Final{{else}}Draf{{end}}</a><p class="mt-1 text-sm text-gray-500">{{.Event}} · {{.ActorName}} · {{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</p>{{if .EventReason}}<p class="mt-2 text-sm">Alasan: {{.EventReason}}</p>{{end}}</li>{{else}}<li>Belum ada histori.</li>{{end}}</ol></section>{{end}}
+
+{{define "teaching-journal-error"}}<section class="panel"><h2 class="text-lg font-semibold">Jurnal tidak dapat ditampilkan</h2><p class="mt-2 text-sm text-gray-600">Periksa hak akses atau kembali ke daftar jurnal.</p><a class="button-secondary mt-4" href="/jurnal-saya">Kembali ke Jurnal Saya</a></section>{{end}}

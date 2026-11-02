@@ -13,6 +13,8 @@ func TestParse(t *testing.T) {
 	}{
 		{"defaults", map[string]string{}, true},
 		{"custom port", map[string]string{"APP_PORT": "9095"}, true},
+		{"trusted proxy cidrs", map[string]string{"APP_TRUSTED_PROXY_CIDRS": "127.0.0.1/32, ::1/128"}, true},
+		{"invalid trusted proxy cidr", map[string]string{"APP_TRUSTED_PROXY_CIDRS": "not-a-cidr"}, false},
 		{"invalid port", map[string]string{"APP_PORT": "0"}, false},
 		{"port overflow", map[string]string{"APP_PORT": "65536"}, false},
 		{"environment", map[string]string{"APP_ENV": "staging"}, false},
@@ -24,6 +26,13 @@ func TestParse(t *testing.T) {
 		{"missing db name", map[string]string{"DATABASE_URL": "postgres://localhost/"}, false},
 		{"production tls", map[string]string{"APP_ENV": "production"}, false},
 		{"production verified", map[string]string{"APP_ENV": "production", "DATABASE_URL": "postgres://localhost/db?sslmode=verify-full"}, true},
+		{"photo storage disabled", map[string]string{"TEACHER_PHOTO_DIR": ""}, true},
+		{"absolute photo storage", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, true},
+		{"absolute staff photo storage", map[string]string{"STAFF_PHOTO_DIR": "/private/staff-selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, true},
+		{"relative staff photo directory", map[string]string{"STAFF_PHOTO_DIR": "private/staff-selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, false},
+		{"relative photo directory", map[string]string{"TEACHER_PHOTO_DIR": "private/selfies", "APP_REPOSITORY_ROOT": "/source/sim_guru"}, false},
+		{"missing repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies"}, false},
+		{"relative repository root", map[string]string{"TEACHER_PHOTO_DIR": "/private/selfies", "APP_REPOSITORY_ROOT": "sim_guru"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			values := map[string]string{"DATABASE_URL": "postgres://user:secret@localhost/db", "CSRF_AUTH_KEY": strings.Repeat("a", 64)}
@@ -42,6 +51,12 @@ func TestParse(t *testing.T) {
 			}
 			if tc.name == "defaults" && cfg.Address != "127.0.0.1:18743" {
 				t.Fatalf("unexpected address %s", cfg.Address)
+			}
+			if tc.name == "trusted proxy cidrs" && (len(cfg.TrustedProxyCIDRs) != 2 || cfg.TrustedProxyCIDRs[0].String() != "127.0.0.1/32" || cfg.TrustedProxyCIDRs[1].String() != "::1/128") {
+				t.Fatal("CIDR proxy tepercaya tidak diparsing dengan benar")
+			}
+			if tc.name == "absolute photo storage" && (cfg.TeacherPhotoDirectory != tc.values["TEACHER_PHOTO_DIR"] || cfg.RepositoryRoot != tc.values["APP_REPOSITORY_ROOT"]) {
+				t.Fatal("konfigurasi storage foto tidak diteruskan")
 			}
 		})
 	}

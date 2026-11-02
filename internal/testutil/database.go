@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/fasih-kode/sim_guru/internal/database"
@@ -56,6 +57,50 @@ func Random(t *testing.T) string {
 	}
 	return hex.EncodeToString(b)
 }
+
+// ActiveCalendar menyiapkan kalender privat untuk satu tes dan mengembalikan
+// tahun aktif sebelumnya saat cleanup, tanpa mengandalkan fixture paket lain.
+func ActiveCalendar(t *testing.T, db *sql.DB, suffix string) (int64, string) {
+	t.Helper()
+	var previous sql.NullInt64
+	err := db.QueryRow(`SELECT id FROM app.school_years WHERE active`).Scan(&previous)
+	if err != nil && err != sql.ErrNoRows {
+		t.Fatal("cannot inspect active test school year")
+	}
+	var yearID, semesterID int64
+	t.Cleanup(func() {
+		if semesterID > 0 {
+			_, _ = db.Exec(`DELETE FROM app.semester_calendars WHERE semester_id=$1`, semesterID)
+			_, _ = db.Exec(`DELETE FROM app.semesters WHERE id=$1`, semesterID)
+		}
+		if yearID > 0 {
+			_, _ = db.Exec(`UPDATE app.school_years SET active=false WHERE id=$1`, yearID)
+			_, _ = db.Exec(`DELETE FROM app.school_years WHERE id=$1`, yearID)
+		}
+		if previous.Valid {
+			_, _ = db.Exec(`UPDATE app.school_years SET active=true WHERE id=$1`, previous.Int64)
+		}
+	})
+	if previous.Valid {
+		if _, err = db.Exec(`UPDATE app.school_years SET active=false WHERE id=$1`, previous.Int64); err != nil {
+			t.Fatal("cannot isolate active test year")
+		}
+	}
+	if err = db.QueryRow(`INSERT INTO app.school_years(name,active) VALUES($1,true) RETURNING id`, "Panduan test "+suffix).Scan(&yearID); err != nil {
+		t.Fatal("cannot create isolated active test year")
+	}
+	if err = db.QueryRow(`INSERT INTO app.semesters(school_year_id,number) VALUES($1,1) RETURNING id`, yearID).Scan(&semesterID); err != nil {
+		t.Fatal("cannot create isolated test semester")
+	}
+	eventDate := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -10).Format("2006-01-02")
+	starts := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -30).Format("2006-01-02")
+	ends := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, 30).Format("2006-01-02")
+	if _, err = db.Exec(`INSERT INTO app.semester_calendars(semester_id,starts_on,ends_on,school_days) VALUES($1,$2,$3,'[1,2,3,4,5,6]'::jsonb)`, semesterID, starts, ends); err != nil {
+		t.Fatal("cannot create isolated test calendar")
+	}
+	return yearID, eventDate
+}
+
 func User(t *testing.T, db *sql.DB, roles ...string) (auth.User, string) {
 	t.Helper()
 	password := Random(t)

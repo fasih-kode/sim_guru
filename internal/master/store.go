@@ -22,7 +22,7 @@ func authorize(ctx context.Context, q queryer, actor int64, kind Kind, write boo
 	}
 	role := kind.WriterRole()
 	readRole := role
-	if !write && kind != Subjects {
+	if !write && kind != Subjects && kind != Staff {
 		readRole = "kurikulum"
 	}
 	var allowed bool
@@ -42,6 +42,8 @@ func selection(kind Kind) string {
 		return `SELECT id,name,to_char(birth_date,'YYYY-MM-DD') AS birth_date,gender,COALESCE(nis,'') AS nis,COALESCE(nisn,'') AS nisn,phone,(active AND NOT EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id AND e.effective_date <= (now() AT TIME ZONE 'Asia/Jakarta')::date)),version,EXISTS(SELECT 1 FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id AND e.effective_date <= (now() AT TIME ZONE 'Asia/Jakarta')::date),coalesce((SELECT effective_date::text FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id),''),coalesce((SELECT return_date::text FROM app.outstanding_student_school_exits e WHERE e.student_id=app.students.id),'') FROM app.students`
 	case Teachers:
 		return `SELECT id,name,nip,nuptk,email,phone,COALESCE(user_id,0) AS user_id,active,version FROM app.teachers`
+	case Staff:
+		return `SELECT id,name,COALESCE(employee_number,''),email,phone,COALESCE(user_id,0) AS user_id,active,version FROM app.staff_members`
 	case Subjects:
 		return `SELECT id,name,code,active,version FROM app.subjects`
 	}
@@ -55,6 +57,8 @@ func scan(kind Kind, row interface{ Scan(...any) error }) (Record, error) {
 		err = row.Scan(&r.ID, &r.Name, &r.BirthDate, &r.Gender, &r.NIS, &r.NISN, &r.Phone, &r.Active, &r.Version, &r.Transferred, &r.ExitDate, &r.ReturnDate)
 	case Teachers:
 		err = row.Scan(&r.ID, &r.Name, &r.NIP, &r.NUPTK, &r.Email, &r.Phone, &r.UserID, &r.Active, &r.Version)
+	case Staff:
+		err = row.Scan(&r.ID, &r.Name, &r.EmployeeNumber, &r.Email, &r.Phone, &r.UserID, &r.Active, &r.Version)
 	case Subjects:
 		err = row.Scan(&r.ID, &r.Name, &r.Code, &r.Active, &r.Version)
 	default:
@@ -108,6 +112,8 @@ func (s *Store) List(ctx context.Context, actor int64, kind Kind, f Filter) ([]R
 		searchFields += ` OR nis ILIKE $1 OR nisn ILIKE $1`
 	case Teachers:
 		searchFields += ` OR nip ILIKE $1 OR nuptk ILIKE $1`
+	case Staff:
+		searchFields += ` OR employee_number ILIKE $1`
 	case Subjects:
 		searchFields += ` OR code ILIKE $1`
 	}
@@ -198,6 +204,8 @@ func saveRecord(ctx context.Context, tx *sql.Tx, actor int64, kind Kind, id int6
 			err = tx.QueryRowContext(ctx, `INSERT INTO app.students(name,birth_date,gender,nis,nisn,phone,active) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7) RETURNING id`, in.Name, in.BirthDate, in.Gender, in.NIS, in.NISN, in.Phone, in.Active).Scan(&id)
 		case Teachers:
 			err = tx.QueryRowContext(ctx, `INSERT INTO app.teachers(name,nip,nuptk,email,phone,user_id,active) VALUES($1,$2,$3,$4,$5,NULLIF($6::bigint,0),$7) RETURNING id`, in.Name, in.NIP, in.NUPTK, in.Email, in.Phone, in.UserID, in.Active).Scan(&id)
+		case Staff:
+			err = tx.QueryRowContext(ctx, `INSERT INTO app.staff_members(name,employee_number,email,phone,user_id,active) VALUES($1,$2,$3,$4,NULLIF($5::bigint,0),$6) RETURNING id`, in.Name, in.EmployeeNumber, in.Email, in.Phone, in.UserID, in.Active).Scan(&id)
 		case Subjects:
 			err = tx.QueryRowContext(ctx, `INSERT INTO app.subjects(name,code,active) VALUES($1,$2,$3) RETURNING id`, in.Name, in.Code, in.Active).Scan(&id)
 		}
@@ -207,6 +215,8 @@ func saveRecord(ctx context.Context, tx *sql.Tx, actor int64, kind Kind, id int6
 			_, err = tx.ExecContext(ctx, `UPDATE app.students SET name=$1,birth_date=$2,gender=$3,nis=NULLIF($4,''),nisn=NULLIF($5,''),phone=$6,active=$7,version=version+1,updated_at=now() WHERE id=$8`, in.Name, in.BirthDate, in.Gender, in.NIS, in.NISN, in.Phone, in.Active, id)
 		case Teachers:
 			_, err = tx.ExecContext(ctx, `UPDATE app.teachers SET name=$1,nip=$2,nuptk=$3,email=$4,phone=$5,user_id=NULLIF($6::bigint,0),active=$7,version=version+1,updated_at=now() WHERE id=$8`, in.Name, in.NIP, in.NUPTK, in.Email, in.Phone, in.UserID, in.Active, id)
+		case Staff:
+			_, err = tx.ExecContext(ctx, `UPDATE app.staff_members SET name=$1,employee_number=$2,email=$3,phone=$4,user_id=NULLIF($5::bigint,0),active=$6,version=version+1,updated_at=now() WHERE id=$7`, in.Name, in.EmployeeNumber, in.Email, in.Phone, in.UserID, in.Active, id)
 		case Subjects:
 			_, err = tx.ExecContext(ctx, `UPDATE app.subjects SET name=$1,code=$2,active=$3,version=version+1,updated_at=now() WHERE id=$4`, in.Name, in.Code, in.Active, id)
 		}

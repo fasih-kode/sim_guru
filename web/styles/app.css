@@ -73,7 +73,6 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .brand-mark svg { width:22px; height:22px; }
 .sidebar-caption { margin:8px 0 26px 50px; color:#667085; font-size:12px; }
 .sidebar-nav { display:flex; flex:1; flex-direction:column; gap:5px; }
-.nav-section-label { margin:0 0 8px 12px; color:#98a2b3; font-size:10px; font-weight:600; letter-spacing:.06em; }
 .nav-section-secondary { margin-top:22px; }
 .nav-group { margin:0; }
 .nav-group-toggle { display:flex; min-height:40px; cursor:pointer; list-style:none; align-items:center; gap:12px; border-radius:8px; padding:9px 12px; color:#344054; font-size:14px; font-weight:500; transition:background .15s,color .15s; }
@@ -84,6 +83,18 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .nav-group[open] > .nav-group-toggle .nav-chevron { transform:rotate(180deg); }
 .nav-submenu { display:grid; gap:3px; padding:4px 0 5px 14px; }
 .nav-submenu .nav-link { min-height:38px; font-size:13px; }
+.nav-link > span { min-width:0; overflow-wrap:anywhere; }
+.nav-group-toggle:focus-visible { outline:2px solid #465fff; outline-offset:2px; }
+.nav-admin-parent { min-height:42px; }
+.section-navigation-title { margin:0 0 14px; color:#101828; font-size:1.5rem; font-weight:600; line-height:1.3; }
+.navigation-tabs-viewport { width:100%; min-width:0; max-width:100%; margin:0 0 18px; overflow-x:auto; overscroll-behavior-inline:contain; scrollbar-width:thin; }
+.navigation-tabs-row { display:flex; width:max-content; min-width:100%; align-items:stretch; gap:16px; border-bottom:1px solid #e4e7ec; }
+.navigation-tab { display:inline-flex; min-height:44px; flex:0 0 auto; align-items:center; gap:8px; margin-bottom:-1px; border-bottom:2px solid transparent; padding:8px 8px 10px; color:#667085; font-size:14px; font-weight:500; line-height:1.25; text-decoration:none; white-space:nowrap; transition:color .15s,border-color .15s; }
+.navigation-tab:hover { color:#3641f5; }
+.navigation-tab.is-active { border-bottom-color:#465fff; color:#3641f5; }
+.navigation-tab:focus-visible { position:relative; z-index:1; outline:2px solid #465fff; outline-offset:1px; }
+.navigation-tab svg { width:18px; height:18px; flex:0 0 auto; }
+.section-navigation-page-title { margin:0 0 18px; color:#344054; font-size:1rem; font-weight:500; line-height:1.5; }
 .sidebar-footer { display:flex; align-items:center; gap:9px; margin-top:24px; border-top:1px solid #f2f4f7; padding:16px 8px 0; color:#667085; font-size:11px; }
 .sidebar-role-dot { width:7px; height:7px; border-radius:50%; background:#12b76a; }
 .sidebar-main { min-width:0; }
@@ -116,6 +127,9 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .sidebar-toggle svg,.sidebar-close svg { width:20px; height:20px; }
 .sidebar-close { width:34px; height:34px; }
 @media (max-width:520px) {
+ .navigation-tabs-row { gap:8px; }
+ .navigation-tab { min-height:42px; gap:6px; padding:8px 7px 9px; font-size:13px; }
+ .navigation-tab svg { width:17px; height:17px; }
  .header-user-name { max-width:110px; }
  .header-user-role { display:none; }
  .header-user-dropdown > summary { gap:7px; padding-inline:4px; }
@@ -160,9 +174,15 @@ html { scrollbar-color: rgb(102 112 133 / .32) transparent; scrollbar-width: thi
 .table-filter-panel label { margin-bottom:5px; color:#475467; font-size:12px; }
 .table-filter-panel select { min-height:38px; padding-block:7px !important; }
 .table-surface { overflow-x:auto; border:1px solid #e4e7ec; border-radius:14px; background:#fff; }
+.teacher-attendance-management-filter { display:grid; grid-template-columns:minmax(190px,240px) minmax(260px,1fr) auto; align-items:end; gap:12px; margin-top:16px; }
+.teacher-attendance-management-table { min-width:760px; }
+.teacher-attendance-request-table { min-width:780px; }
+@media (max-width:640px) { .teacher-attendance-management-filter { grid-template-columns:1fr; } }
+.lesson-attendance-roster-surface { position:relative; }
 table.app-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
 .app-table thead tr { border-bottom:1px solid #eaecf0; }
 .app-table th { padding:13px 12px; color:#667085; font-weight:400; white-space:nowrap; }
+table.app-table th.journal-content-heading { white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
 .app-table td { border-bottom:1px solid #eaecf0; padding:14px 12px; color:#344054; vertical-align:middle; }
 .app-table tbody tr { border-bottom:0; }
 .app-table tbody tr:last-child td { border-bottom:0; }
@@ -246,3 +266,75 @@ body:has(.form-modal[open]) { overflow:hidden; }
 @media(max-width:640px) { .timetable-action-group { display:flex; width:100%; } .timetable-action-group > a,.timetable-action-group > button { flex:1; min-width:0; padding:8px; gap:5px; font-size:12px; } }
 
 @media(max-width:640px) { .movement-action-group { display:flex; width:100%; } .movement-action-group > button { flex:1; min-width:0; padding:8px; gap:4px; font-size:12px; white-space:normal; } }
+
+.daily-filters { display:flex; flex-wrap:wrap; gap:1rem; flex:1; }
+.daily-filters > div { min-width:12rem; }
+.qr-reader { max-width:38rem; margin-inline:auto; }
+.qr-video { display:block; width:100%; max-height:24rem; min-height:12rem; object-fit:cover; background:#101828; border-radius:1rem; }
+.qr-result { border:1px solid #d0d5dd; border-radius:0.75rem; padding:1rem; color:#344054; background:#f9fafb; overflow-wrap:anywhere; }
+.qr-result--error { border-color:#fda29b; background:#fef3f2; color:#b42318; }
+.student-printed-card { width:min(100%,24rem); margin-inline:auto; padding:1.25rem; border:1px solid #d0d5dd; border-radius:1rem; text-align:center; background:white; color:#101828; }
+.student-printed-card img { width:15rem; max-width:100%; height:auto; margin:0.75rem auto; image-rendering:pixelated; }
+@media(max-width:640px) { .daily-filters { width:100%; } .daily-filters > div { width:100%; min-width:0; } }
+@media print {
+ body:has(.student-printed-card) .sidebar-panel, body:has(.student-printed-card) .app-header, body:has(.student-printed-card) .print-controls, body:has(.student-printed-card) main > h1, body:has(.student-printed-card) .sidebar-backdrop { display:none !important; }
+ body:has(.student-printed-card) .sidebar-main { margin:0 !important; }
+ body:has(.student-printed-card) .page-content { padding:0 !important; }
+ .student-printed-card { width:85mm; break-inside:avoid; margin:5mm; }
+}
+
+.daily-quick-toolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:.75rem; }
+.daily-quick-toolbar > div { max-width:20rem; }
+.daily-quick-footer { position:sticky; bottom:0; z-index:10; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; border-top:1px solid #e4e7ec; background:#fff; padding:1rem 0; }
+.quick-status-options { display:flex; flex-wrap:wrap; gap:.4rem; }
+.quick-status-options label { display:flex; align-items:center; gap:.35rem; padding:.5rem .6rem; border:1px solid #d0d5dd; border-radius:.5rem; cursor:pointer; white-space:nowrap; }
+.quick-status-options label:has(input:checked) { border-color:#465fff; background:#ecf3ff; color:#3538cd; }
+.quick-status-options input { width:1rem; height:1rem; accent-color:#465fff; }
+.quick-clear { margin-top:.4rem; border:0; background:none; padding:.2rem 0; color:#465fff; font-size:.75rem; }
+.daily-quick-table [data-quick-arrival] { min-width:7rem; }
+@media(max-width:640px) {
+ .daily-quick-table { min-width:0; }
+ .daily-quick-table thead { display:none; }
+ .daily-quick-table tbody,.daily-quick-table tr { display:block; width:100%; }
+ .daily-quick-table tr[data-quick-row] { display:grid; grid-template-columns:1.5rem minmax(0,1fr); border-bottom:1px solid #e4e7ec; padding:.75rem; }
+ .daily-quick-table tr[data-quick-row][hidden] { display:none; }
+ .daily-quick-table td { border:0; padding:.35rem; }
+ .daily-quick-table td:first-child { grid-column:1; grid-row:1; }
+ .daily-quick-table td:nth-child(n+2) { grid-column:2; }
+ .daily-quick-table td:last-child::before { content:'Datang (WIB, 24 jam)'; display:block; font-size:.75rem; margin-bottom:.4rem; color:#667085; }
+ .quick-status-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+.daily-quick-table [data-quick-arrival]:disabled { background:#f2f4f7; color:#667085; }
+
+.teacher-report-surface { position:relative; }
+.teacher-report-table { min-width:880px; }
+.teacher-report-description { max-width:280px; overflow-wrap:anywhere; }
+.teacher-report-content { overflow-wrap:anywhere; }
+
+.student-guidance-table-surface { overflow-x:auto; overscroll-behavior-inline:contain; }
+.student-guidance-table { min-width:1180px; table-layout:fixed; }
+.student-guidance-table thead tr { border-bottom:1px solid #eaecf0; background:#f9fafb; }
+.student-guidance-table th { padding:16px 20px; color:#667085; font-size:.75rem; white-space:normal; vertical-align:top; }
+.student-guidance-table td { padding:16px 20px; color:#344054; line-height:1.5; vertical-align:top; white-space:normal; overflow-wrap:anywhere; }
+.student-guidance-table td:first-child { white-space:nowrap; }
+.student-guidance-table tbody tr { border-bottom:1px solid #eaecf0; }
+.student-guidance-table tbody tr:last-child { border-bottom:0; }
+.student-guidance-table tbody tr:hover { background:#fafbff; }
+.guidance-table-text { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+@media(max-width:640px) {
+ .student-guidance-page .table-pagination { gap:4px; }
+ .student-guidance-page .table-pagination .table-page-arrow { gap:4px; padding:6px 8px; font-size:12px; }
+ .student-guidance-page .table-page-links a,.student-guidance-page .table-page-links span,.student-guidance-page .table-page-links button { min-width:28px; }
+}
+
+/* Hasil daftar tetap terlihat saat loading; tombol submit tetap menjadi fallback tanpa JS. */
+.list-feedback { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; font-size:.875rem; color:#667085; }
+.list-feedback:has([data-list-message]:not(:empty)),.list-feedback:has(.htmx-request) { margin-bottom:1rem; }
+.list-feedback .htmx-indicator { display:none; }
+.list-feedback .htmx-indicator.htmx-request { display:inline; }
+.live-list-ready [data-list-filter] button[type="submit"] { display:none; }
+.student-guidance-mobile-list { grid-template-columns:minmax(0,1fr); }
+.student-guidance-mobile-card { min-width:0; overflow-wrap:anywhere; }
+.student-guidance-mobile-card p { min-width:0; overflow-wrap:anywhere; }

@@ -33,7 +33,7 @@
 
 ## 2. Tujuan dan batas aplikasi — FINAL
 
-SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kelas/penempatan, penugasan dan jadwal, absensi guru QR, absensi siswa harian dan per pelajaran, catatan pembinaan Kesiswaan dan bimbingan BK sederhana, jurnal mengajar, penilaian, serta laporan akademik dan kehadiran. Data historis dipertahankan; laporan bukan rapor resmi. Satu sekolah, bukan multi-tenant.
+SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kelas/penempatan, penugasan dan jadwal, absensi guru GPS dan selfie, absensi siswa harian dan per pelajaran, catatan pembinaan Kesiswaan dan bimbingan BK sederhana, jurnal mengajar, penilaian, serta laporan akademik dan kehadiran. Data historis dipertahankan; laporan bukan rapor resmi. Satu sekolah, bukan multi-tenant.
 
 ## 3. Model kewenangan sederhana — FINAL (menggantikan rumusan mandat/delegasi sebelumnya)
 
@@ -47,8 +47,10 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 | Wali Kelas | Pantau siswa dan absensi kelas yang ditugaskan, tindak lanjut kelas; baca catatan Kesiswaan/BK siswa di kelasnya | Hak baca catatan tidak memberi hak edit; tidak otomatis mengubah nilai seluruh mapel |
 | Kepala Sekolah | Lihat ringkasan/laporan sekolah dan baca catatan Kesiswaan/BK seluruh sekolah; menangani keputusan akademik khusus | Hak baca catatan tidak memberi hak edit; tidak menjadi antrean persetujuan pekerjaan harian |
 | BK | Lihat siswa yang ditangani; catat bimbingan/konseling dan tindak lanjutnya | Terbatas pada siswa/kasus yang ditangani; tidak otomatis mengubah identitas, penempatan, jadwal, atau nilai |
-| Kesiswaan | Lihat seluruh siswa dan rekap kehadiran sekolah; catat pelanggaran serta pembinaan yang dilakukan | Tidak otomatis membuka catatan BK atau mengubah identitas, sumber absensi, penempatan, jadwal, atau nilai |
-| Petugas Absensi | Catat/koreksi kehadiran sesuai cakupan tugas | Tidak otomatis mengubah jurnal atau nilai |
+| Kesiswaan | Lihat seluruh siswa dan rekap kehadiran sekolah; atur batas kedatangan/toleransi siswa (D-036); catat pelanggaran serta pembinaan yang dilakukan | Tidak otomatis membuka catatan BK atau mengubah identitas, sumber absensi, penempatan, jadwal, atau nilai |
+| Petugas Absensi Siswa | Kelola absensi harian dan kartu QR siswa | Tidak memiliki akses kehadiran guru |
+| Pegawai TU | Role pegawai administratif | Tidak otomatis mengelola kehadiran guru |
+| TU Pengelola Kehadiran Guru | Catat manual, lengkapi, dan koreksi histori kehadiran guru; melihat permintaan guru | Harus merangkap Pegawai TU; tidak boleh mengubah kehadirannya sendiri |
 
 **Role Kurikulum langsung memberi akses ke menu dan fungsi Kurikulum.** Role dapat rangkap; penugasan Guru Mapel dan Wali Kelas tetap membatasi kelas/mapel. Admin boleh mengubah role berdasarkan keputusan sekolah, dengan audit sederhana. Pengelolaan penugasan oleh Kurikulum dalam modul akademik dapat berupa data operasional, tetapi **Admin tetap pengelola akun dan role; Kurikulum mengelola penugasan akademik**; tidak perlu approval silang. Bila Kurikulum menyusun pengampu/jadwal, sistem harus menyelaraskan dengan penugasan yang telah ditetapkan tanpa memberikan hak baru diam-diam.
 
@@ -80,20 +82,45 @@ SIM-GURU menyatukan master data siswa/guru/mapel, tahun ajaran dan semester, kel
 
 **Revisi disetujui pemilik proyek 21 Oktober 2026:** pembuatan/koreksi kelas dan penempatan awal beralih ke Admin; kalender dan seluruh tugas Kurikulum yang disebut di atas tetap Kurikulum. ID kelas dan histori sebelum perubahan kebijakan dipertahankan. Rujukan keputusan: [D-015](docs/DECISIONS.md#d-015--pemisahan-kelasadmin-dan-kalenderkurikulum-disetujui-21-oktober-2026).
 
-## 3B. Kesiswaan dan BK — FINAL (22 Oktober 2026)
+## 3B. Kesiswaan dan BK — FINAL (D-018, diperbarui D-042 pada 29 Oktober 2026)
 
-**Status:** masuk rencana v1 berdasarkan persetujuan pemilik proyek; belum diimplementasikan. Rujukan keputusan: [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026).
+**Status:** kebutuhan awal disetujui melalui [D-018](docs/DECISIONS.md#d-018--kesiswaan-dan-bk-sederhana-disetujui-22-oktober-2026). Catatan Pembinaan Kesiswaan 8A-02 diimplementasikan sesuai D-042. Fase 8A-03 terintegrasi lokal ke branch review melalui migration 00029–00030, service, dan UI. UAT FINAL Product Owner PASS: alur 8/8, UX-FIX-01 4/4, dan handoff D-046 5/5. Final gate dan commit lokal lulus; push tertahan karena autentikasi SSH ditolak, sesuai HANDOVER. Modul BK mandiri tetap di luar cakupan.
+
+**Handoff akibat perubahan Wali Kelas — D-046 FINAL:** kasus Perlu tindak lanjut tahap Wali dapat diambil alih secara eksplisit oleh Wali aktif baru hanya jika satu penempatan aktif dan satu penugasan Wali sah dapat diverifikasi serta owner lama bukan lagi Wali aktif siswa. Alasan, owner lama/baru, pelaku, waktu, dan histori dicatat atomik. Tidak berlaku pada kasus selesai atau tahap BK/Kesiswaan; GET tidak memutasi; kondisi ambigu, stale version, dan pengulangan ditolak tanpa mutasi. Lihat [D-046](docs/DECISIONS.md#d-046--pengambilalihan-penanganan-kasus-akibat-perubahan-wali-kelas-30-oktober-2026).
 
 - **Kesiswaan:** melihat seluruh siswa dan rekap kehadiran sekolah, serta mencatat pelanggaran dan pembinaan yang dilakukan.
 - **BK:** melihat siswa yang menjadi tanggung jawabnya, serta mencatat bimbingan/konseling dan tindak lanjut pada siswa/kasus yang ditangani.
-- **Wali Kelas:** membaca catatan Kesiswaan dan BK siswa di kelas penugasannya; tidak memperoleh hak mengubah catatan dari role Wali Kelas.
+- **Wali Kelas:** membaca catatan Kesiswaan siswa berdasarkan penempatan kelas aktif siswa dan penugasan Wali Kelas yang berlaku saat pembacaan; membaca catatan BK sesuai cakupan yang berlaku untuk catatan BK. Perpindahan siswa mengalihkan hak baca catatan Kesiswaan kepada Wali Kelas baru, dan mantan Wali Kelas tidak mempertahankan akses melalui penugasan historis. Jika penempatan atau penugasan aktif tidak dapat dipastikan, akses catatan Kesiswaan ditolak. Wali Kelas tidak memperoleh hak mengubah catatan.
 - **Kepala Sekolah:** membaca catatan dan ringkasan Kesiswaan/BK seluruh sekolah; tidak menjadi pemberi persetujuan rutin atau pengubah catatan dari role Kepala Sekolah.
 - Setiap catatan cukup memuat **siswa, tanggal, kejadian/keperluan, tindakan, petugas, dan status**. Status hanya **Perlu tindak lanjut** atau **Selesai**. Petugas pencatat tetap tercatat sesuai akun yang melakukan tindakan.
 - Siswa mengacu pada ID master yang dikelola Admin. Identitas, kelas/penempatan, jadwal, nilai, dan pencatatan/koreksi sumber absensi tetap mengikuti kewenangan modul masing-masing.
 - **Tidak ada poin pelanggaran, sanksi otomatis, atau alur persetujuan pada v1 ini.** Pengembangan lebih lanjut dilakukan bila ada kebutuhan dan persetujuan baru; usulan audit yang lebih luas tidak otomatis masuk cakupan.
-- Akses baca catatan mengikuti ketentuan di atas; role Admin atau Kesiswaan tidak otomatis memberi akses ke catatan BK. Role gabungan hanya memperoleh hak tambahan dari role/cakupan yang memang dimiliki.
+- Identitas dan kelas siswa pada saat kejadian disimpan sebagai snapshot historis dan tidak menentukan hak baca saat ini. BK, Guru Mapel, Admin, dan role lain tidak otomatis mendapat akses baca catatan Kesiswaan. Role gabungan hanya memperoleh hak dalam cakupan masing-masing role yang sah; role lain tidak memperluas cakupan.
+- Akses baca catatan BK tetap mengikuti D-018: Kesiswaan tidak otomatis mendapat akses ke catatan BK dan cakupan BK hanya mencakup siswa/kasus yang ditangani. D-042 hanya menetapkan cakupan baca catatan Kesiswaan.
 
-**Acceptance criteria rencana:** Kesiswaan dapat mencatat pembinaan siswa seluruh sekolah; BK dibatasi pada siswa/kasus yang ditangani; Wali Kelas hanya membaca catatan siswa di kelasnya; Kepala Sekolah membaca seluruh sekolah. Catatan menggunakan field dan dua status di atas, pemeriksaan akses dilakukan di server, serta tidak ada poin/sanksi otomatis/approval rutin. Perubahan catatan penting mengikuti audit sederhana bab 11. Cara mencatat penanggung jawab siswa/kasus BK perlu ditetapkan saat fase implementasi agar cakupan dapat diperiksa, tanpa menambahkan workflow persetujuan.
+**Acceptance criteria rencana:** Kesiswaan mengelola catatan pembinaan seluruh sekolah; BK dibatasi pada siswa/kasus yang ditangani; Wali Kelas membaca catatan Kesiswaan hanya untuk penempatan aktif yang cocok dengan penugasan aktif saat baca dan akses ditolak jika cakupan tidak jelas; Kepala Sekolah membaca seluruh sekolah. Identitas/kelas saat kejadian disimpan sebagai snapshot historis. Catatan menggunakan field dan dua status di atas, pemeriksaan akses dilakukan di server, serta tidak ada poin/sanksi otomatis/approval rutin. Perubahan catatan penting mengikuti audit sederhana bab 11. Cara mencatat penanggung jawab siswa/kasus BK perlu ditetapkan saat fase implementasi agar cakupan dapat diperiksa, tanpa menambahkan workflow persetujuan. Cakupan Wali Kelas untuk catatan Kesiswaan ditetapkan FINAL melalui D-042; keputusan tersebut belum menetapkan detail cakupan BK.
+
+### Konsep koordinasi kasus — D-043 (disetujui 30 Oktober 2026)
+
+Setiap kasus memiliki ID permanen, siswa master dan snapshot konteks, satu penanggung jawab saat ini, status Perlu tindak lanjut atau Selesai, dan banyak entri tindakan/tindak lanjut. Rujukan kepada petugas lain yang berwenang dan perubahan penanggung jawab menjadi peristiwa histori tersendiri; perubahan tidak menimpa catatan atau tanggung jawab terdahulu. Catatan Pembinaan Kesiswaan existing tetap dipertahankan dan dapat dihubungkan ke kasus secara aditif. Konsep ini tidak mengubah akses D-042, tidak membuka isi konseling pribadi, serta tidak menambahkan poin, sanksi otomatis, atau approval digital berlapis.
+
+**Rancangan relasi minimal (belum skema implementasi):** entitas `student_cases` menyimpan ID kasus, ID siswa resmi, snapshot identitas/konteks saat kasus dibuka, status, dan penanggung jawab saat ini; entitas anak `student_case_entries` menyimpan banyak tindakan/tindak lanjut beserta aktor dan waktu server; histori append-only `student_case_history` mencatat rujukan dan perubahan penanggung jawab dengan aktor, waktu, alasan bila relevan, serta nilai sebelum/sesudah. Catatan `student_guidance_records` yang sudah ada tetap menjadi catatan yang berdiri sendiri dan dapat memiliki tautan nullable ke kasus; baris lama tidak dipindahkan, digabung, atau diubah otomatis. Rujukan tidak dengan sendirinya memberikan hak baca. Pilihan ini adalah rancangan teknis, bukan keputusan otorisasi.
+
+Catatan status keputusan: D-043 semula mencatat alur penanggung jawab dan rincian akses sebagai OPEN. D-044 kini menetapkan urutan normal dan pihak perujuk pada tiap tahap. Kewenangan penugasan ulang di luar alur normal, penutupan kasus, serta batas baca isi konseling tetap OPEN; persetujuan konsep tidak memberi akses konseling otomatis kepada Kesiswaan, Wali Kelas, Kepala Sekolah, Admin, atau petugas yang dirujuk.
+
+### Alur formal kasus berjenjang — D-044 (FINAL, 30 Oktober 2026)
+
+Alur normal wajib **Wali Kelas → Guru BK → Kesiswaan**. Wali Kelas memulai kasus formal, mencatat pembinaan awal dan mengevaluasi perkembangannya. Bila belum berhasil atau membutuhkan konseling, Wali Kelas merujuk ke Guru BK. Guru BK mencatat layanan dan tindak lanjut; bila belum ada perbaikan dan perlu penegakan disiplin, Guru BK meneruskan ke Kesiswaan. Kesiswaan menentukan penanganan disiplin menurut tata tertib dan kewenangan sekolah, tanpa sanksi otomatis.
+
+Kasus tetap memiliki satu **penanggung jawab aktif** pada tahap yang berjalan. **Wali Kelas tetap menjadi pemantau/koordinator** dan menerima informasi koordinasi/perkembangan yang diperlukan untuk siswa binaannya setelah penanggung jawab aktif beralih. Kedua fungsi ini berbeda dan tidak boleh digabung menjadi satu pemilik. Perubahan tahap/rujukan dicatat append-only. Status hanya Perlu tindak lanjut atau Selesai; tidak ada approval digital berlapis.
+
+Siswa yang datang langsung ke BK memperoleh bantuan awal; Wali Kelas menerima informasi yang diperlukan untuk koordinasi tanpa rincian konseling pribadi. Jalur ini bukan bypass rutin atas tahap formal Wali Kelas. Prosedur darurat sekolah didahulukan dan aplikasi tidak boleh menghambat pertolongan. Tata cara pencatatan intake langsung dan keadaan darurat harus mengikuti keputusan/prosedur sekolah yang berlaku; implementasi tidak boleh menjadikan formulir atau persetujuan sebagai prasyarat bantuan.
+
+**Batas rancangan implementasi:** model menyimpan tahap dan satu penanggung jawab aktif pada kasus, terpisah dari Wali Kelas pemantau. Service mengunci/memeriksa versi kasus, memvalidasi transisi normal secara berurutan, mengubah penanggung jawab, dan menulis histori append-only dalam satu transaksi agar dua rujukan bersamaan tidak membuat jalur paralel. Migration membatasi nilai tahap/status dan referensi aktor; UI hanya menawarkan tindakan tahap berikut yang sah, sementara server tetap menolak request bypass. Intake langsung BK dicatat tanpa mengubahnya menjadi transisi rutin yang melewati Wali Kelas. Informasi koordinasi untuk Wali Kelas harus dipisahkan dari isi konseling pribadi dan dibatasi pada kebutuhan koordinasi; D-044 belum menentukan daftar field/rincian yang boleh dibagikan. Pembinaan awal Wali Kelas adalah entri domain kasus baru, bukan mutasi otomatis ke `student_guidance_records` existing. Hak akses dan histori record existing tetap mengikuti D-042.
+
+**Status setelah D-045:** hak pemantauan Wali Kelas aktif, pemilihan Guru BK aktif pada rujukan, baca ringkasan oleh Kepala Sekolah, akses catatan konseling hanya untuk BK penanggung jawab aktif, batas Kesiswaan, serta larangan akses otomatis Admin/role lain ditetapkan FINAL. Penanggung jawab aktif dapat menyelesaikan atau membuka kembali kasus dengan alasan dan histori; hanya penanggung jawab aktif yang dapat melakukan perubahan status. Penutupan tidak memerlukan approval. Tata cara formal pencatatan intake BK langsung/darurat serta penugasan ulang di luar alur normal masih perlu dirancang tanpa menahan bantuan awal/darurat.
+
+D-045 memperjelas pembacaan D-018: hak Kepala Sekolah terhadap ringkasan tidak mencakup isi konseling pribadi. Catatan konseling dipisahkan dari ringkasan koordinasi dan `student_guidance_records` existing. Hak akses Catatan Pembinaan Kesiswaan existing tetap mengikuti D-042.
 
 ## 4. Master Data — FINAL inti
 
@@ -251,24 +278,76 @@ Pengguna mengonfirmasi sampel ekspor terpotong karena batas lisensi dan meminta 
 
 Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka pengunggah ber-role Kurikulum, dengan token acak yang disimpan hash-nya, masa berlaku 30 menit, maksimal lima unggahan aktif, versi pratinjau dan provenance file. Kontak siswa/guru dan XML mentah tidak disimpan. Payload unggahan selesai dibersihkan; histori entri menyimpan hash file, referensi pelajaran/slot XML dan hasil tujuan. Unggahan kedaluwarsa tidak dapat dipakai dan payload dibersihkan saat pengguna mengunggah lagi. Tidak menjalankan impor contoh otomatis pada database pengguna.
 
-## 7. Absensi — FINAL inti
+## 7. Absensi — FINAL rancangan disetujui 24 Oktober 2026
 
-- Ketidakhadiran guru tidak memicu penunjukan pengganti/cadangan. Absensi guru, absensi siswa, jadwal, dan jurnal tetap merupakan sumber data yang terpisah.
+**Keputusan:** D-033. Guru memakai GPS dan selfie masuk/pulang; absensi harian siswa memakai kartu QR; absensi per pelajaran dicatat guru pengampu. Ketiga sumber terpisah; kehadiran guru tidak membuktikan mengajar atau membuat jurnal, dan Hadir harian tidak mengisi tiap mapel. Kosong tetap **Belum Dicatat**, bukan Hadir/Alpa. Status siswa hanya Hadir, Sakit, Izin, Alpa, Belum Dicatat; Belum Diverifikasi bukan status keenam. Tanpa guru pengganti, poin pelanggaran, atau approval Kepala Sekolah.
 
-- Guru: QR kedatangan dan kepulangan, terpisah dari bukti mengajar. Mekanisme QR/fallback ketika gagal masih **OPEN P0**.
-- Siswa: absensi harian berbeda dari absensi per pelajaran. Status: **Hadir, Sakit, Izin, Alpa, Belum Dicatat**. “Belum Diverifikasi” adalah kondisi proses, bukan status keenam.
-- Tidak ada inferensi otomatis Hadir/Alpa dari data kosong. Perbedaan data dapat ditandai untuk pemeriksaan.
-- Koreksi dilakukan guru/petugas berwenang dengan alasan dan riwayat. Tidak perlu approval Kepala Sekolah.
+### 7.1 Fondasi tanggal dan akses — urutan implementasi pertama
+- Kurikulum mengatur rentang tanggal semester (inklusif), hari sekolah mingguan (Senin–Minggu dapat dipilih), serta tanggal pengecualian libur/hari sekolah khusus. Tidak menebak tanggal dari nama tahun. Rentang semester dalam satu tahun berurutan/tidak overlap. Rentang tahun sekolah mengikuti rentang semester yang dikonfigurasi, bukan sumber tanggal ganda.
+- Admin menentukan tanggal siswa mulai mengikuti kelas pada penempatan awal; tanggal mengetik data bukan tanggal mulai. Penempatan lama tanpa tanggal tidak diisi otomatis. Admin melengkapinya melalui Tanggal Mulai Penempatan dengan alasan dan histori. Tanggal tidak boleh melewati kejadian perpindahan yang sudah diketahui. Penempatan baru melalui UI wajib tanggal; penempatan dari penerimaan kembali memakai tanggal kembali, transisi memakai awal kalender tujuan bila tersedia, selain itu perlu dilengkapi Admin.
+- Kalender dan tanggal penempatan memakai transaksi serta optimistic version. Riwayat mencatat pelaku/waktu/alasan/sebelum/sesudah.
+- Roster untuk absensi dibaca sesuai tanggal WIB, meliputi pindah kelas, keluar, dan kembali. Data tanpa tanggal yang dapat memengaruhi roster menahan pembacaan absensi sampai dilengkapi; daftar operasional lama tetap kompatibel. Tanggal sebelum mulai penempatan tidak masuk roster. Siswa baru tidak dinyatakan absen pada masa sebelum mulai.
+- Jadwal menggunakan versi **published** terbaru dengan tanggal berlaku <= tanggal pertemuan; draf tidak digunakan. Hari libur tidak menghasilkan pertemuan pembelajaran. Tidak menimpa snapshot jadwal lama.
+- Hak baca fondasi siswa: Petugas Absensi Siswa/Kesiswaan/Kepala Sekolah seluruh sekolah, Wali Kelas hanya kelas penugasan saat ini, Guru Mapel hanya kelas dan pelajaran sesuai penugasan efektif pada tanggal yang dipilih. Kehadiran guru dikelola melalui kewenangan D-039. Admin tanpa role operasional tidak memperoleh akses absensi; Kurikulum mengelola kalender/jadwal, bukan input kehadiran. Hak baca bukan hak tulis.
+- Menu pengaturan kalender/tanggal dan helper konteks tanggal merupakan fondasi, bukan formulir pencatatan absensi. Modul pencatatan, pembekuan konteks yang sudah digunakan absensi, dan tampilan operasional dilanjutkan pada urutan berikutnya.
 
-**AC:** scan guru tidak membuat jurnal; Hadir harian tidak mengisi absensi tiap mapel; Belum Dicatat tidak otomatis menjadi Alpa; koreksi terlacak.
+### 7.2 Kehadiran guru GPS dan selfie
+- **D-038 dan D-039 (27–28 Oktober 2026):** Admin mengatur titik sekolah; radius awal 100 m, rentang 25–500 m. Akurasi browser maksimal 50 m dan diperiksa terpisah dari jarak terhadap radius. Server menghitung jarak Haversine. Bukti menyimpan jarak, akurasi, serta snapshot koordinat/radius sekolah, bukan koordinat perangkat mentah. Tata kelola TU dan kontrak status kehadiran mengikuti [D-039](docs/DECISIONS.md#d-039--tata-kelola-kehadiran-guru-oleh-tu-28-oktober-2026).
+- Guru login dengan akun sendiri → pilih Masuk/Pulang → ambil GPS → selfie kamera langsung → kirim → bukti waktu server/WIB. Satu identitas guru berlaku untuk semua role; satu Masuk dan satu Pulang per tanggal WIB. Pulang tanpa Masuk diperbolehkan dan Masuk tetap Belum Dicatat. Guru Mapel/Wali Kelas aktif dengan akun dan profil tertaut boleh absen mandiri; guru tanpa akun tidak. Replay identik mempertahankan bukti/histori, request berbeda untuk event sama konflik.
+- Foto bukan pilihan unggah dari galeri; GPS/selfie adalah bukti pendukung, tanpa klaim menjamin pencegahan titip absen atau pengenalan wajah.
+- Selfie wajib masuk dan pulang. Perkecil di perangkat; server memvalidasi format dan ukuran **maksimal 100 KB per foto**. Foto privat; guru membaca bukti sendiri dan TU Pengelola Kehadiran Guru memeriksa sesuai kewenangan. Petugas Absensi Siswa tidak mendapat akses kehadiran guru/foto.
+- Foto disimpan **dua bulan kalender sejak pencatatan**, lalu berkasnya dihapus otomatis. Metadata kehadiran dan histori tetap ada; detail menampilkan masa penyimpanan foto berakhir. Penghapusan mencakup berkas asli/turunan yang dikelola aplikasi; kebijakan backup foto harus selaras dengan retensi ini sebelum deployment.
+- Waktu dari server, pengiriman berulang idempoten. Lokasi di luar radius, akurasi buruk, kamera/GPS/internet gagal menampilkan kendala; TU Pengelola Kehadiran Guru mencatat manual dengan alasan. Pencatatan susulan dan koreksi historis tidak dibatasi usia tanggal, tetapi waktu kejadian tidak boleh di masa depan. Waktu kejadian dan waktu rekam server terpisah. Koreksi memakai version, alasan wajib dan histori append-only; bukti GPS/selfie asli dipertahankan. Guru dapat mengirim permintaan pelengkapan/koreksi yang tidak memutasi kehadiran. Izin/Sakit/Dinas Luar dilaporkan guru untuk tanggal lampau/hari ini/mendatang dan langsung berlaku tanpa persetujuan; form laporan beserta koreksi/pembatalan TU dan histori tersedia pada DEV-03G2. Laporan memakai satu rentang inklusif, keterangan wajib, dan menolak overlap laporan aktif secara atomik. Laporan tetap terpisah dari event Masuk/Pulang; mesin status akhir dan rekap berbasis jadwal DEV-03G3 telah melewati UAT Product Owner serta final gate publikasi menurut HANDOVER. Penilaian memakai revisi published serta penugasan efektif pada tanggal kejadian, tanpa toleransi; selisih positif dibulatkan ke atas ke menit. Tanggal mendatang/berjalan dibedakan dari hasil akhir, sumber belum lengkap menjadi Belum Dapat Dinilai, dan tugas nonmengajar belum dinilai karena sumber penugasan terstruktur belum tersedia. Rekap hanya jumlah per status tanpa persentase final. Tidak ada approval Kepala Sekolah.
+
+### 7.3 Absensi harian siswa dan siklus kartu QR
+- Petugas Absensi menangani seluruh sekolah: login → pemindai → scan kartu → nama/kelas/waktu/hasil. Tahap awal hanya kedatangan siswa.
+- Kartu berisi kode acak yang merujuk ID siswa, tanpa nama/NISN di payload. Scan ganda tidak menduplikasi. Penempatan harus berlaku pada tanggal itu. Status Sakit/Izin/Alpa yang sudah ada tidak ditimpa scan; petugas meninjau dan mengoreksi beralasan.
+- Petugas juga mengisi Sakit/Izin/Alpa dan manual bila kartu/perangkat bermasalah. Belum scan tetap Belum Dicatat.
+- Kartu hilang: Petugas memilih Ganti QR karena hilang, menonaktifkan kode lama dan menerbitkan kode baru untuk identitas yang sama; petugas/waktu/alasan dicatat. Kode lama tetap tidak berlaku bila kartu ditemukan. Sambil menunggu cetak kartu baru, kehadiran manual beralasan Kartu QR hilang.
+- Kartu rusak tetapi masih dipegang: cetak ulang kode sama. Cetak ulang berbeda dari penggantian kode. Kehadiran lama tidak berubah.
+
+### 7.4 Absensi per pelajaran, koreksi, dan rekap
+- Guru → Jadwal Saya → tanggal/pertemuan → daftar siswa → isi → Simpan. Server memeriksa akun/role/guru aktif, penugasan resmi yang efektif, pertemuan terpublikasi dan roster bertanggal. Satu catatan per siswa/pertemuan.
+- **D-050 FINAL:** sebelum guru membuka form dan saat transaksi simpan/koreksi, server memeriksa bukti presensi guru pada tanggal WIB occurrence. Hari ini memerlukan Check-In sah tanpa konflik; tanggal lampau memerlukan Check-In dan Check-Out sah/konsisten. Tanpa bukti lengkap, laporan Izin/Sakit aktif, Dinas Luar aktif (blokir default), bukti bertentangan/tidak jelas, atau Check-Out sebelum akhir pertemuan menahan mutasi. Koreksi resmi sumber yang memenuhi syarat membuka akses kembali otomatis. Form menyampaikan alasan dan mempertahankan isian; histori absensi/jurnal yang sudah ada tidak berubah bila bukti kemudian tidak memenuhi syarat.
+- Tombol Tandai semua Hadir adalah aksi eksplisit pengguna, lalu status siswa disesuaikan sebelum simpan. Tidak mengisi Hadir dari data kosong atau dari QR harian.
+- Koreksi absensi per pelajaran mengikuti keputusan final **D-037**: Guru Mapel historis yang akunnya aktif, ber-role Guru Mapel, dan identitas gurunya aktif boleh mengoreksi catatan yang `teacher_id`-nya sama, meskipun penugasan/jadwal/roster kini berubah. Guru pengampu baru tidak mewarisi hak tersebut. Kurikulum hanya menjadi fallback administratif bila akun historis tidak aktif/tidak terhubung atau role Guru Mapel historis telah dicabut; profil guru nonaktif saja tidak cukup. Admin, Kesiswaan, Kepala Sekolah, dan guru lain tidak mendapat bypass. Koreksi memakai status lama/baru, alasan wajib 1–500 karakter, expected version, mutation lock, dan transaksi atomik dengan histori before/after; konflik meminta tinjau ulang, status sama adalah no-op tanpa histori baru. Catatan dan histori tetap dicari berdasarkan ID permanen serta snapshot kejadian asli. Tidak ada approval Kepala Sekolah. Keputusan ini tidak mengubah hak baca rekap yang masih mengikuti cakupan peran tersendiri.
+- Wali membaca kelasnya, Kesiswaan membaca rekap siswa sekolah, Kepala Sekolah membaca ringkasan; role gabungan mengikuti masing-masing cakupan.
+- Gate D-050 adalah prasyarat mutasi guru, bukan indikator pelanggaran dan tidak menyimpulkan status absensi siswa. Hak baca, koreksi administratif Kurikulum, assignment/snapshot, dan histori D-037 tetap berlaku. Keterlambatan siswa mengikuti batas kedatangan Kesiswaan pada D-036/bab 7.6; pulang cepat belum ditetapkan.
+
+### 7.5 Urutan dan bukti lulus
+1. Fondasi kalender/tanggal penempatan/akses.
+2. Harian siswa, QR, cetak/ganti kartu, manual, koreksi.
+3. Per pelajaran melalui Jadwal Saya.
+4. GPS/selfie guru, fallback, retensi otomatis.
+5. Rekap dan pengujian gabungan, lalu Fase 8A Kesiswaan/BK.
+
+FE mengikuti TailAdmin/pola aplikasi: filter bertahan, tabel bernomor/pagination 10, badge, modal koreksi, menu aksi saling menutup, notifikasi 10 detik, pemindai/kamera nyaman di ponsel. Uji akses negatif setiap role; roster sebelum/sesudah pindah/keluar/kembali; hari libur; batas semester; revisi jadwal; scan/kirim ganda; konflik koreksi; ukuran/akses/retensi foto; fallback dan histori. Bukti implementasi aktual dicatat di HANDOVER per urutan, bukan menganggap seluruh rancangan sudah tersedia.
 
 ## 8. Jurnal Mengajar — FINAL inti
 
-- Jurnal mencatat kelas, mapel, blok pelajaran aktual, **guru pengampu resmi yang berwenang**, waktu, dan materi. Tidak ada pemilihan Guru Pengganti/Cadangan.
+- Jurnal mencatat kelas, mapel, blok JP dan waktu dari snapshot jadwal resmi yang efektif, **guru pengampu resmi yang berwenang**, dan materi. Guru tidak menginput waktu aktual; tidak ada pemilihan Guru Pengganti/Cadangan.
 - Status **Draf** dan **Final**; guru berwenang dapat memfinalisasi sendiri. Koreksi Final dengan alasan dan riwayat, **tanpa inbox approval berlapis**.
-- Anomali antara jadwal, QR guru, absensi siswa, dan jurnal hanya ditandai untuk pemeriksaan; tidak otomatis membuktikan pelanggaran atau menimpa sumber.
+- D-050 FINAL mensyaratkan bukti presensi guru untuk mutasi Jurnal Mengajar: Check-In sah pada hari ini tanpa konflik; Check-In dan Check-Out sah/konsisten pada tanggal lampau; laporan Izin/Sakit aktif, Dinas Luar aktif secara default, bukti tidak jelas/bertentangan, atau Check-Out sebelum akhir occurrence menahan mutasi. Evaluasi di form dan diulang dalam transaksi backend; request langsung tidak dapat melewati gate. Koreksi resmi membuka akses kembali otomatis. Catatan dan snapshot yang sudah tersimpan dipertahankan jika bukti kemudian berubah. Gate bukan indikator pelanggaran dan tidak mengubah data absensi siswa.
 
 **AC:** guru di luar penugasan ditolak; jurnal Final tidak dapat diubah tanpa mekanisme koreksi beralasan; tidak ada jurnal oleh Guru Pengganti/Cadangan; jadwal yang tidak terlaksana tidak otomatis memiliki jurnal Final.
+
+### D-048 — kontrak Jurnal Mengajar yang disetujui Product Owner (31 Oktober 2026)
+
+Jurnal tetap membedakan status **Draf** dan **Final**. Draf boleh belum lengkap. Untuk pembelajaran terlaksana, materi maksimal 500 karakter wajib sebelum Final; catatan kegiatan opsional maksimal 2.000 karakter. Nomor dan seluruh waktu JP berasal dari snapshot jadwal resmi yang efektif pada tanggal pertemuan; guru tidak menginput waktu aktual. Revisi jadwal tidak mengubah snapshot jurnal historis. Revisi FINAL D-048 pada 1 November 2026 menggantikan ketentuan sebelumnya mengenai input waktu aktual.
+
+Jurnal menyediakan penanda **Tidak Terlaksana** dengan alasan wajib saat penanda disimpan dan saat Final. Draf boleh belum lengkap pada materi/catatan. Final Tidak Terlaksana tidak menjadi bukti pembelajaran terlaksana; Final untuk pembelajaran terlaksana wajib bermateri. Status jadwal kosong tidak otomatis menjadi penanda tersebut, dan ketiadaan presensi tidak membuatnya otomatis.
+
+Konteks blok jam diisi dari jadwal resmi: daftar berurutan nomor JP, waktu mulai/selesai tiap JP, kelas, mapel, guru resmi, serta ID dan snapshot revisi. Guru tidak mengubah nomor JP. Snapshot historis tidak berubah jika jadwal atau konfigurasi jam direvisi. Draf terdampak revisi mendapat penanda **Perlu Ditinjau** dan tetap pada occurrence aslinya.
+
+Satu jurnal berlaku untuk satu occurrence, dikunci dengan ID slot/logical lesson stabil lintas revisi dan tanggal WIB. Mapping lintas revisi harus pasti; ambiguitas ditolak dan diselesaikan eksplisit oleh Kurikulum, tanpa tebakan otomatis.
+
+**D-049 — cutover lineage:** jadwal historis tanpa bukti kesinambungan tidak di-backfill otomatis. Jurnal baru untuk tanggal sebelum cutover dilarang sampai ada mekanisme pemetaan historis yang diputuskan terpisah; pengisian terlambat untuk tanggal sejak cutover tetap diperbolehkan. Revision yang digunakan dipilih berdasarkan tanggal occurrence WIB dan tanggal efektif publikasinya, bukan revision terbaru saat ini. Setiap versi jurnal mempertahankan snapshotnya sendiri, termasuk revision serta nomor dan waktu masing-masing JP. Konflik lineage menahan operasi jurnal terkait saja; tidak menahan jadwal, absensi, atau presensi.
+
+Guru historis dapat membaca dan mengoreksi jurnal miliknya ketika akun serta role yang diperlukan masih aktif; guru baru tidak mewarisi mutasi terhadap jurnal lama. Perubahan assignment tidak menulis ulang pemilik atau isi jurnal.
+
+Ekspor **PDF** dan **XLSX** tersedia untuk Jurnal Saya dengan filter tahun ajaran, semester, tanggal, kelas, mapel, dan status; ekspor memuat seluruh hasil filter. PDF memuat nomor, tanggal WIB, kelas, mapel, nomor JP, materi, catatan dan status. XLSX memiliki header, tanggal WIB, satu baris per jurnal, dan memperlakukan teks pengguna sebagai teks. Status Draf ditandai jelas. Hak ekspor agregat role lain tidak ditetapkan di sini.
+
+Indikator **Perlu Ditinjau** Draf tetap hanya untuk perubahan revision/lineage/konteks jadwal menurut D-048/D-049. D-050 bukan indikator: ia adalah gate presensi guru untuk mutasi Jurnal dan Absensi Pelajaran. Ketiadaan jurnal atau baris absensi siswa tidak ditafsirkan sebagai ketidakhadiran atau pelanggaran. Tidak ada perbandingan waktu aktual guru karena D-048 tidak memperbolehkan input waktu aktual. Hak sumber dan role tidak berubah.
 
 ## 9. Penilaian — FINAL prinsip, OPEN rincian formula
 
@@ -306,7 +385,8 @@ Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka peng
 5. **Kepala Sekolah:** lihat dashboard dan laporan → keputusan khusus di luar alur rutin.
 6. **Kesiswaan:** lihat siswa/rekap kehadiran sekolah → catat pelanggaran dan pembinaan → tandai Perlu tindak lanjut atau Selesai.
 7. **BK:** buka siswa/kasus yang ditangani → catat bimbingan dan tindak lanjut → tandai Perlu tindak lanjut atau Selesai. Wali Kelas/Kepala Sekolah membaca sesuai cakupan bab 3B.
-8. **Petugas Absensi:** buka data yang relevan → catat/koreksi kehadiran sesuai cakupan tugas.
+8. **Petugas Absensi Siswa:** kelola QR dan absensi harian siswa sesuai cakupan tugas; tidak mengelola kehadiran guru.
+9. **TU Pengelola Kehadiran Guru:** melengkapi atau mengoreksi kejadian guru sesuai D-039.
 
 ## 13. Acceptance criteria lintas modul
 
@@ -319,7 +399,7 @@ Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka peng
 | XM-05 | Guru tanpa penugasan mengakses nilai | Ditolak oleh server |
 | XM-06 | Jadwal bentrok dipublikasikan | Ditolak |
 | XM-07 | Guru tidak hadir pada jadwalnya | Tidak ada pengganti otomatis, hak sementara, atau jurnal mengajar otomatis |
-| XM-08 | QR guru berhasil | Tidak otomatis menghasilkan jurnal mengajar |
+| XM-08 | GPS/selfie guru berhasil | Tidak otomatis menghasilkan jurnal mengajar |
 | XM-09 | Siswa Hadir harian, pelajaran Belum Dicatat | Kedua catatan tetap berbeda |
 | XM-10 | Guru mengoreksi jurnal Final | Alasan dan versi sebelumnya tersimpan, tanpa approval Kepala Sekolah |
 | XM-11 | Nilai Final dikoreksi | Pemeriksaan Kurikulum, alasan, histori; tanpa approval Kepala Sekolah rutin |
@@ -330,7 +410,7 @@ Migration aditif 00013 menyimpan unggahan sementara yang hanya dapat dibuka peng
 
 ## 14. OPEN yang benar-benar berdampak
 
-**P0:** rincian penutupan semester; kesiapan kelas/penempatan khusus; fallback QR; definisi status anomali; komponen/TP/bobot/rumus/pembulatan/remedial; detail koreksi nilai Final oleh Kurikulum; katalog dan cakupan laporan. Putuskan **ketika fase terkait tiba**, bukan menunda fondasi.
+**P0:** rincian penutupan semester; kesiapan kelas/penempatan khusus; parameter teknis GPS/akurasi dan fallback sesuai D-033; definisi status anomali; komponen/TP/bobot/rumus/pembulatan/remedial; detail koreksi nilai Final oleh Kurikulum; katalog dan cakupan laporan. Putuskan **ketika fase terkait tiba**, bukan menunda fondasi.
 
 **Ditunda di luar cakupan v1:** pengampu bersama dan pembagian hak nilai akhirnya. Generator yang dahulu ditunda telah diterapkan sesuai bab 6.1 dan D-025; batas ketersediaan individu guru belum tersedia. Pengembangan berikutnya mengikuti kebutuhan nyata dan keputusan pengguna.
 
@@ -345,3 +425,18 @@ Setiap fitur harus memenuhi workflow, hak server-side, validasi, histori/audit y
 
 ### Pilihan hasil dan kelas tujuan transisi — disetujui 23 Oktober 2026
 Setiap siswa dimulai dengan **Pilih hasil**, tanpa keputusan otomatis. Kelas 7/8 memiliki hasil Naik kelas (tujuan tingkat berikutnya), Tidak naik (tujuan tingkat sama), atau Keluar (tanpa tujuan). Kelas 9 hanya memiliki Lulus (tanpa tujuan), Tidak lulus — mengulang kelas 9 (wajib kelas 9 tahun tujuan), atau Keluar (tanpa tujuan). Dropdown tujuan muncul hanya untuk naik/mengulang dan hanya menawarkan tingkat yang sesuai. Perubahan ke Lulus/Keluar mengosongkan pilihan kelas lama; pratinjau menggunakan label bahasa Indonesia dan tanda — untuk tujuan yang tidak berlaku. Server memeriksa ulang aturan yang sama. Semua keputusan siswa harus ditetapkan sebelum menjalankan batch; keputusan yang belum ditetapkan tidak dianggap naik/lulus. Tidak membuat kelas 10, tidak menghapus riwayat, dan tidak mengubah status master siswa otomatis.
+
+### Pelengkap fondasi Fase 8: tanggal penempatan massal (D-034)
+Admin membuka Penempatan Siswa → Tanggal mulai penempatan → Isi tanggal massal. Pilih cakupan semua kelas atau kelas awal tertentu; hanya siswa tanpa tanggal ditampilkan. Tanggal awal Semester 1 ditawarkan sebagai saran yang bisa diubah; siswa pindahan dapat dikeluarkan dari pilihan. Pilihan siswa berlaku lintas pagination dan tetap dipilih saat pencarian. Setelah tanggal/alasan diisi, pratinjau memeriksa seluruh siswa terpilih dan menampilkan konflik kalender atau kejadian perpindahan. Konfirmasi eksplisit menyimpan seluruh tanggal dan histori dalam satu transaksi; tanggal yang sudah ada tidak ditimpa. Data terpilih/kalender/riwayat yang berubah sejak pratinjau membatalkan penyimpanan dan meminta pemeriksaan ulang. Pratinjau berlaku 10 menit, maksimum 5.000 siswa per batch. Penempatan baru juga menampilkan saran tanggal awal Semester 1; pengguna memastikan tanggal sebenarnya sebelum menyimpan. Tanpa kalender, tanggal tidak ditebak.
+
+### Pelengkap implementasi 7.3 — D-035
+Absensi harian hanya mencatat kedatangan. Tanggal/waktu QR dari server WIB; tanggal mendatang dan pencatatan baru pada hari libur ditolak. Status awal tetap Belum Dicatat. Manual/koreksi memerlukan alasan; sesuai D-036, waktu datang wajib untuk Hadir baru/koreksi. Data lama tanpa waktu tidak diisi otomatis. Bukti tersimpan membekukan identitas/kelas/penempatan/semester pada saat pencatatan. Perubahan roster kemudian tidak menulis ulang bukti tersebut; formulir pencatatan baru menolak roster/kalender yang berubah sejak dibuka. Koreksi memakai versi dan histori atomik, tetap bisa dilakukan atas bukti lama bila kalender kemudian diubah menjadi libur. Wali Kelas hanya membaca kelas penugasannya; Kesiswaan/Kepala Sekolah membaca seluruh sekolah; hak tulis dan kartu hanya Petugas Absensi.
+Penerbitan/ganti/cetak ulang kartu memerlukan konfirmasi dan alasan. Scan ganda pada catatan Hadir mempertahankan waktu awal; status lain memerlukan koreksi terpisah. Kode acak 256 bit di-host/dihasilkan lokal, tidak berisi identitas siswa. Penggantian langsung mencabut kode lama; cetak ulang tidak mengganti kode. Kamera memakai HTTPS/localhost; pemindai USB atau manual menjadi fallback. Belum mencakup scan pulang, absensi pelajaran, keterlambatan, GPS/selfie guru, atau rekap lanjutan.
+
+### 7.6 Keterlambatan dan isi cepat harian — D-036 (24 Oktober 2026)
+Menggantikan penundaan aturan terlambat serta izin jam Hadir kosong pada 7.3/pelengkap D-035: **Kesiswaan** mengatur batas kedatangan dan toleransi, berbeda per semester/hari dengan pengecualian rombel/tanggal, serta mulai berlaku. Tidak disamakan dengan jam pelajaran pertama/upacara. Wajib jam kedatangan sebenarnya untuk pencatatan/koreksi Hadir; QR/Catat datang sekarang memakai waktu server WIB. Sakit/Izin/Alpa tanpa jam. Hadir memiliki keterangan tepat waktu/terlambat, bukan status kehadiran baru. Tidak menghasilkan sanksi atau poin otomatis.
+Toleransi menentukan status; durasi terlambat dihitung dari batas kedatangan asli, dengan ketelitian menit untuk QR/manual. Pada menit batas+toleransi masih tepat waktu. Aturan ber-versi dan disalin ke bukti absensi; perubahan berlaku sejak tanggal pilihan dan tidak menghitung ulang bukti lama. Prioritas pengecualian: tanggal+rombel → tanggal semua rombel → mingguan rombel → mingguan semua rombel; cakupan sama mengikuti tanggal efektif terbaru lalu versi terakhir. Tanpa aturan, waktu tetap dicatat dan keterlambatan belum dapat dinilai. Hadir lama tanpa jam tetap perlu dilengkapi berdasarkan bukti, tanpa tebakan.
+Petugas membuka Isi cepat per kelas: seluruh siswa ditampilkan, pilih status langsung, tombol eksplisit tandai sisanya Hadir, waktu bersama hanya untuk yang benar-benar diketahui, koreksi waktu per baris, alasan sekali, ringkasan jumlah status dan Simpan satu transaksi. Siswa belum dipilih tetap Belum Dicatat. Catatan yang sudah ada tidak ditimpa; koreksi melalui jalur individual. Jika aturan/roster/absensi berubah sejak form dibuka, seluruh batch ditolak dan isian dipertahankan untuk peninjauan ulang. Pencarian tidak menghapus pilihan; pergantian tanggal/kelas/halaman memberi peringatan perubahan belum tersimpan. Hak operasional dan histori tetap sesuai 7.3–7.4.
+
+### 7.7 Kehadiran mandiri Pegawai TU — D-041 (29 Oktober 2026)
+Pegawai TU aktif dengan akun aktif yang tertaut ke identitas master aktif dan role `pegawai_tu` dapat mencatat Masuk dan Pulang untuk dirinya sendiri melalui GPS, geofence, pemeriksaan akurasi, dan selfie. Waktu berasal dari server dan tanggal dihitung menurut WIB. Maksimal satu Masuk dan satu Pulang per tanggal WIB; Pulang tanpa Masuk tetap diizinkan. Pegawai hanya membaca catatan dan bukti miliknya, tanpa hak mengubah atau membatalkan catatan. Capture TU, metadata foto, dan histori disimpan dalam domain terpisah dari kehadiran guru. Retensi file foto dua bulan kalender; identitas, catatan, metadata, dan histori dipertahankan. Ketentuan D-039 untuk pengelola kehadiran guru tetap berlaku, termasuk pasangan role dan larangan koreksi diri sendiri. Kehadiran TU tidak digabung dengan rekap kewajiban mengajar guru. Belum ditetapkan jam kerja, keterlambatan berbasis jadwal, Alpa otomatis, persentase, maupun kewajiban nonmengajar TU.

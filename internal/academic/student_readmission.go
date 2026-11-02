@@ -58,7 +58,7 @@ func (s *Store) ReadmitStudent(ctx context.Context, actor, student, version, exi
 	err = tx.QueryRowContext(ctx, `SELECT p.id,c.grade FROM app.student_placements p JOIN app.classes c ON c.id=p.class_id WHERE p.student_id=$1 AND p.school_year_id=$2`, student, year).Scan(&placement, &placedGrade)
 	created := false
 	if errors.Is(err, sql.ErrNoRows) {
-		err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id) VALUES($1,$2,$3,$4) RETURNING id`, year, student, target, actor).Scan(&placement)
+		err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,$5) RETURNING id`, year, student, target, actor, date).Scan(&placement)
 		if err != nil {
 			return dbError(err)
 		}

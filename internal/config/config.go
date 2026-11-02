@@ -4,16 +4,21 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Environment, Address, DatabaseURL string
-	CSRFKey                           []byte
+	Environment, Address, DatabaseURL                          string
+	TeacherPhotoDirectory, StaffPhotoDirectory, RepositoryRoot string
+	TrustedProxyCIDRs                                          []netip.Prefix
+	CSRFKey                                                    []byte
 }
 
 // Load reads optional local configuration without overriding exported variables.
@@ -59,5 +64,29 @@ func Parse(get func(string) string) (Config, error) {
 	if err != nil || len(key) != 32 {
 		return Config{}, errors.New("CSRF_AUTH_KEY wajib berupa 64 digit heksadesimal acak")
 	}
-	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key}, nil
+	teacherPhotoDirectory, staffPhotoDirectory, repositoryRoot := get("TEACHER_PHOTO_DIR"), get("STAFF_PHOTO_DIR"), get("APP_REPOSITORY_ROOT")
+	if (teacherPhotoDirectory != "" || staffPhotoDirectory != "") && (!filepath.IsAbs(repositoryRoot) || (teacherPhotoDirectory != "" && !filepath.IsAbs(teacherPhotoDirectory)) || (staffPhotoDirectory != "" && !filepath.IsAbs(staffPhotoDirectory))) {
+		return Config{}, errors.New("APP_REPOSITORY_ROOT dan direktori foto yang diaktifkan wajib berupa path absolut")
+	}
+	trustedProxyCIDRs, err := parseTrustedProxyCIDRs(get("APP_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
+	return Config{Environment: env, Address: net.JoinHostPort(host, port), DatabaseURL: raw, CSRFKey: key,
+		TeacherPhotoDirectory: teacherPhotoDirectory, StaffPhotoDirectory: staffPhotoDirectory, RepositoryRoot: repositoryRoot, TrustedProxyCIDRs: trustedProxyCIDRs}, nil
+}
+
+func parseTrustedProxyCIDRs(value string) ([]netip.Prefix, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	prefixes := make([]netip.Prefix, 0)
+	for _, item := range strings.Split(value, ",") {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(item))
+		if err != nil {
+			return nil, errors.New("APP_TRUSTED_PROXY_CIDRS harus berisi CIDR yang valid")
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
 }

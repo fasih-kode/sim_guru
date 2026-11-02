@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,11 +24,12 @@ import (
 const sessionCookie = "sim_guru_session"
 
 type Options struct {
-	Accounts      *auth.Store
-	Masters       *master.Store
-	Academics     *academic.Store
-	CSRFKey       []byte
-	SecureCookies bool
+	Accounts          *auth.Store
+	Masters           *master.Store
+	Academics         *academic.Store
+	CSRFKey           []byte
+	SecureCookies     bool
+	TrustedProxyCIDRs []netip.Prefix
 }
 type principalKey struct{}
 type application struct {
@@ -40,27 +42,47 @@ type roleChoice struct {
 	Checked    bool
 }
 type view struct {
-	Movement                    *movementView
-	ASCImport                   *ascImportView
-	User                        *auth.User
-	CSRF                        template.HTML
-	Page, Title, Error, Message string
-	NavActive, NavGroup         string
-	ModalOpen                   bool
-	ModalID                     string
-	Users                       []auth.User
-	Input                       auth.Input
-	Editing                     int64
-	RoleChoices                 []roleChoice
-	Audits                      []auth.Audit
-	Filter                      auth.Filter
-	Previous, Next              int
-	Master                      *masterView
-	Import                      *importView
-	Academic                    *academicView
-	Placement                   *placementView
-	PlacementHistory            []academic.PlacementHistory
-	Transition                  *transitionView
+	LiveList                            bool
+	TeacherRecap                        *teacherRecapView
+	TeacherReports                      *teacherReportsView
+	TeacherAttendance                   *teacherAttendanceView
+	StaffAttendance                     *staffAttendanceView
+	StudentGuidance                     *studentGuidanceView
+	StudentCases                        *studentCasesView
+	TeacherAttendanceManagement         *teacherAttendanceManagementView
+	TeacherAttendanceRecord             *teacherAttendanceRecordView
+	Arrival                             *arrivalView
+	Daily                               *dailyView
+	Foundation                          *foundationView
+	TeacherLocation                     *teacherLocationView
+	Movement                            *movementView
+	ASCImport                           *ascImportView
+	User                                *auth.User
+	CSRF                                template.HTML
+	Page, Title, Error, Message         string
+	NavActive, NavGroup                 string
+	NavigationSection, NavigationActive string
+	NavigationTabs                      []navigationTab
+	Dashboard                           *dashboardPresentation
+	AdditionalDashboards                []*dashboardPresentation
+	HomeAttendance                      *homeAttendanceShortcuts
+	ModalOpen                           bool
+	ModalID                             string
+	Users                               []auth.User
+	Input                               auth.Input
+	Editing                             int64
+	RoleChoices                         []roleChoice
+	Audits                              []auth.Audit
+	Filter                              auth.Filter
+	Previous, Next                      int
+	Master                              *masterView
+	Import                              *importView
+	Academic                            *academicView
+	Placement                           *placementView
+	PlacementHistory                    []academic.PlacementHistory
+	Transition                          *transitionView
+	LessonAttendance                    *lessonAttendanceView
+	TeachingJournal                     *teachingJournalView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -71,6 +93,13 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.User = principal(r)
 	v.CSRF = csrf.TemplateField(r)
 	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
+	v.NavigationSection, v.NavigationActive = sectionNavigationState(r.URL.Path, v.User)
+	v.NavigationTabs = sectionNavigationTabs(v.NavigationSection, v.NavigationActive, v.User)
+	v.LiveList = liveListPage(v.Page)
+	if name == "page" && v.LiveList && r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-List-Request") == "true" {
+		name = "list-fragment"
+	}
+	w.Header().Add("Vary", "HX-List-Request")
 	var buf bytes.Buffer
 	if err := a.templates.ExecuteTemplate(&buf, name, v); err != nil {
 		slog.Error("template gagal", "template", name, "error", err)
@@ -89,24 +118,80 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		roleMenu = "admin"
 	}
 	switch {
+	case strings.HasPrefix(path, "/pegawai/kehadiran-saya"):
+		return "staff-attendance", "staff-attendance"
+	case strings.HasPrefix(path, "/kesiswaan/kasus"):
+		return "student-cases", "student-cases"
+	case path == "/kehadiran-saya/rekap":
+		return "teacher-recap", "teacher-attendance"
+	case path == "/tu/kehadiran-guru/rekap":
+		return "managed-teacher-recap", "teacher-attendance-management"
+	case strings.HasPrefix(path, "/kehadiran-saya"):
+		return "teacher-attendance", "teacher-attendance"
+	case strings.HasPrefix(path, "/tu/kehadiran-guru"):
+		return "teacher-attendance-management", "teacher-attendance-management"
+	case strings.HasPrefix(path, "/admin/kehadiran-tu"):
+		return "teacher-attendance-management", "admin-attendance"
+	case path == "/kesiswaan/batas-kedatangan":
+		return "arrival-rules", "attendance"
+	case path == "/absensi/harian/cepat":
+		return "daily-attendance", "attendance"
+	case strings.HasPrefix(path, "/absensi/kartu"):
+		return "student-cards", "attendance"
+	case path == "/absensi/pemindai":
+		return "daily-scanner", "attendance"
+	case path == "/absensi/harian":
+		return "daily-attendance", "attendance"
+	case strings.HasPrefix(path, "/jadwal-saya/absensi"):
+		if user != nil && user.HasRole("kurikulum") && !user.HasRole("guru_mapel") {
+			return "lesson-attendance", "curriculum-schedule"
+		}
+		if user != nil && user.HasRole("guru_mapel") {
+			return "lesson-attendance", "guru-mapel"
+		}
+		return "", ""
+	case strings.HasPrefix(path, "/jadwal-saya/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "my-schedule", "guru-mapel"
+		}
+		return "", ""
+	case path == "/jurnal-saya" || strings.HasPrefix(path, "/jurnal-saya/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "teaching-journal", "guru-mapel"
+		}
+		return "", ""
 	case path == "/":
 		return "home", "menu"
 	case strings.HasPrefix(path, "/akademik/penempatan/"):
+		if adminMenu {
+			return "placements", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "placements", "curriculum-students"
 		}
 		return "placements", roleMenu
 	case strings.HasPrefix(path, "/students/"):
+		if adminMenu {
+			return "students", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "students", "curriculum-students"
 		}
 		return "students", roleMenu
 	case strings.HasPrefix(path, "/master/students"):
+		if adminMenu {
+			return "students", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "students", "curriculum-students"
 		}
 		return "students", roleMenu
+	case strings.HasPrefix(path, "/master/staff"):
+		return "staff", "admin-master"
 	case strings.HasPrefix(path, "/master/teachers"):
+		if adminMenu {
+			return "teachers", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "teachers", "curriculum-students"
 		}
@@ -114,6 +199,9 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case strings.HasPrefix(path, "/master/subjects"):
 		return "subjects", "curriculum-subjects"
 	case strings.HasPrefix(path, "/admin/placements"), strings.HasPrefix(path, "/akademik/histori/penempatan/"):
+		if adminMenu {
+			return "placements", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "placements", "curriculum-students"
 		}
@@ -121,11 +209,15 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case strings.HasPrefix(path, "/akademik/transisi"):
 		return "transitions", "curriculum-students"
 	case strings.HasPrefix(path, "/admin/users"):
-		return "users", "admin"
+		return "users", "admin-access"
+	case path == "/admin/attendance/location":
+		return "teacher-attendance-location", "admin-attendance"
 	case strings.HasPrefix(path, "/admin/audit"):
-		return "audit", "admin"
+		return "audit", "admin-access"
 	case path == "/akademik/tahun-ajaran" || strings.HasPrefix(path, "/akademik/tahun-ajaran/"):
 		return "years", "curriculum-calendar"
+	case path == "/akademik/kalender-sekolah":
+		return "school-calendar", "curriculum-calendar"
 	case path == "/akademik/semester" || strings.HasPrefix(path, "/akademik/semester/"):
 		return "semesters", "curriculum-calendar"
 	case path == "/akademik/pengampu":
@@ -140,11 +232,19 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "school-time-blocks", "curriculum-schedule"
 	case path == "/akademik/jadwal" || path == "/akademik/jadwal/impor":
 		return "weekly-timetable", "curriculum-schedule"
+	case path == "/akademik/jurnal-lineage":
+		return "curriculum-journal-lineage", "curriculum-schedule"
 	case path == "/jadwal-saya":
-		return "my-schedule", "schedule"
+		if user != nil && user.HasRole("guru_mapel") {
+			return "my-schedule", "guru-mapel"
+		}
+		return "", ""
 	case strings.HasPrefix(path, "/wali-kelas"):
 		return "my-classes", "wali"
 	case path == "/akademik/kelas" || strings.HasPrefix(path, "/akademik/kelas/") || strings.HasPrefix(path, "/akademik/histori/class/"):
+		if adminMenu {
+			return "classes", "admin-master"
+		}
 		if roleMenu == "curriculum" {
 			return "classes", "curriculum-students"
 		}
@@ -164,7 +264,7 @@ func (a *application) authenticate(next http.Handler) http.Handler {
 			if err == nil {
 				r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &u))
 			} else if errors.Is(err, auth.ErrSession) || errors.Is(err, auth.ErrNotFound) {
-				a.clearSession(w)
+				a.clearSession(w, r)
 			} else {
 				a.failure(w, err)
 				return
@@ -193,7 +293,7 @@ func (a *application) require(role string, next http.HandlerFunc) http.HandlerFu
 	}
 }
 func (a *application) failure(w http.ResponseWriter, err error) {
-	// Never log raw SQL errors: driver errors can include submitted credentials or personal data.
+	// Jangan catat error SQL mentah karena dapat memuat kredensial atau data pribadi.
 	var pgError *pgconn.PgError
 	category := "storage_or_internal"
 	if errors.As(err, &pgError) {
@@ -201,7 +301,7 @@ func (a *application) failure(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		category = "timeout"
 	}
-	slog.Error("operasi akun gagal", "category", category)
+	slog.Error("operasi aplikasi gagal", "category", category)
 	http.Error(w, "Layanan belum dapat memproses permintaan. Coba kembali.", http.StatusInternalServerError)
 }
 func publicError(err error) (int, string) {
@@ -229,11 +329,11 @@ func parseForm(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
-func (a *application) setSession(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: a.options.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: int(auth.SessionLifetime.Seconds())})
+func (a *application) setSession(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: requestIsSecure(r, a.options.SecureCookies), SameSite: http.SameSiteLaxMode, MaxAge: int(auth.SessionLifetime.Seconds())})
 }
-func (a *application) clearSession(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: a.options.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+func (a *application) clearSession(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: requestIsSecure(r, a.options.SecureCookies), SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 func (a *application) login(w http.ResponseWriter, r *http.Request) {
 	if principal(r) != nil {
@@ -283,7 +383,7 @@ func (a *application) login(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, "login", code, v)
 		return
 	}
-	a.setSession(w, token)
+	a.setSession(w, r, token)
 	http.Redirect(w, r, "/", 303)
 }
 func (a *application) logout(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +394,7 @@ func (a *application) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	a.clearSession(w)
+	a.clearSession(w, r)
 	http.Redirect(w, r, "/login", 303)
 }
 func (a *application) password(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +421,7 @@ func (a *application) password(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, "page", code, v)
 		return
 	}
-	a.clearSession(w)
+	a.clearSession(w, r)
 	http.Redirect(w, r, "/login?changed=1", 303)
 }
 func (a *application) users(w http.ResponseWriter, r *http.Request) {

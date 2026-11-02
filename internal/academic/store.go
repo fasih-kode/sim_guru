@@ -10,7 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB          *sql.DB
+	Photos      TeacherAttendancePhotoStorage
+	StaffPhotos StaffAttendancePhotoStorage
+}
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -27,6 +31,10 @@ func (s *Store) authorize(ctx context.Context, tx *sql.Tx, actor int64, roles ..
 }
 
 func (s *Store) begin(ctx context.Context, actor int64, role string) (*sql.Tx, error) {
+	return s.beginAny(ctx, actor, role)
+}
+
+func (s *Store) beginAny(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -35,9 +43,27 @@ func (s *Store) begin(ctx context.Context, actor int64, role string) (*sql.Tx, e
 		tx.Rollback()
 		return nil, err
 	}
-	if err = s.authorize(ctx, tx, actor, role); err != nil {
+	if err = s.authorize(ctx, tx, actor, roles...); err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+	return tx, nil
+}
+
+func (s *Store) beginAll(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, auth.MutationLock); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	for _, role := range roles {
+		if err = s.authorize(ctx, tx, actor, role); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 	return tx, nil
 }
@@ -52,6 +78,52 @@ func (s *Store) reader(ctx context.Context, actor int64, roles ...string) (*sql.
 		return nil, err
 	}
 	return tx, nil
+}
+
+func (s *Store) readerAll(ctx context.Context, actor int64, roles ...string) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	for _, role := range roles {
+		if err = s.authorize(ctx, tx, actor, role); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+	return tx, nil
+}
+
+func teacherAttendanceManagerAccess(ctx context.Context, tx *sql.Tx, actorID, teacherID int64) error {
+	var manager, admin bool
+	err := tx.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='pegawai_tu'),
+		EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='admin')`, actorID).Scan(&manager, &admin)
+	if err != nil {
+		return err
+	}
+	var targetUser sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT t.user_id FROM app.teachers t WHERE t.id=$1`, teacherID).Scan(&targetUser)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var roleManager bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.user_roles WHERE user_id=$1 AND role_code='pengelola_kehadiran_guru')`, actorID).Scan(&roleManager); err != nil {
+		return err
+	}
+	if targetUser.Valid && targetUser.Int64 == actorID {
+		if admin {
+			return nil
+		}
+		return ErrForbidden
+	}
+	if roleManager && manager {
+		return nil
+	}
+	return ErrForbidden
 }
 
 func scanYear(row rowScanner) (Year, error) {
@@ -449,7 +521,7 @@ func (s *Store) Placements(ctx context.Context, actor int64, yearID, classID int
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT p.id,p.student_id,p.school_year_id,p.class_id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),y.name,c.grade,c.name,u.display_name,p.created_at FROM app.current_student_placements p JOIN app.students s ON s.id=p.student_id JOIN app.school_years y ON y.id=p.school_year_id JOIN app.classes c ON c.id=p.class_id JOIN app.users u ON u.id=p.actor_id WHERE p.school_year_id=$1 AND ($2=0 OR p.class_id=$2) AND (s.name ILIKE $3 OR COALESCE(s.nis,'') ILIKE $3 OR COALESCE(s.nisn,'') ILIKE $3) ORDER BY c.grade,c.name,s.name,p.id LIMIT 11 OFFSET $4`, yearID, classID, "%"+search+"%", (page-1)*10)
+	rows, err := tx.QueryContext(ctx, `SELECT p.id,p.student_id,p.school_year_id,p.class_id,s.name,COALESCE(s.nis,''),COALESCE(s.nisn,''),y.name,c.grade,c.name,u.display_name,p.created_at,coalesce(original.starts_on::text,'') FROM app.current_student_placements p JOIN app.student_placements original ON original.id=p.id JOIN app.students s ON s.id=p.student_id JOIN app.school_years y ON y.id=p.school_year_id JOIN app.classes c ON c.id=p.class_id JOIN app.users u ON u.id=p.actor_id WHERE p.school_year_id=$1 AND ($2=0 OR p.class_id=$2) AND (s.name ILIKE $3 OR COALESCE(s.nis,'') ILIKE $3 OR COALESCE(s.nisn,'') ILIKE $3) ORDER BY c.grade,c.name,s.name,p.id LIMIT 11 OFFSET $4`, yearID, classID, "%"+search+"%", (page-1)*10)
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +529,7 @@ func (s *Store) Placements(ctx context.Context, actor int64, yearID, classID int
 	var placements []Placement
 	for rows.Next() {
 		var placement Placement
-		if err = rows.Scan(&placement.ID, &placement.StudentID, &placement.SchoolYearID, &placement.ClassID, &placement.StudentName, &placement.NIS, &placement.NISN, &placement.YearName, &placement.Grade, &placement.ClassName, &placement.Actor, &placement.At); err != nil {
+		if err = rows.Scan(&placement.ID, &placement.StudentID, &placement.SchoolYearID, &placement.ClassID, &placement.StudentName, &placement.NIS, &placement.NISN, &placement.YearName, &placement.Grade, &placement.ClassName, &placement.Actor, &placement.At, &placement.StartsOn); err != nil {
 			return nil, err
 		}
 		placements = append(placements, placement)
@@ -487,7 +559,10 @@ func (s *Store) PlacementCounts(ctx context.Context, actor int64) (map[int64]int
 	return counts, rows.Err()
 }
 
-func (s *Store) CreatePlacement(ctx context.Context, actor, studentID, classID int64) (int64, error) {
+// CreatePlacement accepts an explicit participation date for new UI writes.
+// Omitted dates retain compatibility for pre-foundation service callers; such
+// placements require Admin review before use in attendance contexts.
+func (s *Store) CreatePlacement(ctx context.Context, actor, studentID, classID int64, startsOn ...string) (int64, error) {
 	if studentID < 1 || classID < 1 {
 		return 0, ValidationError("Pilih siswa dan kelas yang valid.")
 	}
@@ -523,13 +598,25 @@ func (s *Store) CreatePlacement(ctx context.Context, actor, studentID, classID i
 	if departed {
 		return 0, ValidationError("Siswa sudah memiliki catatan pindah sekolah.")
 	}
+	var start any
+	if len(startsOn) > 0 {
+		if err = validatePlacementStart(ctx, tx, 0, yearID, startsOn[0]); err != nil {
+			return 0, err
+		}
+		start = startsOn[0]
+	}
 	var id int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id) VALUES($1,$2,$3,$4) RETURNING id`, yearID, studentID, classID, actor).Scan(&id)
+	err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,$5) RETURNING id`, yearID, studentID, classID, actor, start).Scan(&id)
 	if err != nil {
 		return 0, dbError(err)
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO app.student_placement_history(placement_id,actor_id,to_class_id,reason) VALUES($1,$2,$3,'Penempatan awal oleh Admin')`, id, actor, classID); err != nil {
 		return 0, err
+	}
+	if start != nil {
+		if err = foundationHistory(ctx, tx, actor, "placement_date", id, nil, map[string]any{"StartsOn": start, "Version": 1}, "Tanggal mulai penempatan awal oleh Admin"); err != nil {
+			return 0, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return 0, dbError(err)

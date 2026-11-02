@@ -1,0 +1,50 @@
+{{define "journal-lineage"}}
+<section class="panel space-y-6">
+  <div>
+    <h2 class="text-lg font-semibold">Cutover dan pemetaan occurrence historis</h2>
+    <p class="mt-2 text-sm text-gray-600">Cutover memberikan identitas baru pada seluruh slot jadwal terbit yang efektif. Operasi ini tidak mengubah jadwal atau absensi dan hanya boleh dijalankan setelah Kurikulum memastikan seluruh slot valid.</p>
+  </div>
+  {{if .Academic.JournalCutoverDate}}
+    <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900" role="status">Cutover sudah tercatat pada {{.Academic.JournalCutoverDate}}.</div>
+  {{else}}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Cutover belum dilakukan. Cutover adalah operasi satu kali untuk tanggal WIB saat ini. Periksa jadwal terbit dan penugasan sebelum melanjutkan.</div>
+    <form method="post" action="/akademik/jurnal-lineage" class="max-w-2xl space-y-4">
+      {{.CSRF}}<input type="hidden" name="action" value="cutover">
+      <div><label for="cutover-reason">Alasan aktivasi cutover</label><textarea id="cutover-reason" name="reason" rows="3" maxlength="500" required></textarea><p class="mt-1 text-xs text-gray-500">Wajib diisi, maksimal 500 karakter. Jika satu slot tidak konsisten, seluruh operasi ditolak.</p></div>
+      <button class="button-primary" type="submit">Aktifkan cutover</button>
+    </form>
+  {{end}}
+
+  <div class="border-t border-gray-200 pt-5">
+    <h3 class="font-semibold">Pemetaan satu pertemuan historis</h3>
+    <p class="mt-1 text-sm text-gray-600">Pemetaan hanya tersedia untuk tanggal sebelum cutover. Pilih tanggal, lalu cocokkan slot resmi secara manual. Pemetaan memeriksa revision efektif, penugasan, identitas aktif, dan kelayakan presensi.</p>
+    <form method="get" action="/akademik/jurnal-lineage" class="mt-4 flex flex-wrap items-end gap-3">
+      <div><label for="historical-date">Tanggal pertemuan (WIB)</label><input id="historical-date" name="date" type="date" value="{{.Academic.JournalHistoricalDate}}" required></div>
+      <button class="button-secondary" type="submit">Cari slot resmi</button>
+    </form>
+  </div>
+
+  {{if .Academic.JournalCutoverDate}}
+    <div class="table-surface overflow-x-auto">
+      <table class="app-table min-w-full">
+        <thead><tr><th>Tanggal</th><th>Kelas</th><th>Mata pelajaran</th><th>Guru</th><th>JP resmi</th><th>Pemetaan</th></tr></thead>
+        <tbody>
+          {{range .Academic.JournalHistoricalCandidates}}
+            <tr>
+              <td>{{.Date}}<br><span class="text-xs text-gray-500">{{.SemesterSnapshot}} · Revision {{.RevisionID}} · Entry {{.EntryID}}</span></td>
+              <td>{{.ClassSnapshot}}</td><td>{{.SubjectSnapshot}}</td><td>{{.TeacherSnapshot}}</td>
+              <td>{{range $i,$p := .Periods}}{{if $i}}, {{end}}Jam ke-{{$p.PeriodNo}} ({{$p.StartsAt}}–{{$p.EndsAt}}){{end}}</td>
+              <td>
+                {{if .AttendanceReason}}<p class="max-w-xs text-sm text-amber-700">Belum dapat dipetakan: {{.AttendanceReason}}</p>
+                {{else}}<form method="post" action="/akademik/jurnal-lineage" class="min-w-56 space-y-2">{{$.CSRF}}<input type="hidden" name="action" value="map"><input type="hidden" name="date" value="{{.Date}}"><input type="hidden" name="revision_id" value="{{.RevisionID}}"><input type="hidden" name="entry_id" value="{{.EntryID}}"><label class="sr-only" for="mapping-reason-{{.EntryID}}">Alasan pemetaan {{.ClassSnapshot}} {{.SubjectSnapshot}}</label><textarea id="mapping-reason-{{.EntryID}}" name="reason" rows="2" maxlength="500" placeholder="Alasan pemetaan resmi" required></textarea><button class="button-primary" type="submit">Tetapkan occurrence ini</button></form>{{end}}
+              </td>
+            </tr>
+          {{else}}
+            <tr><td colspan="6" class="p-6 text-center text-sm text-gray-500">Tidak ada slot resmi yang memenuhi syarat untuk tanggal ini. Periksa tanggal, revision efektif, penugasan, dan bukti presensi.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  {{end}}
+</section>
+{{end}}

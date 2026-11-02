@@ -303,6 +303,13 @@ func (s *Store) PublishTimetable(ctx context.Context, actor, revisionID int64) e
 	if err != nil {
 		return err
 	}
+	var attendanceExists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_lesson_attendance WHERE semester_id=$1 AND meeting_date >= $2::date)`, semesterID, date).Scan(&attendanceExists); err != nil {
+		return err
+	}
+	if attendanceExists {
+		return ValidationError("Revisi tidak dapat diterbitkan karena tanggal berlakunya mencakup pertemuan yang sudah memiliki absensi.")
+	}
 	var count int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM app.weekly_timetable_entries WHERE revision_id=$1`, revisionID).Scan(&count); err != nil {
 		return err

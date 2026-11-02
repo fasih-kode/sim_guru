@@ -180,7 +180,7 @@ func TestAcademicHTTPIntegration(t *testing.T) {
 		t.Fatal("Admin edit link or readiness boundary missing")
 	}
 	readOnly := get(kc, "/akademik/kelas", http.StatusOK)
-	if strings.Contains(readOnly, "Tambah kelas") || strings.Contains(readOnly, editPath) || !strings.Contains(readOnly, "Hubungi Admin") || !strings.Contains(readOnly, "Kelas (baca-saja)") {
+	if strings.Contains(readOnly, "Tambah kelas") || strings.Contains(readOnly, editPath) || !strings.Contains(readOnly, "Baca-saja. Hubungi Admin untuk membuat atau memperbaiki kelas.") {
 		t.Fatal("Kurikulum class view does not enforce read-only UI")
 	}
 	get(kc, editPath, http.StatusForbidden)

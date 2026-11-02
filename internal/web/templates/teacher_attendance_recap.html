@@ -1,0 +1,117 @@
+{{define "teacher-recap"}}
+{{with .TeacherRecap}}
+<div class="mb-5 flex flex-wrap gap-3">
+  <a class="button-secondary" href="{{if .Managed}}/tu/kehadiran-guru{{else}}/kehadiran-saya{{end}}">Kembali ke kehadiran</a>
+  {{if .TeacherID}}<a class="button-secondary" href="{{.BackURL}}">Daftar guru</a>{{end}}
+</div>
+<section class="panel mb-5 teacher-report-content">
+  <h2 class="mb-4 text-lg font-semibold">Filter rekap</h2>
+  <form method="get" action="{{.Base}}" class="grid gap-4 sm:grid-cols-2">
+    {{if .TeacherID}}<input type="hidden" name="teacher_id" value="{{.TeacherID}}"><input type="hidden" name="q" value="{{.Search}}"><input type="hidden" name="page" value="{{.Page}}">{{end}}
+    <div><label for="recap-from">Dari tanggal</label><input type="date" name="from" id="recap-from" value="{{.From}}" required></div>
+    <div><label for="recap-to">Sampai tanggal</label><input type="date" name="to" id="recap-to" value="{{.To}}" required></div>
+    {{if and .Managed (not .TeacherID)}}<div><label for="recap-search">Cari guru</label><input type="search" name="q" id="recap-search" value="{{.Search}}" maxlength="120" placeholder="Nama guru"></div>{{end}}
+    <div class="flex items-end"><button class="button-primary" type="submit">Tampilkan rekap</button></div>
+  </form>
+  <p class="mt-4 text-sm text-gray-500">Semua waktu dalam WIB. Maksimal 366 tanggal per pembacaan; gunakan rentang lain untuk riwayat yang lebih lama. Penilaian mengikuti jadwal published dan penugasan efektif pada tanggal kejadian.</p>
+  <p class="mt-3 text-sm text-gray-500">Sumber tugas nonmengajar belum tersedia. Hari wajib dihitung dari jadwal mengajar, tanpa jam buka/tutup sekolah otomatis. Dinas Luar tetap Hadir meskipun tanpa jadwal. Tidak ada persentase kehadiran final.</p>
+</section>
+{{if .Selected}}
+  {{$recap := .Selected}}
+  <section class="panel mb-5 teacher-report-content">
+    <h2 class="mb-4 text-lg font-semibold">{{$recap.TeacherName}}</h2>
+    <p class="mb-4 font-medium">Hari wajib hadir terjadwal: {{$recap.RequiredDays}}</p>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {{range $recap.Counts}}<div class="rounded-lg border border-gray-200 p-3"><p class="text-sm text-gray-500">{{.Status}}</p><p class="mt-1 text-xl font-semibold">{{.Count}}</p></div>{{end}}
+    </div>
+    <p class="mt-4 text-sm text-gray-500">Kategori status dihitung satu kali per tanggal. Hari wajib adalah informasi jadwal terpisah; hari Tidak Terjadwal tidak menambah jumlah wajib. Tanggal mendatang dan berjalan ditampilkan terpisah.</p>
+  </section>
+  {{if .Detail}}{{template "teacher-recap-detail" $}}{{end}}
+  <section class="panel">
+    <h2 class="mb-4 text-lg font-semibold">Kehadiran per tanggal</h2>
+    <div class="table-surface teacher-report-surface">
+      <table class="app-table min-w-[1280px]">
+        <caption class="sr-only">Rekap kehadiran per tanggal</caption>
+        <thead><tr><th>No.</th><th>Tanggal</th><th>Kewajiban WIB</th><th>Masuk WIB</th><th>Pulang WIB</th><th>Laporan</th><th>Status</th><th>Terlambat</th><th>Pulang cepat</th><th>Tindakan</th></tr></thead>
+        <tbody>
+          {{range $i,$day := $recap.Days}}
+          <tr>
+            <td>{{rowNumber $.TeacherRecap.DayPage $i}}</td><td>{{$day.Date}}</td>
+            <td>{{if $day.Required}}{{$day.StartsAt.Format "15:04"}}–{{$day.EndsAt.Format "15:04"}}{{else}}—{{end}}</td>
+            <td>{{with $day.CheckIn}}{{.OccurredAt.Format "15:04:05"}}<span class="block text-xs">{{if eq .Source "manual"}}Manual TU{{else}}GPS/selfie{{end}}</span>{{else}}—{{end}}</td>
+            <td>{{with $day.CheckOut}}{{.OccurredAt.Format "15:04:05"}}<span class="block text-xs">{{if eq .Source "manual"}}Manual TU{{else}}GPS/selfie{{end}}</span>{{else}}—{{end}}</td>
+            <td>{{with $day.Report}}{{.KindLabel}}{{else}}—{{end}}</td>
+            <td>{{template "teacher-recap-status" $day}}<p class="mt-2 text-sm">{{$day.Explanation}}</p>{{if $day.NeedsReview}}<p class="mt-2 font-medium">Perlu pemeriksaan administratif</p>{{end}}</td>
+            <td>{{if and $day.Required $day.CheckIn}}{{$day.LateMinutes}} menit{{else}}—{{end}}</td>
+            <td>{{if and $day.Required $day.CheckOut}}{{$day.EarlyMinutes}} menit{{else}}—{{end}}</td>
+            <td><a class="button-secondary" href="{{$.TeacherRecap.Base}}?from={{$.TeacherRecap.From}}&amp;to={{$.TeacherRecap.To}}{{if $.TeacherRecap.Managed}}&amp;teacher_id={{$recap.TeacherID}}{{end}}&amp;q={{$.TeacherRecap.Search}}&amp;page={{$.TeacherRecap.Page}}&amp;date={{$day.Date}}&amp;day_page={{$.TeacherRecap.DayPage}}#recap-date-detail">Detail tanggal</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <nav class="table-pagination mt-4 flex-wrap" aria-label="Halaman tanggal">
+      {{if .DayPreviousURL}}<a href="{{.DayPreviousURL}}">← Sebelumnya</a>{{else}}<span></span>{{end}}
+      <span>Halaman {{.DayPage}}</span>
+      {{if .DayNextURL}}<a href="{{.DayNextURL}}">Berikutnya →</a>{{else}}<span></span>{{end}}
+    </nav>
+  </section>
+{{else}}
+  <section class="panel">
+    <h2 class="mb-4 text-lg font-semibold">Ringkasan guru · {{.From}} s.d. {{.To}}</h2>
+    <div class="table-surface teacher-report-surface">
+      <table class="app-table teacher-report-table">
+        <caption class="sr-only">Ringkasan rekap guru</caption>
+        <thead><tr><th>No.</th><th>Guru</th><th>Hari wajib</th><th>Jumlah per status</th><th>Tindakan</th></tr></thead>
+        <tbody>
+          {{range $i,$teacher := .Teachers}}
+          <tr><td>{{rowNumber $.TeacherRecap.Page $i}}</td><td>{{$teacher.TeacherName}}</td><td>{{$teacher.RequiredDays}}</td><td>{{range $teacher.Counts}}{{if .Count}}<p>{{.Status}}: {{.Count}}</p>{{end}}{{end}}</td><td><a class="button-secondary" href="{{$.TeacherRecap.Base}}?from={{$.TeacherRecap.From}}&amp;to={{$.TeacherRecap.To}}&amp;q={{$.TeacherRecap.Search}}&amp;page={{$.TeacherRecap.Page}}&amp;teacher_id={{$teacher.TeacherID}}">Lihat per tanggal</a></td></tr>
+          {{else}}<tr><td colspan="5">Tidak ada data yang cocok dengan pencarian.</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+    <nav class="table-pagination mt-4 flex-wrap" aria-label="Halaman guru">
+      {{if .PreviousURL}}<a href="{{.PreviousURL}}">← Sebelumnya</a>{{else}}<span></span>{{end}}
+      <span>Halaman {{.Page}}</span>
+      {{if .NextURL}}<a href="{{.NextURL}}">Berikutnya →</a>{{else}}<span></span>{{end}}
+    </nav>
+  </section>
+{{end}}
+<section class="panel mt-5">
+  <h2 class="mb-3 text-lg font-semibold">Memahami status</h2>
+  <p>Belum Dicatat: belum ada bukti pada hari wajib yang telah berakhir; bukan otomatis Alpa.</p>
+  <p class="mt-2">Kehadiran Belum Lengkap: salah satu bukti Masuk/Pulang belum tersedia; bukan otomatis Pulang Cepat.</p>
+  <p class="mt-2">Belum Dapat Dinilai: sumber kalender, jadwal, atau penugasan perlu dilengkapi atau diperiksa.</p>
+  <p class="mt-2">Tidak Terjadwal: kalender dan jadwal diketahui, tetapi tidak ada kewajiban mengajar pada tanggal tersebut.</p>
+</section>
+{{end}}
+{{end}}
+
+{{define "teacher-recap-detail"}}
+{{with .TeacherRecap.Detail}}
+<section class="panel mb-5 teacher-report-content" id="recap-date-detail" aria-label="Dasar penilaian tanggal">
+  <h2 class="mb-3 text-lg font-semibold">Dasar penilaian · {{.Date}}</h2>
+  <p>{{.Status}} · {{.Explanation}}</p>
+  <p class="mt-3 text-sm text-gray-500">Semester #{{.SemesterID}} · Kalender versi {{.CalendarVersion}} · Revisi published #{{.RevisionID}}. Rekap dihitung ulang dari sumber versi yang tersedia; bukti dan histori asli tidak diubah.</p>
+  {{if .CalendarNote}}<p class="mt-2">Pengecualian kalender: {{.CalendarNote}}</p>{{end}}
+  {{if .NeedsReview}}<p class="mt-3 font-medium">Perlu pemeriksaan administratif. Pertahankan laporan dan bukti; hubungi TU.</p>{{end}}
+  {{with .CheckIn}}<p class="mt-3">Masuk {{.OccurredAt.Format "15:04:05"}} WIB · {{if eq .Source "manual"}}Manual TU{{else}}GPS/selfie{{end}} · Versi {{.Version}} · Direkam {{.RecordedAt.Format "02 Jan 2006 15:04:05"}} WIB</p>{{end}}
+  {{with .CheckOut}}<p class="mt-3">Pulang {{.OccurredAt.Format "15:04:05"}} WIB · {{if eq .Source "manual"}}Manual TU{{else}}GPS/selfie{{end}} · Versi {{.Version}} · Direkam {{.RecordedAt.Format "02 Jan 2006 15:04:05"}} WIB</p>{{end}}
+  <ul class="mt-4 space-y-2">
+    {{range .Obligations}}<li>{{.ClassName}} · {{.SubjectName}} · {{.Segments}} WIB · Entri #{{.EntryID}} · Penugasan #{{.AssignmentID}} · Revisi #{{.RevisionID}}</li>{{else}}<li>Belum ada kewajiban mengajar yang dapat ditampilkan.</li>{{end}}
+  </ul>
+  <div class="mt-4 flex flex-wrap gap-3">
+    {{if $.TeacherRecap.Managed}}
+      {{with .CheckIn}}<a class="button-secondary" href="/tu/kehadiran-guru/catatan/{{.ID}}">Masuk: detail / histori / koreksi</a>{{end}}
+      {{with .CheckOut}}<a class="button-secondary" href="/tu/kehadiran-guru/catatan/{{.ID}}">Pulang: detail / histori / koreksi</a>{{end}}
+      <a class="button-secondary" href="/tu/kehadiran-guru?date={{.Date}}&amp;q={{.TeacherName}}">Kelola catatan tanggal ini</a>
+    {{else}}
+      <a class="button-secondary" href="/kehadiran-saya?request=1">Minta pelengkapan / koreksi kepada TU</a>
+    {{end}}
+    {{with .Report}}<a class="button-secondary" href="{{if $.TeacherRecap.Managed}}/tu/kehadiran-guru/laporan{{else}}/kehadiran-saya/laporan{{end}}/{{.ID}}">Laporan: detail / histori</a>{{end}}
+  </div>
+</section>
+{{end}}
+{{end}}
+
+{{define "teacher-recap-status"}}<span class="status-badge {{if or (eq .Status "Hadir") (eq .Status "Hadir (Terlambat)") (eq .Status "Hadir (Dinas Luar)")}}status-badge--active{{else if eq .Status "Tidak Hadir (Pulang Cepat)"}}status-badge--error{{else if .NeedsReview}}status-badge--warning{{else}}status-badge--inactive{{end}}">{{.Status}}</span>{{end}}

@@ -1,0 +1,76 @@
+{{define "student-guidance"}}
+{{$g := .StudentGuidance}}
+<section class="panel student-guidance-page">
+  <div class="table-heading">
+    <div><h2 class="text-lg font-semibold">Catatan Pembinaan</h2><p class="mt-1 text-sm text-gray-500">Catatan kejadian dan tindakan pembinaan siswa.</p></div>
+    {{if $g.CanManage}}<a class="button-primary" href="/kesiswaan/pembinaan?new=1">Tambah catatan</a>{{end}}
+  </div>
+  <div class="table-toolbar">
+    <form method="get" action="/kesiswaan/pembinaan" class="flex w-full flex-wrap items-end gap-3">
+      <div class="table-search"><label class="sr-only" for="guidance-q">Cari catatan</label><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="guidance-q" name="q" type="search" data-instant-search maxlength="120" value="{{$g.Filter.Search}}" placeholder="Cari siswa, kelas, kejadian"></div>
+      <label class="min-w-48">Status<select name="status" data-list-filter><option value="">Semua status</option><option value="perlu_tindak_lanjut" {{if eq $g.Filter.Status "perlu_tindak_lanjut"}}selected{{end}}>Perlu tindak lanjut</option><option value="selesai" {{if eq $g.Filter.Status "selesai"}}selected{{end}}>Selesai</option></select></label>
+      <input type="hidden" name="student_id" value="{{$g.Filter.StudentID}}">
+      <button class="button-secondary" type="submit">Terapkan filter</button>
+    </form>
+  </div>
+  <div class="student-guidance-mobile-list mt-4 grid gap-3 sm:hidden">
+    {{range $g.List.Records}}
+    <article class="student-guidance-mobile-card rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+      <div class="flex items-start justify-between gap-3"><div><p class="font-semibold">{{.StudentNameAtEvent}}</p><p class="mt-1 text-sm text-gray-500">{{.ClassNameAtEvent}} · {{.Date}}</p></div><span class="status-badge {{if eq .Status "selesai"}}status-badge--active{{else}}status-badge--warning{{end}}">{{.Status.Label}}</span></div>
+      <p class="mt-3 break-words whitespace-pre-wrap text-sm"><span class="font-medium">Kejadian:</span> {{.Incident}}</p><p class="mt-2 break-words whitespace-pre-wrap text-sm"><span class="font-medium">Tindakan:</span> {{.Action}}</p>
+      <a class="button-secondary mt-4" href="/kesiswaan/pembinaan/{{.ID}}">Lihat detail dan histori</a>
+    </article>
+    {{else}}<p class="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700">Tidak ada catatan yang cocok dengan filter.</p>{{end}}
+  </div>
+  <div class="table-surface student-guidance-table-surface mt-4 hidden sm:block"><table class="student-guidance-table w-full min-w-[1180px] table-fixed text-left"><colgroup><col class="w-[12%]"><col class="w-[17%]"><col class="w-[23%]"><col class="w-[23%]"><col class="w-[14%]"><col class="w-[11%]"></colgroup><thead><tr><th scope="col" class="px-5 py-4 font-medium">Tanggal</th><th scope="col" class="px-5 py-4 font-medium">Siswa / kelas saat kejadian</th><th scope="col" class="px-5 py-4 font-medium">Kejadian</th><th scope="col" class="px-5 py-4 font-medium">Tindakan</th><th scope="col" class="px-5 py-4 font-medium">Status</th><th scope="col" class="px-5 py-4 font-medium">Aksi</th></tr></thead><tbody>
+    {{range $g.List.Records}}<tr><td class="whitespace-nowrap px-5 py-4 align-top">{{.Date}}</td><td class="break-words px-5 py-4 align-top"><strong>{{.StudentNameAtEvent}}</strong><br><span class="text-sm text-gray-500">{{.ClassNameAtEvent}}</span></td><td class="break-words px-5 py-4 align-top"><p class="guidance-table-text">{{.Incident}}</p></td><td class="break-words px-5 py-4 align-top"><p class="guidance-table-text">{{.Action}}</p></td><td class="px-5 py-4 align-top"><span class="status-badge {{if eq .Status "selesai"}}status-badge--active{{else}}status-badge--warning{{end}}">{{.Status.Label}}</span></td><td class="px-5 py-4 align-top"><a class="button-secondary" href="/kesiswaan/pembinaan/{{.ID}}">Detail</a></td></tr>{{else}}<tr><td colspan="6" class="px-5 py-8 text-center text-gray-500">Tidak ada catatan yang cocok dengan filter.</td></tr>{{end}}
+  </tbody></table></div>
+  <nav aria-label="Halaman catatan pembinaan" class="table-pagination">{{if $g.Previous}}<a class="table-page-arrow" href="/kesiswaan/pembinaan?page={{$g.Previous}}&amp;q={{$g.Filter.Search | urlquery}}&amp;status={{$g.Filter.Status | urlquery}}&amp;student_id={{$g.Filter.StudentID}}">‹ Sebelumnya</a>{{else}}<button class="table-page-arrow" type="button" disabled>‹ Sebelumnya</button>{{end}}<div class="table-page-links"><span class="is-current" aria-current="page">{{$g.Filter.Page}}</span>{{if $g.Next}}<a href="/kesiswaan/pembinaan?page={{$g.Next}}&amp;q={{$g.Filter.Search | urlquery}}&amp;status={{$g.Filter.Status | urlquery}}&amp;student_id={{$g.Filter.StudentID}}">{{$g.Next}}</a>{{end}}</div>{{if $g.Next}}<a class="table-page-arrow" href="/kesiswaan/pembinaan?page={{$g.Next}}&amp;q={{$g.Filter.Search | urlquery}}&amp;status={{$g.Filter.Status | urlquery}}&amp;student_id={{$g.Filter.StudentID}}">Berikutnya ›</a>{{else}}<button class="table-page-arrow" type="button" disabled>Berikutnya ›</button>{{end}}</nav>
+</section>
+{{if $g.ModalOpen}}{{template "student-guidance-create-modal" .}}{{end}}
+{{end}}
+
+{{define "student-guidance-create-modal"}}
+{{$g := .StudentGuidance}}
+<dialog class="form-modal" data-form-modal data-modal-open-on-load data-modal-return="/kesiswaan/pembinaan" aria-labelledby="guidance-create-title"><div class="form-modal-card">
+  <div class="form-modal-heading"><h2 id="guidance-create-title">Tambah catatan pembinaan</h2><a class="form-modal-close" href="/kesiswaan/pembinaan" aria-label="Tutup">×</a></div>
+  {{if .Error}}{{template "notification-error" .Error}}{{end}}
+  <form method="post" action="/kesiswaan/pembinaan/new" class="space-y-5">{{.CSRF}}
+    <div><label for="guidance-student">Siswa</label><select id="guidance-student" name="student_id" required><option value="">Pilih siswa aktif</option>{{range $g.Students}}<option value="{{.ID}}" {{if eq .ID $g.Input.StudentID}}selected{{end}}>{{.Name}} — {{.ClassName}}</option>{{end}}</select><p class="mt-1 text-xs text-gray-500">Kelas pada tanggal kejadian akan diverifikasi dari riwayat penempatan resmi.</p></div>
+    <div><label for="guidance-date">Tanggal kejadian</label><input id="guidance-date" name="occurred_on" type="date" value="{{$g.Input.Date}}" required></div>
+    <div><label for="guidance-incident">Kejadian atau pelanggaran</label><textarea id="guidance-incident" name="incident" maxlength="2000" rows="4" required>{{$g.Input.Incident}}</textarea></div>
+    <div><label for="guidance-action">Tindakan pembinaan</label><textarea id="guidance-action" name="action" maxlength="2000" rows="4" required>{{$g.Input.Action}}</textarea></div>
+    <div><label for="guidance-status">Status</label><select id="guidance-status" name="status" required><option value="perlu_tindak_lanjut" {{if or (eq $g.Input.Status "") (eq $g.Input.Status "perlu_tindak_lanjut")}}selected{{end}}>Perlu tindak lanjut</option><option value="selesai" {{if eq $g.Input.Status "selesai"}}selected{{end}}>Selesai</option></select></div>
+    <div class="form-modal-actions"><div class="button-group button-group--primary" role="group" aria-label="Aksi catatan"><a class="button-secondary" href="/kesiswaan/pembinaan">Batal</a><button class="button-primary" type="submit">{{template "icon-save" .}}Simpan catatan</button></div></div>
+  </form>
+</div></dialog>
+{{end}}
+
+{{define "student-guidance-detail"}}
+{{$g := .StudentGuidance}}
+<div id="student-guidance-detail-region">
+<p class="mb-4"><a class="button-secondary" href="/kesiswaan/pembinaan">← Kembali ke daftar</a></p>
+<section class="panel">
+  <div class="table-heading"><div><h2 class="text-lg font-semibold">{{.StudentGuidance.Record.StudentNameAtEvent}}</h2><p class="mt-1 text-sm text-gray-500">{{.StudentGuidance.Record.ClassNameAtEvent}} · {{.StudentGuidance.Record.Date}}</p></div><span class="status-badge {{if eq .StudentGuidance.Record.Status "selesai"}}status-badge--active{{else}}status-badge--warning{{end}}">{{.StudentGuidance.Record.Status.Label}}</span></div>
+  <dl class="grid gap-5 md:grid-cols-2"><div><dt class="text-sm font-medium text-gray-500">Kejadian atau pelanggaran</dt><dd class="mt-1 whitespace-pre-wrap">{{.StudentGuidance.Record.Incident}}</dd></div><div><dt class="text-sm font-medium text-gray-500">Tindakan pembinaan</dt><dd class="mt-1 whitespace-pre-wrap">{{.StudentGuidance.Record.Action}}</dd></div><div><dt class="text-sm font-medium text-gray-500">Dicatat oleh</dt><dd class="mt-1">{{.StudentGuidance.Record.RecordedByName}}</dd></div><div><dt class="text-sm font-medium text-gray-500">Versi catatan</dt><dd class="mt-1">{{.StudentGuidance.Record.Version}}</dd></div></dl>
+  {{if $g.CanManage}}<div class="mt-6 flex flex-wrap gap-3"><a class="button-secondary" href="/kesiswaan/pembinaan/{{$g.Record.ID}}?edit=1">{{template "icon-edit" .}}Ubah kejadian/tindakan</a>
+  <form id="guidance-status-form" method="post" action="/kesiswaan/pembinaan/{{$g.Record.ID}}/status" hx-post="/kesiswaan/pembinaan/{{$g.Record.ID}}/status" hx-target="#student-guidance-detail-region" hx-swap="outerHTML" class="grid w-full gap-3 rounded-xl border border-gray-200 p-4 sm:grid-cols-[1fr_2fr_auto] dark:border-gray-800">{{.CSRF}}<input type="hidden" name="version" value="{{if $g.StatusVersion}}{{$g.StatusVersion}}{{else}}{{$g.Record.Version}}{{end}}">{{if $g.StatusMessage}}<p class="sm:col-span-3 text-sm text-green-700" role="status">{{$g.StatusMessage}}</p>{{end}}{{if $g.StatusError}}<p class="sm:col-span-3 text-sm text-red-700" role="alert" data-guidance-status-error>{{$g.StatusError}}</p>{{end}}<label>Status baru<select name="status" required><option value="" disabled {{if eq $g.StatusChange.Status ""}}selected{{end}}>Pilih status</option><option value="perlu_tindak_lanjut" {{if eq $g.StatusChange.Status "perlu_tindak_lanjut"}}selected{{end}}>Perlu tindak lanjut</option><option value="selesai" {{if eq $g.StatusChange.Status "selesai"}}selected{{end}}>Selesai</option></select></label><label>Alasan perubahan<textarea name="reason" maxlength="500" rows="2" required>{{$g.StatusChange.Reason}}</textarea></label><button class="button-primary self-end" type="submit">Ubah status</button></form></div>{{end}}
+</section>
+  <section class="panel mt-5"><h2 class="text-lg font-semibold">Histori perubahan</h2><div class="mt-4 space-y-4">{{range $g.History}}<article class="rounded-xl border border-gray-200 p-4 dark:border-gray-800"><div class="flex flex-wrap justify-between gap-2"><strong>{{if eq .Change "recorded"}}Catatan dibuat{{else if eq .Change "content_changed"}}Kejadian/tindakan diubah{{else}}Status diubah{{end}}</strong><time class="text-sm text-gray-500">{{.RecordedAt.Format "02 Jan 2006 15:04"}} WIB</time></div><p class="mt-1 text-sm">Pelaku: {{.ActorName}} · Alasan: {{.Reason}}</p><div class="mt-3 grid gap-4 md:grid-cols-2">{{if .Before}}<div><h3 class="text-sm font-medium text-gray-500">Sebelum</h3><p class="mt-1">{{.Before.Incident}} — {{.Before.Action}} · {{.Before.Status.Label}}</p></div>{{end}}<div><h3 class="text-sm font-medium text-gray-500">Sesudah</h3><p class="mt-1">{{.After.Incident}} — {{.After.Action}} · {{.After.Status.Label}}</p></div></div></article>{{else}}<p class="text-sm text-gray-500">Belum ada histori.</p>{{end}}</div></section>
+{{if and $g.CanManage $g.ModalOpen}}{{template "student-guidance-edit-modal" .}}{{end}}
+</div>
+{{end}}
+
+{{define "student-guidance-edit-modal"}}
+{{$g := .StudentGuidance}}
+<dialog class="form-modal" data-form-modal data-modal-open-on-load data-modal-return="/kesiswaan/pembinaan/{{$g.Record.ID}}" aria-labelledby="guidance-edit-title"><div class="form-modal-card">
+  <div class="form-modal-heading"><h2 id="guidance-edit-title">Ubah catatan pembinaan</h2><a class="form-modal-close" href="/kesiswaan/pembinaan/{{$g.Record.ID}}" aria-label="Tutup">×</a></div>
+  {{if .Error}}{{template "notification-error" .Error}}{{end}}
+  <form method="post" action="/kesiswaan/pembinaan/{{$g.Record.ID}}/edit" class="space-y-5">{{.CSRF}}<input type="hidden" name="version" value="{{$g.Record.Version}}">
+    <div><label for="guidance-edit-incident">Kejadian atau pelanggaran</label><textarea id="guidance-edit-incident" name="incident" maxlength="2000" rows="4" required>{{$g.ContentChange.Incident}}</textarea></div>
+    <div><label for="guidance-edit-action">Tindakan pembinaan</label><textarea id="guidance-edit-action" name="action" maxlength="2000" rows="4" required>{{$g.ContentChange.Action}}</textarea></div>
+    <div><label for="guidance-edit-reason">Alasan perubahan</label><textarea id="guidance-edit-reason" name="reason" maxlength="500" rows="3" required>{{$g.ContentChange.Reason}}</textarea></div>
+    <div class="form-modal-actions"><div class="button-group button-group--primary" role="group" aria-label="Aksi edit catatan"><a class="button-secondary" href="/kesiswaan/pembinaan/{{$g.Record.ID}}">Batal</a><button class="button-primary" type="submit">{{template "icon-save" .}}Simpan perubahan</button></div></div>
+  </form>
+</div></dialog>
+{{end}}

@@ -125,7 +125,7 @@ func (s *Store) ExecuteStudentTransition(ctx context.Context, actor int64, sourc
 		var targetClass any
 		if d.TargetClassID > 0 {
 			var id int64
-			err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id) VALUES($1,$2,$3,$4) RETURNING id`, targetYear, d.StudentID, d.TargetClassID, actor).Scan(&id)
+			err = tx.QueryRowContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,(SELECT min(c.starts_on) FROM app.semester_calendars c JOIN app.semesters sm ON sm.id=c.semester_id WHERE sm.school_year_id=$1)) RETURNING id`, targetYear, d.StudentID, d.TargetClassID, actor).Scan(&id)
 			if err != nil {
 				return dbError(err)
 			}

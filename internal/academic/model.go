@@ -57,6 +57,7 @@ type StudentOption struct {
 }
 
 type Placement struct {
+	StartsOn                             string
 	ID, StudentID, SchoolYearID, ClassID int64
 	StudentName, NIS, NISN               string
 	YearName, ClassName                  string

@@ -57,6 +57,13 @@ func (s *Store) MoveStudentClass(ctx context.Context, actor, placement, expected
 		return err
 	}
 	defer tx.Rollback()
+	var beforeStart bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_placements WHERE id=$1 AND starts_on>$2::date)`, placement, date).Scan(&beforeStart); err != nil {
+		return err
+	}
+	if beforeStart {
+		return ValidationError("Tanggal pindah mendahului mulai penempatan siswa.")
+	}
 	v, err := movementStudent(ctx, tx, 0, placement)
 	if err != nil {
 		return err
@@ -101,6 +108,13 @@ func (s *Store) ExitStudentSchool(ctx context.Context, actor, student, version i
 	}
 	if v.ExitID > 0 {
 		return ValidationError("Siswa masih memiliki catatan keluar atau kembali terjadwal.")
+	}
+	var beforeStart bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_placements p JOIN app.school_years y ON y.id=p.school_year_id WHERE p.student_id=$1 AND y.active AND p.starts_on>$2::date)`, student, date).Scan(&beforeStart); err != nil {
+		return err
+	}
+	if beforeStart {
+		return ValidationError("Tanggal keluar mendahului mulai penempatan siswa.")
 	}
 	var conflict bool
 	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.student_school_returns r JOIN app.student_school_exits e ON e.id=r.exit_id WHERE e.student_id=$1 AND r.effective_date >= $2::date) OR EXISTS(SELECT 1 FROM app.student_class_moves m JOIN app.student_placements p ON p.id=m.placement_id WHERE p.student_id=$1 AND m.effective_date >= $2::date) OR EXISTS(SELECT 1 FROM app.student_year_transitions t JOIN app.school_years y ON y.id=t.source_year_id WHERE t.student_id=$1 AND y.active)`, student, date).Scan(&conflict)

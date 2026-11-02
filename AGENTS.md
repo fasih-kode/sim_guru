@@ -7,9 +7,14 @@
 4. Jelaskan rencana serta dampak sebelum perubahan besar. Gunakan bahasa Indonesia untuk laporan.
 
 ## Implementasi
+- **Satu port web standar:** development dan UAT manual memakai `http://127.0.0.1:18743`. Jangan membuat server/port preview permanen atau port fase baru secara otomatis. Bila UAT sintetis harus memakai port ini, hentikan server development secara normal, siapkan target database UAT terisolasi secara eksplisit, verifikasi nama target sebelum startup, lalu pulihkan development dari `.env` setelah UAT. Jangan pernah mengalihkan database secara diam-diam atau memakai `sim_guru_dev` untuk fixture/UAT sintetis. Port lain hanya boleh digunakan bila ada kebutuhan teknis nyata yang tidak dapat dipenuhi dengan konfigurasi standar dan alasannya dijelaskan kepada Product Owner terlebih dahulu. Pengujian HTTP otomatis harus memakai `httptest` atau mekanisme in-process; jangan meninggalkan preview server permanen.
+- Database development `sim_guru_dev`, database test terisolasi, dan database UAT sintetis memiliki tujuan berbeda. Jangan menjalankan suite otomatis dan sesi UAT bersamaan pada database yang sama. Jangan reset atau membersihkan database/fixture, kredensial aktif, file pengguna, atau artefak sementara kecuali kepemilikan, status tidak dipakai, dan dampaknya sudah dipastikan.
 - Ikuti arsitektur, stack, dan konvensi yang berlaku. Fondasi aplikasi tersedia; baca ARCHITECTURE dan kode aktual sebelum menambah modul atau API.
 - **Standar FE SIM-GURU: TailAdmin Free adalah acuan visual default untuk seluruh halaman, semua role, dan komponen baru.** Sebelum membuat/mengubah FE, buka demo TailAdmin dan periksa halaman/komponen paling dekat serta source repository; jangan menunggu pengguna mengirim screenshot atau mengulang referensi. Cocokkan layout, lebar konten, jarak, tipografi, warna, border/radius, ikon, state, responsivitas, dan interaksi. Contoh: permintaan form di modal mengikuti komponen Form in Modal pada `/modals`; tabel mengikuti `/basic-tables`. Gunakan komponen/varian terdekat bila permintaan tidak menyebut detail.
+- **Navigasi global (D-047):** bila kelompok menu memiliki lebih dari satu halaman terkait, sidebar hanya menampilkan link kelompok/halaman awal yang diizinkan dan submenu antarhalaman wajib memakai horizontal navigation tabs bersama dengan ikon serta underline aktif. Gunakan `internal/web/section_navigation.go`, partial `section-navigation-tabs`, dan kelas `.navigation-*`; jangan membuat markup, CSS, atau sistem tab kedua. Daftarkan kelompok, route, dan filter role di kontrak bersama, pertahankan link native dan `aria-current="page"`, satu tab aktif, parent sidebar aktif, serta route detail/tambah/edit. Sembunyikan tab yang tidak berhak tanpa mengubah otorisasi server atau menambah permission. Kelompok satu halaman tidak perlu tab; form, dialog, dan wizard bukan tab navigasi. Uji role gabungan dan tampilan desktop/ponsel. Rincian permanen ada di [UI Standards](docs/UI_STANDARDS.md).
+- **Seluruh pencarian pada halaman daftar SIM-GURU wajib menggunakan Instant Search sebagai standar frontend. Pencarian dan perubahan filter memperbarui hasil secara langsung tanpa submit manual atau full-page reload ketika JavaScript tersedia.** Debounce server default 350 ms; gunakan HTMX dan pola bersama `instant-search.js`/`list-fragment`. Pencarian lokal hanya bila seluruh data relevan dalam cakupan tersedia di browser, bukan 10 baris pertama pagination SQL. Pertahankan fokus, nilai input, kombinasi filter, pagination, URL dan batas role; gunakan komponen TailAdmin Free yang konsisten. Lindungi modal dan draft/form mutasi dari swap; jangan membuat implementasi berbeda untuk fitur baru tanpa alasan. Lihat [inventaris dan kontrak](docs/INSTANT_SEARCH_AUDIT.md).
 - Adaptasikan pola TailAdmin ke stack SSR/htmx dan pola akses SIM-GURU; pertahankan data, business rules, otorisasi, aksesibilitas, dan konvensi proyek. Jangan mengganti stack atau menyalin seluruh template aplikasi tanpa kebutuhan. Verifikasi hasil FE secara visual pada desktop dan ponsel, bandingkan dengan referensi; jangan menyatakan cocok bila belum diperiksa.
+- Standar UI global dan pola navigasi D-047 dirinci di [UI Standards](docs/UI_STANDARDS.md); gunakan komponen tabs bersama untuk setiap kelompok baru yang memiliki submenu/lebih dari satu halaman. Ini wajib dalam definisi selesai frontend.
 - Jangan meminta klarifikasi visual yang sudah dapat dijawab dengan membuka referensi. Jika referensi tidak dapat diakses, cari source resmi. Tanyakan hanya bila ada beberapa varian yang materially berbeda dan pilihan memengaruhi alur/aturan produk; jika tidak, pilih varian TailAdmin yang paling dekat dan lanjutkan.
 - Admin mengelola identitas siswa/guru, akun, role, pembuatan/koreksi kelas dan penempatan awal siswa. Kurikulum menyiapkan/mengaktifkan tahun ajaran beserta dua semester, mengelola mapel, wali kelas, pengampu, jadwal, transisi kenaikan/kelulusan dan pemeriksaan koreksi nilai Final. Kurikulum membaca kelas tanpa hak membuat/mengoreksi kelas; Admin tidak otomatis mendapat hak kalender/penugasan/nilai. Lihat PRD bab 3A dan keputusan D-015. Jangan mengubah aturan bisnis tanpa persetujuan.
 - Utamakan perubahan kecil, terfokus, mudah diuji; clean code, pemisahan tanggung jawab, dan penanganan error eksplisit.
@@ -29,3 +34,34 @@
 
 ## Tata kelola sumber
 [PRD](docs/PRD.md) menunjuk dokumen kebutuhan otoritatif. [DECISIONS](docs/DECISIONS.md) mencatat keputusan; jangan menggandakan kebutuhan lengkap. Bedakan fakta terverifikasi, keputusan disetujui, rekomendasi belum disetujui, dan pekerjaan belum selesai. Jika sumber bertentangan, laporkan dan minta keputusan sebelum mengganti kebijakan; lanjutkan pekerjaan independen yang aman.
+
+# Pedoman Pengembangan SIM-GURU
+
+## Prinsip
+- Prioritaskan readability, maintainability, dan testability.
+- Gunakan idiom Go dan struktur sederhana.
+- Hindari overengineering dan abstraksi yang tidak perlu.
+- Pertahankan perilaku aplikasi saat refactoring.
+- Jangan mengubah aturan bisnis tanpa persetujuan.
+
+## Komentar
+- Tulis komentar penjelasan dalam bahasa Indonesia.
+- Utamakan penjelasan alasan dan batasan bisnis.
+- Hindari komentar yang hanya mengulang kode.
+
+## Pengujian
+- Tambahkan regression test untuk perubahan berisiko.
+- Jalankan go test ./... dan go vet ./...
+- Jangan menyatakan test lulus tanpa menjalankannya.
+
+## Teknologi
+- Go, html/template, htmx, PostgreSQL.
+- TailAdmin Free dan Tailwind CSS.
+- Jangan mengganti stack tanpa persetujuan.
+
+## Cara Kerja
+- Kerjakan perubahan kecil dan terukur.
+- Periksa diff serta dampak perubahan.
+- Catat temuan yang tidak mendesak sebagai backlog.
+- Jangan menjadikan urusan monitoring atau deployment
+  sebagai penghalang refactoring lokal.
