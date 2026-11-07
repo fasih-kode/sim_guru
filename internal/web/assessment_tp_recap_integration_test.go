@@ -62,7 +62,39 @@ func TestAssessmentTPRecapHTTPContextAuthorizationIntegration(t *testing.T) {
 	if err = service.AssignTeacher(ctx, curriculum.ID, semesterID, otherClassID, subjectID, otherIdentity.ID, from); err != nil {
 		t.Fatal("penugasan guru pembanding", err)
 	}
+	var objectiveID, activityID, studentID int64
+	if err = service.CreateLearningObjective(ctx, teacher.ID, semesterID, classID, subjectID, "TP HTTP di luar kalender "+suffix); err != nil {
+		t.Fatal("buat TP fixture", err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND definition=$4`, semesterID, classID, subjectID, "TP HTTP di luar kalender "+suffix).Scan(&objectiveID); err != nil {
+		t.Fatal("baca TP fixture", err)
+	}
+	outsideDate := today.AddDate(0, 0, 25).Format("2006-01-02")
+	if err = service.CreateAssessmentActivity(ctx, teacher.ID, semesterID, classID, subjectID, "Sumatif HTTP luar kalender "+suffix, "sumatif", outsideDate, []int64{objectiveID}); err != nil {
+		t.Fatal("buat Sumatif di luar kalender", err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=(SELECT school_year_id FROM app.semesters WHERE id=$1) AND name=$2`, semesterID, "Sumatif HTTP luar kalender "+suffix).Scan(&activityID); err != nil {
+		t.Fatal("baca Sumatif fixture", err)
+	}
+	if err = db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2012-01-01','L') RETURNING id`, "Siswa HTTP rekap "+suffix).Scan(&studentID); err != nil {
+		t.Fatal("buat siswa fixture", err)
+	}
+	if _, err = db.Exec(`INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES((SELECT school_year_id FROM app.semesters WHERE id=$1),$2,$3,$4,$5::date)`, semesterID, studentID, classID, admin.ID, today.AddDate(0, 0, -2).Format("2006-01-02")); err != nil {
+		t.Fatal("buat penempatan siswa diketahui", err)
+	}
+	var unknownStudentID int64
+	if err = db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2012-01-01','L') RETURNING id`, "Siswa HTTP tanggal tidak diketahui "+suffix).Scan(&unknownStudentID); err != nil {
+		t.Fatal("buat siswa penempatan tidak diketahui", err)
+	}
+	if _, err = db.Exec(`INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES((SELECT school_year_id FROM app.semesters WHERE id=$1),$2,$3,$4,NULL)`, semesterID, unknownStudentID, classID, admin.ID); err != nil {
+		t.Fatal("buat penempatan tanpa tanggal mulai", err)
+	}
 	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id=$1`, activityID)
+		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE id=$1`, activityID)
+		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE id=$1`, objectiveID)
+		_, _ = db.Exec(`DELETE FROM app.student_placements WHERE student_id IN ($1,$2)`, studentID, unknownStudentID)
+		_, _ = db.Exec(`DELETE FROM app.students WHERE id IN ($1,$2)`, studentID, unknownStudentID)
 		_, _ = db.Exec(`DELETE FROM app.teaching_assignment_history WHERE assignment_id IN (SELECT id FROM app.teaching_assignments WHERE semester_id=$1)`, semesterID)
 		_, _ = db.Exec(`DELETE FROM app.teaching_assignments WHERE semester_id=$1`, semesterID)
 		for _, id := range []int64{teacherIdentity.ID, otherIdentity.ID} {
@@ -103,7 +135,7 @@ func TestAssessmentTPRecapHTTPContextAuthorizationIntegration(t *testing.T) {
 	}
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, requestFor(auth.User{ID: teacher.ID, Active: true, Roles: []string{"guru_mapel"}}))
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `data-navigation-tab="assessment-tp-recap"`) || !strings.Contains(page.Body.String(), "NH adalah rata-rata tanpa bobot") {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `data-navigation-tab="assessment-tp-recap"`) || !strings.Contains(page.Body.String(), "NH adalah rata-rata tanpa bobot") || !strings.Contains(page.Body.String(), "1 data penempatan belum dapat dipastikan") || !strings.Contains(page.Body.String(), "Ada 1 kegiatan Sumatif dengan tanggal di luar rentang kalender semester") || !strings.Contains(page.Body.String(), "Di luar kalender semester") {
 		t.Fatalf("Guru Mapel dengan penugasan tidak melihat rekap: status=%d body=%s", page.Code, page.Body.String())
 	}
 	denied := httptest.NewRecorder()

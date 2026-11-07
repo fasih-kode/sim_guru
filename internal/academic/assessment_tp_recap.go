@@ -12,8 +12,10 @@ import (
 
 // AssessmentTPRecap adalah rekap baca-saja untuk satu konteks penugasan.
 type AssessmentTPRecap struct {
-	Context  LearningObjectiveContext
-	Students []AssessmentTPRecapStudent
+	Context                    LearningObjectiveContext
+	Students                   []AssessmentTPRecapStudent
+	UnknownPlacementCount      int
+	OutOfCalendarActivityCount int
 }
 
 type AssessmentTPRecapStudent struct {
@@ -39,6 +41,7 @@ type AssessmentTPRecapActivity struct {
 	ID, Name, Date string
 	EffectiveValue string
 	HasValue       bool
+	OutOfCalendar  bool
 }
 
 // AssessmentTPRecap membaca satu snapshot konsisten. Kewajiban kegiatan
@@ -86,10 +89,63 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		return AssessmentTPRecap{}, err
 	}
 	out.Context.SemesterID, out.Context.ClassID, out.Context.SubjectID = semesterID, classID, subjectID
+	if err = tx.QueryRowContext(ctx, `
+		SELECT count(DISTINCT a.id)
+		FROM app.assessment_activities a
+		JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id
+		JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
+		JOIN app.semester_calendars cal ON cal.semester_id=a.semester_id
+		WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3
+		  AND a.activity_type='sumatif'
+		  AND (a.activity_date<cal.starts_on OR a.activity_date>cal.ends_on)
+		  AND lo.school_year_id=$4 AND lo.semester_id=$1 AND lo.class_id=$2 AND lo.subject_id=$3`,
+		semesterID, classID, subjectID, schoolYearID).Scan(&out.OutOfCalendarActivityCount); err != nil {
+		return AssessmentTPRecap{}, err
+	}
+	if err = tx.QueryRowContext(ctx, `
+		WITH calendar AS (
+			SELECT starts_on,ends_on FROM app.semester_calendars WHERE semester_id=$1
+		), context_activities AS (
+			SELECT DISTINCT a.activity_date
+			FROM app.assessment_activities a
+			JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id
+			JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
+			WHERE a.semester_id=$1 AND a.class_id=$3 AND a.subject_id=$4 AND a.activity_type='sumatif'
+			  AND lo.school_year_id=$2 AND lo.semester_id=$1 AND lo.class_id=$3 AND lo.subject_id=$4
+		), relevant_dates AS (
+			SELECT starts_on AS on_date FROM calendar
+			UNION SELECT ends_on FROM calendar
+			UNION
+			SELECT m.effective_date FROM app.student_class_moves m
+			JOIN app.student_placements p ON p.id=m.placement_id
+			JOIN calendar cal ON p.school_year_id=$2
+			WHERE m.effective_date BETWEEN cal.starts_on AND cal.ends_on
+			UNION
+			SELECT r.effective_date FROM app.student_school_returns r
+			JOIN app.student_placements p ON p.id=r.placement_id
+			JOIN calendar cal ON p.school_year_id=$2
+			WHERE r.effective_date BETWEEN cal.starts_on AND cal.ends_on
+			UNION SELECT activity_date FROM context_activities
+		)
+		SELECT count(*) FROM app.student_placements p
+		WHERE p.school_year_id=$2 AND p.starts_on IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM relevant_dates d
+			WHERE app.student_placement_class_at(p.id,d.on_date)=$3
+		  )`, semesterID, schoolYearID, classID, subjectID).Scan(&out.UnknownPlacementCount); err != nil {
+		return AssessmentTPRecap{}, err
+	}
 
 	rows, err := tx.QueryContext(ctx, `
 		WITH calendar AS (
 			SELECT starts_on, ends_on FROM app.semester_calendars WHERE semester_id=$1
+		), context_activities AS (
+			SELECT DISTINCT a.id, a.activity_date
+			FROM app.assessment_activities a
+			JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id
+			JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
+			WHERE a.semester_id=$1 AND a.class_id=$3 AND a.subject_id=$4 AND a.activity_type='sumatif'
+			  AND lo.school_year_id=$2 AND lo.semester_id=$1 AND lo.class_id=$3 AND lo.subject_id=$4
 		), candidates AS (
 			SELECT p.id AS placement_id, p.student_id,
 			       greatest(p.starts_on, cal.starts_on) AS on_date
@@ -108,18 +164,22 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 			JOIN app.student_school_returns r ON r.placement_id=p.id
 			JOIN calendar cal ON p.school_year_id=$2
 			WHERE p.starts_on IS NOT NULL AND r.effective_date BETWEEN cal.starts_on AND cal.ends_on
+			UNION
+			SELECT p.id, p.student_id, a.activity_date
+			FROM app.student_placements p
+			CROSS JOIN context_activities a
+			WHERE p.school_year_id=$2 AND p.starts_on IS NOT NULL AND p.starts_on<=a.activity_date
 		), class_students AS (
 			SELECT DISTINCT p.student_id, st.name, coalesce(st.nis,'') AS nis
 			FROM candidates cand
 			JOIN app.student_placements p ON p.id=cand.placement_id
 			JOIN app.students st ON st.id=p.student_id
-			CROSS JOIN calendar cal
-			WHERE cand.on_date BETWEEN cal.starts_on AND cal.ends_on
-			  AND app.student_placement_class_at(cand.placement_id,cand.on_date)=$3
+			WHERE app.student_placement_class_at(cand.placement_id,cand.on_date)=$3
 		)
 		SELECT st.student_id, st.name, st.nis,
 		       lo.id, lo.definition,
 		       a.id, a.name, a.activity_date::text,
+		       CASE WHEN a.id IS NULL THEN false ELSE a.activity_date<cal.starts_on OR a.activity_date>cal.ends_on END AS out_of_calendar,
 		       CASE WHEN a.id IS NULL THEN false ELSE EXISTS (
 		         SELECT 1 FROM app.student_placements p
 		         WHERE p.student_id=st.student_id AND p.school_year_id=$2
@@ -136,7 +196,6 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		  ON ao.learning_objective_id=lo.id
 		LEFT JOIN app.assessment_activities a
 		  ON a.id=ao.activity_id AND a.activity_type='sumatif'
-		 AND a.activity_date BETWEEN cal.starts_on AND cal.ends_on
 		LEFT JOIN app.assessment_activity_initial_scores sc
 		  ON sc.assessment_activity_id=a.id AND sc.learning_objective_id=lo.id
 		 AND sc.student_id=st.student_id
@@ -166,9 +225,9 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		var studentID, objectiveID int64
 		var studentName, nis, definition string
 		var activityID, activityName, activityDate, effective sql.NullString
-		var applicable bool
+		var outOfCalendar, applicable bool
 		if err = rows.Scan(&studentID, &studentName, &nis, &objectiveID, &definition,
-			&activityID, &activityName, &activityDate, &applicable, &effective); err != nil {
+			&activityID, &activityName, &activityDate, &outOfCalendar, &applicable, &effective); err != nil {
 			return AssessmentTPRecap{}, err
 		}
 		idx, exists := studentIndex[studentID]
@@ -192,7 +251,7 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		if !applicable {
 			continue
 		}
-		activity := AssessmentTPRecapActivity{ID: activityID.String, Name: activityName.String, Date: activityDate.String, HasValue: effective.Valid}
+		activity := AssessmentTPRecapActivity{ID: activityID.String, Name: activityName.String, Date: activityDate.String, HasValue: effective.Valid, OutOfCalendar: outOfCalendar}
 		if effective.Valid {
 			activity.EffectiveValue = strings.ReplaceAll(effective.String, ".", ",")
 			objective.ScoredCount++

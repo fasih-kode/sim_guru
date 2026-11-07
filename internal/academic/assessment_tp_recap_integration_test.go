@@ -66,7 +66,7 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 		t.Fatal("penugasan pembanding", err)
 	}
 	keepFixture := false
-	var studentA, studentB int64
+	var studentA, studentB, unknownStudent, foreignUnknownStudent int64
 	t.Cleanup(func() {
 		if keepFixture {
 			t.Log("fixture rekap dipertahankan karena memuat histori koreksi/remedial append-only")
@@ -76,7 +76,7 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id IN (SELECT id FROM app.assessment_activities WHERE school_year_id=$1)`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE school_year_id=$1`, yearID)
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE school_year_id=$1`, yearID)
-		for _, id := range []int64{studentA, studentB} {
+		for _, id := range []int64{studentA, studentB, unknownStudent, foreignUnknownStudent} {
 			if id > 0 {
 				_, _ = db.Exec(`DELETE FROM app.student_placements WHERE student_id=$1`, id)
 				_, _ = db.Exec(`DELETE FROM app.students WHERE id=$1`, id)
@@ -145,6 +145,19 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 	}
 	studentA, _ = createStudent("Siswa rekap aktif ", calendarStart)
 	studentB, _ = createStudent("Siswa pindah masuk ", tomorrow)
+	createUnknownPlacement := func(name string, targetClass int64) int64 {
+		t.Helper()
+		var studentID int64
+		if e := db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2012-01-01','L') RETURNING id`, name+suffix).Scan(&studentID); e != nil {
+			t.Fatal("buat siswa penempatan belum diketahui", e)
+		}
+		if _, e := db.Exec(`INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,NULL)`, yearID, studentID, targetClass, admin.ID); e != nil {
+			t.Fatal("buat penempatan tanpa tanggal mulai", e)
+		}
+		return studentID
+	}
+	unknownStudent = createUnknownPlacement("Siswa tanggal mulai tidak diketahui ", classID)
+	foreignUnknownStudent = createUnknownPlacement("Siswa penempatan kelas lain ", otherClassID)
 	if err = store.SaveAssessmentActivityInitialScores(ctx, teacher.ID, activity60, []AssessmentScoreInput{{StudentID: studentA, ObjectiveID: objective1, Value: "60"}}); err != nil {
 		t.Fatal("nilai 60", err)
 	}
@@ -177,8 +190,13 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 			foundA = &recap.Students[i]
 		}
 	}
-	if foundA == nil || !foundA.NHComplete || foundA.NH != "85,00" || len(foundA.Objectives) != 2 {
+	if foundA == nil || !foundA.NHComplete || foundA.NH != "85,00" || len(foundA.Objectives) != 2 || recap.UnknownPlacementCount != 1 {
 		t.Fatalf("NH/TP roster tidak sesuai: %+v", recap.Students)
+	}
+	for _, student := range recap.Students {
+		if student.ID == fmt.Sprint(unknownStudent) || student.ID == fmt.Sprint(foreignUnknownStudent) {
+			t.Fatalf("penempatan tanpa tanggal mulai atau dari kelas lain tidak boleh masuk roster: %+v", student)
+		}
 	}
 	if foundA.Objectives[0].ScoredCount != 3 || foundA.Objectives[0].RequiredCount != 3 || foundA.Objectives[0].Average != "80,00" {
 		t.Fatalf("rata-rata tiga kegiatan TP1 harus 80,00 dan Formatif diabaikan: %+v", foundA.Objectives[0])
@@ -260,6 +278,80 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 	}
 	if activityPending == 0 {
 		t.Fatal("fixture kegiatan tertunda tidak dibuat")
+	}
+	outsideObjectiveDefinition := "TP kegiatan di luar kalender " + suffix
+	if err = store.CreateLearningObjective(ctx, teacher.ID, semesterID, classID, subjectID, outsideObjectiveDefinition); err != nil {
+		t.Fatal("buat TP untuk kegiatan di luar kalender", err)
+	}
+	var outsideObjectiveID int64
+	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND definition=$4`, semesterID, classID, subjectID, outsideObjectiveDefinition).Scan(&outsideObjectiveID); err != nil {
+		t.Fatal("baca TP kegiatan di luar kalender", err)
+	}
+	outsideDate := todayTime.AddDate(0, 0, 40).Format("2006-01-02")
+	outsideScoredID := createActivity("Sumatif luar kalender bernilai", "sumatif", outsideDate, outsideObjectiveID)
+	if err = store.SaveAssessmentActivityInitialScores(ctx, teacher.ID, outsideScoredID, []AssessmentScoreInput{{StudentID: studentA, ObjectiveID: outsideObjectiveID, Value: "72"}}); err != nil {
+		t.Fatal("simpan nilai Sumatif luar kalender", err)
+	}
+	outsideScoredRecap, err := store.AssessmentTPRecap(ctx, teacher.ID, semesterID, classID, subjectID)
+	if err != nil {
+		t.Fatal("baca Sumatif luar kalender bernilai", err)
+	}
+	if outsideScoredRecap.OutOfCalendarActivityCount != 1 {
+		t.Fatalf("kegiatan di luar kalender harus diberi hitungan eksplisit, got %d", outsideScoredRecap.OutOfCalendarActivityCount)
+	}
+	assertObjective := func(recap AssessmentTPRecap, complete bool, required, scored int, average string) {
+		t.Helper()
+		for _, student := range recap.Students {
+			if student.ID != fmt.Sprint(studentA) {
+				continue
+			}
+			for _, objective := range student.Objectives {
+				if objective.ID == fmt.Sprint(outsideObjectiveID) {
+					if objective.Complete != complete || objective.RequiredCount != required || objective.ScoredCount != scored || objective.Average != average {
+						t.Fatalf("kewajiban kegiatan luar kalender diabaikan: %+v", objective)
+					}
+					return
+				}
+			}
+		}
+		t.Fatalf("TP kegiatan di luar kalender tidak ada pada rekap: %+v", recap.Students)
+	}
+	assertObjective(outsideScoredRecap, true, 1, 1, "72,00")
+
+	outsideMissingDate := todayTime.AddDate(0, 0, 41).Format("2006-01-02")
+	outsideMissingID := createActivity("Sumatif luar kalender belum dinilai", "sumatif", outsideMissingDate, outsideObjectiveID)
+	if outsideMissingID == 0 {
+		t.Fatal("fixture Sumatif luar kalender kosong tidak dibuat")
+	}
+	outsideMissingRecap, err := store.AssessmentTPRecap(ctx, teacher.ID, semesterID, classID, subjectID)
+	if err != nil {
+		t.Fatal("baca Sumatif luar kalender kosong", err)
+	}
+	if outsideMissingRecap.OutOfCalendarActivityCount != 2 {
+		t.Fatalf("dua kegiatan luar kalender harus dilaporkan, got %d", outsideMissingRecap.OutOfCalendarActivityCount)
+	}
+	assertObjective(outsideMissingRecap, false, 2, 1, "")
+	var outOfCalendarScored, outOfCalendarMissing bool
+	for _, student := range outsideMissingRecap.Students {
+		if student.ID != fmt.Sprint(studentA) {
+			continue
+		}
+		for _, objective := range student.Objectives {
+			if objective.ID != fmt.Sprint(outsideObjectiveID) {
+				continue
+			}
+			for _, activity := range objective.Activities {
+				if activity.ID == fmt.Sprint(outsideScoredID) && activity.OutOfCalendar && activity.HasValue && activity.EffectiveValue == "72,00" {
+					outOfCalendarScored = true
+				}
+				if activity.ID == fmt.Sprint(outsideMissingID) && activity.OutOfCalendar && !activity.HasValue {
+					outOfCalendarMissing = true
+				}
+			}
+		}
+	}
+	if !outOfCalendarScored || !outOfCalendarMissing {
+		t.Fatalf("detail Sumatif di luar kalender harus memperlihatkan nilai dan kekosongan: scored=%v missing=%v", outOfCalendarScored, outOfCalendarMissing)
 	}
 	if err = store.CreateLearningObjective(ctx, teacher.ID, semesterID, classID, subjectID, "TP nilai nol "+suffix); err != nil {
 		t.Fatal("buat TP nilai nol", err)
