@@ -1,5 +1,13 @@
 # Handover
 
+## CP10-09 — nilai awal ASTS dan ASAS, menunggu review independen (7 November 2026)
+
+Implementasi lokal menyediakan pencatatan awal ASTS/ASAS terpisah per siswa, kelas, mapel dan semester melalui penugasan Guru Mapel yang aktif. Migration aditif 00044 menyimpan nilai, tanggal pelaksanaan per siswa, penempatan, guru pemilik, pencatat dan waktu; FK konteks, CHECK, UNIQUE dan trigger immutable melindungi bukti awal. Replay identik tidak menggandakan nilai; input berbeda ditolak; batch atomik. Bukti kelas lain tetap terpisah tanpa pemilihan sumber aktif. Halaman menampilkan asal pencatatan dan mempertahankan nilai/tanggal yang dimasukkan ketika validasi gagal. Koreksi, remedial, susulan, pengakuan sumber pindahan, dan Finalisasi tidak termasuk checkpoint ini.
+
+Migration resmi 00044 diterapkan hanya pada `sim_guru_test` (44/44); DEV dan UAT tetap 43/43, preview tidak direstart dan `.env` tidak diubah. Dua fixture sintetis TEST yang dapat digunakan ulang dipertahankan karena bukti immutable; tidak ada penghapusan histori melalui bypass. Integration service dan HTTP CP10-09 dengan race detector PASS untuk validasi nilai/tanggal, nol/kosong, replay, konkurensi, konflik, rollback batch, FK/keunikan dan immutable, bukti dua kelas, penugasan/akun/identitas, CSRF, manipulasi ID, dan pemulihan form. Regresi terpilih CP10-05–08 dengan race detector PASS. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check` PASS. Full integration suite tidak dijalankan.
+
+Pemeriksaan visual desktop/ponsel belum dijalankan karena DEV/UAT tidak boleh direstart dan keduanya belum memakai source/migration ini; isi dan validasi halaman telah diperiksa dengan HTTP `httptest`. CP10-09 menunggu review independen; belum UAT atau CLOSED. CP10-10 belum dimulai.
+
 ## CP10-08 — final gate bersyarat (7 November 2026)
 
 CP10-07 CLOSED sesuai konfirmasi Product Owner. Review independen CP10-08 pada `68e51f5a306ac70c8a71d166a89fbde328b1c702` PASS; Product Owner menyatakan UAT PASS 2/2 dan responsivitas desktop/ponsel PASS. Fixture UAT semester 112, kelas 113 `7UAT-CP10-08`, mapel 46 dan guru `preview9b04a` terverifikasi baca-saja: Siswa A TP1 60/80/100 → 80, TP2 90 → NH 85; Formatif 100 tidak dihitung. Siswa B memiliki 0 yang tersimpan, tiga nilai Sumatif kosong dan NH belum lengkap. Satu penempatan tanpa tanggal mulai menghasilkan peringatan dan tidak masuk roster. Kegiatan fixture tidak memiliki koreksi/remedial sehingga tidak terjadi penggandaan dari histori tersebut. Uji kegiatan di luar kalender adalah regression otomatis PASS, bukan UAT manual.

@@ -1,0 +1,75 @@
+{{define "exam-initial-scores"}}
+<section class="panel mb-5 max-w-5xl">
+  <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
+  <p class="mt-2 text-sm text-gray-600">Pilih tanggal untuk melihat siswa yang berada di kelas pada tanggal tersebut. Tanggal pelaksanaan dapat diisi untuk masing-masing siswa.</p>
+  <form method="get" action="/guru/nilai-asts-asas" class="mt-4 flex flex-wrap items-end gap-3">
+    <div class="min-w-0 flex-1">
+      <label for="exam-context">Semester · Kelas · Mata pelajaran</label>
+      <select id="exam-context" name="context" required>
+        <option value="">Pilih konteks</option>
+        {{range .ExamInitial.Contexts}}
+        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.ExamInitial.SelectedSet (eq .SemesterID $.ExamInitial.Selected.SemesterID) (eq .ClassID $.ExamInitial.Selected.ClassID) (eq .SubjectID $.ExamInitial.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
+        {{end}}
+      </select>
+    </div>
+    <div><label for="roster-date">Tanggal roster</label><input id="roster-date" type="date" name="date" value="{{.ExamInitial.Date}}" required></div>
+    <button class="button-secondary" type="submit">Lihat siswa</button>
+  </form>
+</section>
+{{if .ExamInitial.SelectedSet}}
+<section class="panel max-w-5xl">
+  <h2 class="text-lg font-semibold">Nilai awal ASTS dan ASAS</h2>
+  <p class="mt-1 text-sm text-gray-600">{{.ExamInitial.Selected.SemesterName}} · {{.ExamInitial.Selected.ClassName}} · {{.ExamInitial.Selected.SubjectName}}</p>
+  <p class="mt-2 text-sm text-gray-600">Nilai yang sudah disimpan tidak dapat ditimpa di sini. Koreksi, remedial, dan susulan tersedia melalui mekanisme berbeda pada tahap berikutnya.</p>
+  {{if gt .ExamInitial.Sheet.UnknownPlacementCount 0}}
+  <p class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{{.ExamInitial.Sheet.UnknownPlacementCount}} penempatan belum memiliki tanggal mulai dan belum dapat ditampilkan.</p>
+  {{end}}
+  {{if .ExamInitial.Sheet.Students}}
+  <form method="post" action="/guru/nilai-asts-asas" class="mt-5 space-y-4">
+    {{.CSRF}}
+    <input type="hidden" name="semester_id" value="{{.ExamInitial.Selected.SemesterID}}">
+    <input type="hidden" name="class_id" value="{{.ExamInitial.Selected.ClassID}}">
+    <input type="hidden" name="subject_id" value="{{.ExamInitial.Selected.SubjectID}}">
+    <input type="hidden" name="roster_date" value="{{.ExamInitial.Date}}">
+    {{range .ExamInitial.Sheet.Students}}
+    <article class="rounded-xl border border-gray-200 p-4">
+      <h3 class="font-semibold">{{.Name}}</h3>
+      <p class="text-sm text-gray-500">{{if .NIS}}NIS {{.NIS}}{{else}}NIS tidak tersedia{{end}}</p>
+      <div class="mt-3 grid gap-4 sm:grid-cols-2">
+        <div class="rounded-lg bg-gray-50 p-3">
+          <h4 class="font-semibold">ASTS</h4>
+          {{if .ASTS.Recorded}}
+          <p class="mt-2 text-sm">Sudah dicatat: <strong>{{.ASTS.Value}}</strong> · {{.ASTS.Date}}</p>
+          <p class="text-sm text-gray-600">Guru: {{.ASTS.TeacherName}} · Pencatat: {{.ASTS.RecordedBy}} · {{.ASTS.RecordedAt}} WIB</p>
+          {{if .ASTS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASTS.AttemptedValue}} · {{.ASTS.AttemptedDate}}</p>{{end}}
+          {{else}}
+          <p class="mt-2 text-sm text-gray-500">Belum dicatat</p>
+          <label for="score_asts_{{.ID}}">Nilai ASTS</label>
+          <input id="score_asts_{{.ID}}" name="score_asts_{{.ID}}" inputmode="decimal" value="{{.ASTS.Value}}" placeholder="0–100">
+          <label for="date_asts_{{.ID}}">Tanggal pelaksanaan ASTS</label>
+          <input id="date_asts_{{.ID}}" name="date_asts_{{.ID}}" type="date" value="{{if .ASTS.Entered}}{{.ASTS.Date}}{{else}}{{$.ExamInitial.Date}}{{end}}">
+          {{end}}
+        </div>
+        <div class="rounded-lg bg-gray-50 p-3">
+          <h4 class="font-semibold">ASAS</h4>
+          {{if .ASAS.Recorded}}
+          <p class="mt-2 text-sm">Sudah dicatat: <strong>{{.ASAS.Value}}</strong> · {{.ASAS.Date}}</p>
+          <p class="text-sm text-gray-600">Guru: {{.ASAS.TeacherName}} · Pencatat: {{.ASAS.RecordedBy}} · {{.ASAS.RecordedAt}} WIB</p>
+          {{if .ASAS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASAS.AttemptedValue}} · {{.ASAS.AttemptedDate}}</p>{{end}}
+          {{else}}
+          <p class="mt-2 text-sm text-gray-500">Belum dicatat</p>
+          <label for="score_asas_{{.ID}}">Nilai ASAS</label>
+          <input id="score_asas_{{.ID}}" name="score_asas_{{.ID}}" inputmode="decimal" value="{{.ASAS.Value}}" placeholder="0–100">
+          <label for="date_asas_{{.ID}}">Tanggal pelaksanaan ASAS</label>
+          <input id="date_asas_{{.ID}}" name="date_asas_{{.ID}}" type="date" value="{{if .ASAS.Entered}}{{.ASAS.Date}}{{else}}{{$.ExamInitial.Date}}{{end}}">
+          {{end}}
+        </div>
+      </div>
+    </article>
+    {{end}}
+    <button type="submit" class="button-primary">Simpan nilai awal</button>
+  </form>
+  {{else}}<p class="mt-4 text-sm">Belum ada siswa pada tanggal ini.</p>{{end}}
+</section>
+{{end}}
+{{end}}
