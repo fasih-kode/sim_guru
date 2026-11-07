@@ -63,8 +63,14 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	if err = academics.CreateAssessmentActivity(ctx, owner.ID, semesterID, classID, subjectID, "Sumatif remedial HTTP "+suffix, "sumatif", date, []int64{objectiveID}); err != nil {
 		t.Fatal(err)
 	}
-	var activityID int64
-	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1`, yearID).Scan(&activityID); err != nil {
+	if err = academics.CreateAssessmentActivity(ctx, owner.ID, semesterID, classID, subjectID, "Formatif remedial HTTP "+suffix, "formatif", date, []int64{objectiveID}); err != nil {
+		t.Fatal(err)
+	}
+	var activityID, formatifID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1 AND activity_type='sumatif'`, yearID).Scan(&activityID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE school_year_id=$1 AND activity_type='formatif'`, yearID).Scan(&formatifID); err != nil {
 		t.Fatal(err)
 	}
 	var studentID, placementID int64
@@ -77,8 +83,14 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	if err = academics.SaveAssessmentActivityInitialScores(ctx, owner.ID, activityID, []academic.AssessmentScoreInput{{StudentID: studentID, ObjectiveID: objectiveID, Value: "0"}}); err != nil {
 		t.Fatal(err)
 	}
-	var scoreID int64
+	if err = academics.SaveAssessmentActivityInitialScores(ctx, owner.ID, formatifID, []academic.AssessmentScoreInput{{StudentID: studentID, ObjectiveID: objectiveID, Value: "0"}}); err != nil {
+		t.Fatal(err)
+	}
+	var scoreID, formatifScoreID int64
 	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1`, activityID).Scan(&scoreID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1`, formatifID).Scan(&formatifScoreID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -91,9 +103,9 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 			t.Log("fixture dipertahankan karena remedial append-only")
 			return
 		}
-		_, _ = db.Exec(`DELETE FROM app.assessment_activity_initial_scores WHERE id=$1`, scoreID)
-		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id=$1`, activityID)
-		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE id=$1`, activityID)
+		_, _ = db.Exec(`DELETE FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=ANY($1::bigint[])`, []int64{activityID, formatifID})
+		_, _ = db.Exec(`DELETE FROM app.assessment_activity_objectives WHERE activity_id=ANY($1::bigint[])`, []int64{activityID, formatifID})
+		_, _ = db.Exec(`DELETE FROM app.assessment_activities WHERE id=ANY($1::bigint[])`, []int64{activityID, formatifID})
 		_, _ = db.Exec(`DELETE FROM app.learning_objectives WHERE id=$1`, objectiveID)
 		_, _ = db.Exec(`DELETE FROM app.student_placements WHERE id=$1`, placementID)
 		_, _ = db.Exec(`DELETE FROM app.students WHERE id=$1`, studentID)
@@ -244,8 +256,19 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 		t.Fatalf("detail koreksi nilai gagal: %v %v", correction, err)
 	}
 	correctionBody := read(correction)
-	if !strings.Contains(correctionBody, "Nilai awal asli (tetap)") || !strings.Contains(correctionBody, "Nilai awal terkoreksi") || !strings.Contains(correctionBody, "Nilai efektif Sumatif") || !strings.Contains(correctionBody, "75.00") {
+	if !strings.Contains(correctionBody, "Nilai awal asli (tetap)") || !strings.Contains(correctionBody, "Nilai awal terkoreksi") || !strings.Contains(correctionBody, "Nilai efektif Sumatif") || strings.Count(correctionBody, ">0.00</dd>") < 2 || !strings.Contains(correctionBody, ">75.00</dd>") {
 		t.Fatal("detail koreksi menampilkan nilai Sumatif yang saling bertentangan")
+	}
+	if !strings.Contains(correctionBody, "Belum ada koreksi nilai awal. Nilai awal terkoreksi sama dengan nilai awal asli. Nilai efektif Sumatif dapat berbeda apabila terdapat remedial.") || strings.Contains(correctionBody, "Nilai berlaku sama dengan nilai awal.") {
+		t.Fatal("pesan kosong Sumatif mengabaikan remedial atau menyamakan nilai efektif dengan nilai awal")
+	}
+	formatifCorrection, err := ownerClient.Get(server.URL + "/guru/nilai-awal/" + strconv.FormatInt(formatifScoreID, 10) + "/koreksi")
+	if err != nil || formatifCorrection.StatusCode != http.StatusOK {
+		t.Fatalf("detail koreksi Formatif gagal: %v %v", formatifCorrection, err)
+	}
+	formatifBody := read(formatifCorrection)
+	if !strings.Contains(formatifBody, "Nilai awal terkoreksi sama dengan nilai awal asli. Nilai berlaku Formatif sama dengan nilai awal terkoreksi.") || strings.Contains(formatifBody, "Nilai efektif Sumatif dapat berbeda apabila terdapat remedial.") || strings.Contains(formatifBody, "Nilai berlaku sama dengan nilai awal.") {
+		t.Fatal("pesan kosong Formatif tidak sesuai dengan nilai Formatif")
 	}
 	var initial, count string
 	if err = db.QueryRow(`SELECT sc.score::text,count(r.id)::text FROM app.assessment_activity_initial_scores sc LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id WHERE sc.id=$1 GROUP BY sc.id`, scoreID).Scan(&initial, &count); err != nil || initial != "0.00" || count != "2" {

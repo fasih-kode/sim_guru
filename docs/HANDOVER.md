@@ -1,6 +1,6 @@
 # Handover
 
-## CP10-07 — perbaikan review independen selesai; menunggu review ulang (7 November 2026)
+## CP10-07 — minor review fix selesai; menunggu review supervisor (7 November 2026)
 
 Review commit `7373fe1849e280bb2917464d3c50c53d793e3c9e` menemukan tiga perbaikan. Perbaikannya sekarang tersedia lokal; **belum UAT dan belum dinyatakan lulus review ulang**. Perubahan dibatasi pada validasi tanggal remedial, idempotensi POST, dan konsistensi tampilan nilai.
 
@@ -10,7 +10,9 @@ Daftar Nilai Milik Saya dan detail koreksi kini memisahkan nilai awal asli, nila
 
 Verifikasi pada `sim_guru_test`: migration integrasi membawa TEST dari 42 ke 43 dan `TestMigrationsIntegration` memeriksa kolom UUID, unique, CHECK `NOT VALID`, trigger append-only, dan guard Sumatif. Integration race service dan HTTP remedial PASS; skenario mencakup tanggal sebelum/kini/masa depan, replay identik, konflik payload, tindakan berbeda dengan nilai/tanggal sama, replay HTTP, CSRF, otorisasi pemilik, dan tanpa mutasi parsial. Regresi CP10-05/06 terpilih (`TestAssessmentActivitiesAreScopedAndAtomicIntegration`, `TestAssessmentScoreCorrectionHTTPAuthorizationHistoryAndCSRFIntegration`) juga PASS dengan race detector. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Full integration suite lintas semua paket tidak dijalankan.
 
-DEV dan UAT tidak dimigrasikan atau direstart: instalasi masing-masing tetap 41 (source kini menargetkan 43). Preview tidak disentuh. Cluster PostgreSQL proyek yang sebelumnya berhenti dinyalakan melalui `scripts/dev-db.sh start` untuk tes TEST saja, lalu dihentikan kembali dengan `scripts/dev-db.sh stop`; kondisi cluster awal dipulihkan. Kode dan dokumentasi perbaikan belum di-commit/push. Status: **siap diajukan untuk review independen ulang; UAT belum boleh dilakukan**. CP10-08 belum dimulai.
+DEV dan UAT tidak dimigrasikan atau direstart: instalasi masing-masing tetap 41 (source kini menargetkan 43). Preview tidak disentuh. Cluster PostgreSQL proyek yang sebelumnya berhenti dinyalakan melalui `scripts/dev-db.sh start` untuk tes TEST saja, lalu dihentikan kembali dengan `scripts/dev-db.sh stop`; kondisi cluster awal dipulihkan. Pada pencatatan pertama, perbaikan utama belum di-commit/push; status review minor terbaru tercatat di bawah. UAT belum boleh dilakukan. CP10-08 belum dimulai.
+
+**Tindak lanjut minor review (7 November 2026):** pesan kosong Riwayat Perubahan pada detail Koreksi kini membedakan Sumatif dan Formatif. Untuk Sumatif, pesan menyatakan nilai awal terkoreksi tetap sama dengan nilai awal asli dan nilai efektif dapat berbeda karena remedial; untuk Formatif, pesan menyatakan nilai berlaku mengikuti nilai awal terkoreksi tanpa menyebut remedial sebagai faktor. Tes HTTP terfokus dengan race detector PASS pada nilai Sumatif 0, tanpa koreksi, remedial 75 (halaman menunjukkan asli 0, terkoreksi 0, efektif 75), serta pesan kosong Formatif yang sesuai. `git diff --check` PASS. Hanya template, tes HTTP integration, dan catatan HANDOVER berubah; tidak ada migration, service, DEV/UAT, atau preview yang diubah. Perbaikan minor belum UAT; tunggu review supervisor.
 
 ## CP10-07 — implementasi lokal siap review independen (2 November 2026)
 
