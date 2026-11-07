@@ -16,6 +16,7 @@
     <div class="rounded-lg border border-gray-200 bg-gray-50 p-3"><span class="block text-xs text-gray-500">Nilai awal berlaku setelah koreksi</span><strong>{{.AssessmentRemedial.Detail.CorrectedInitial}}</strong></div>
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-3"><span class="block text-xs text-blue-700">Nilai efektif saat ini</span><strong class="text-blue-900">{{.AssessmentRemedial.Detail.Effective}}</strong></div>
   </div>
+  <p class="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Remedial mencatat hasil penilaian ulang siswa dan tidak mengubah nilai awal maupun histori koreksi.</p>
   <form method="post" action="/guru/nilai-awal/{{.AssessmentRemedial.Detail.Score.ID}}/remedial" class="mt-6 grid gap-4 sm:grid-cols-2">
     {{.CSRF}}<input type="hidden" name="submission_key" value="{{.AssessmentRemedial.SubmissionKey}}">
     <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-value">Nilai remedial</label><input id="remedial-value" name="value" type="text" inputmode="decimal" value="{{.AssessmentRemedial.Value}}" required autocomplete="off"><p class="mt-1 text-xs text-gray-500">Angka 0–100, maksimal dua angka desimal.</p></div>

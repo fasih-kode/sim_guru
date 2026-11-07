@@ -47,7 +47,7 @@
       {{ $student := . }}
       <tr><th scope="row" class="font-medium">{{.Name}}</th><td>{{if .NIS}}{{.NIS}}{{else}}—{{end}}</td>
         {{range .Scores}}<td>
-          {{if .Recorded}}<span class="font-semibold text-gray-900">{{.Value}}</span><span class="mt-1 block text-xs text-gray-500">Nilai efektif</span>{{if .CanCorrect}}<a class="mt-2 inline-flex text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-awal/{{.InitialScoreID}}/koreksi">Koreksi</a>{{end}}{{if .CanRemediate}}<a class="mt-2 inline-flex text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-awal/{{.InitialScoreID}}/remedial">Remedial</a>{{end}}
+          {{if .Recorded}}<span class="font-semibold text-gray-900">{{.Value}}</span><span class="mt-1 block text-xs text-gray-500">Nilai efektif</span>{{if or .CanCorrect .CanRemediate}}<div class="mt-2 flex flex-wrap items-center gap-2">{{if .CanCorrect}}<a class="button-secondary inline-flex items-center justify-center whitespace-nowrap" href="/guru/nilai-awal/{{.InitialScoreID}}/koreksi">Koreksi</a>{{end}}{{if .CanRemediate}}<a class="button-primary inline-flex items-center justify-center whitespace-nowrap" href="/guru/nilai-awal/{{.InitialScoreID}}/remedial">Remedial</a>{{end}}</div>{{end}}
           {{else if $.CanRecord}}<label class="sr-only" for="score-{{$student.ID}}-{{.ObjectiveID}}">Nilai TP {{.ObjectiveID}} untuk {{$student.Name}}</label><input id="score-{{$student.ID}}-{{.ObjectiveID}}" name="score_{{$student.ID}}_{{.ObjectiveID}}" type="text" inputmode="decimal" value="{{.Value}}" placeholder="Kosong = belum dinilai" autocomplete="off">
           {{else}}<span class="text-sm text-gray-500">Belum dinilai</span>{{end}}
         </td>{{end}}

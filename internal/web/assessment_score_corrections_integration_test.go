@@ -208,7 +208,7 @@ func TestAssessmentScoreCorrectionHTTPAuthorizationHistoryAndCSRFIntegration(t *
 		t.Fatalf("GET form koreksi pemilik gagal: status=%v err=%v", page, err)
 	}
 	pageBody := read(page)
-	if !strings.Contains(pageBody, "82.50") || !strings.Contains(pageBody, "Riwayat Perubahan") || !strings.Contains(pageBody, `name="expected_version" value="0"`) {
+	if !strings.Contains(pageBody, "82.50") || !strings.Contains(pageBody, "Riwayat Perubahan") || !strings.Contains(pageBody, `name="expected_version" value="0"`) || !strings.Contains(pageBody, "Koreksi digunakan untuk memperbaiki kesalahan pencatatan nilai awal. Jika siswa mengikuti penilaian ulang, gunakan menu Remedial.") {
 		t.Fatal("form koreksi tidak menampilkan nilai awal, nilai berlaku, histori, dan expected version")
 	}
 	newGet, err := newClient.Get(server.URL + correctionPath)

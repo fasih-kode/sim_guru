@@ -164,6 +164,16 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 		return string(body)
 	}
 	ownerClient, otherClient := login(owner, ownerPassword), login(other, otherPassword)
+	sheet, err := ownerClient.Get(server.URL + assessmentScoreURL(activityID))
+	if err != nil || sheet.StatusCode != http.StatusOK {
+		t.Fatalf("lembar nilai Sumatif gagal dibuka: %v %v", sheet, err)
+	}
+	sheetBody := read(sheet)
+	if !strings.Contains(sheetBody, `class="mt-2 flex flex-wrap items-center gap-2"`) ||
+		!strings.Contains(sheetBody, `class="button-secondary inline-flex items-center justify-center whitespace-nowrap" href="/guru/nilai-awal/`+strconv.FormatInt(scoreID, 10)+`/koreksi">Koreksi</a>`) ||
+		!strings.Contains(sheetBody, `class="button-primary inline-flex items-center justify-center whitespace-nowrap" href="/guru/nilai-awal/`+strconv.FormatInt(scoreID, 10)+`/remedial">Remedial</a>`) {
+		t.Fatal("aksi Koreksi dan Remedial harus tampil terpisah, berjeda, dan dibedakan secara visual")
+	}
 	path := remedialPath(scoreID)
 	page, err := ownerClient.Get(server.URL + path)
 	if err != nil || page.StatusCode != http.StatusOK {
@@ -174,7 +184,7 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	match := csrfRE.FindStringSubmatch(body)
 	keyRE := regexp.MustCompile(`name="submission_key" value="([^"]+)"`)
 	keyMatch := keyRE.FindStringSubmatch(body)
-	if len(match) != 2 || len(keyMatch) != 2 || !strings.Contains(body, "Nilai awal asli") || !strings.Contains(body, "Nilai efektif saat ini") || !strings.Contains(body, "Riwayat Remedial") {
+	if len(match) != 2 || len(keyMatch) != 2 || !strings.Contains(body, "Nilai awal asli") || !strings.Contains(body, "Nilai efektif saat ini") || !strings.Contains(body, "Riwayat Remedial") || !strings.Contains(body, "Remedial mencatat hasil penilaian ulang siswa dan tidak mengubah nilai awal maupun histori koreksi.") {
 		t.Fatal("form remedial tidak menampilkan konteks, nilai atau CSRF")
 	}
 	otherGet, err := otherClient.Get(server.URL + path)

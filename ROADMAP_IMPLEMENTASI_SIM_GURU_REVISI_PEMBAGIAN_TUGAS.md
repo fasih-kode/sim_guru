@@ -1,6 +1,6 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **Status terbaru (7 November 2026):** CP10-01 sampai CP10-06 CLOSED. CP10-07 implementasi awal direview NEEDS FIX; tiga temuan sudah diperbaiki secara lokal: validasi tanggal remedial terhadap tanggal kegiatan/hari WIB, idempotensi persisten melalui migration aditif 00043, serta penegasan nilai asli/terkoreksi/efektif pada daftar dan detail. Tes service/HTTP PostgreSQL dengan race, migration, regresi CP10-05/06, Go, vet, check, build, dan frontend build PASS. `sim_guru_test` 43/43. Perbaikan belum direview ulang dan belum UAT; jangan mulai CP10-08. DEV/UAT tidak dimigrasikan atau direstart; versi terpasang tetap 41 sementara source kini menargetkan 43.
+> **Status terbaru (7 November 2026):** CP10-01 sampai CP10-06 CLOSED. Review independen CP10-07 PASS pada commit `7373fe1`, `84aa769`, dan `25372ba`. UAT B sesuai database, tetapi UAT A perlu diulang: nilai 75,00 TP1 tercatat sebagai koreksi beralasan `remedial`, sementara hanya remedial 85,00 yang tercatat. Histori tidak diubah. Perbaikan UI pemisahan tindakan Koreksi/Remedial dan penjelasan kedua alur sedang disiapkan untuk review; fixture pengulangan UAT A masih berupa rancangan dan belum ditambahkan. UAT baru belum dilakukan; CP10-07 belum CLOSED. `sim_guru_dev` tetap 41 dengan target source 43; CP10-08 belum dimulai.
 
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.

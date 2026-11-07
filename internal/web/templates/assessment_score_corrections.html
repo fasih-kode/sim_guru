@@ -30,6 +30,7 @@
     <div><dt class="text-sm text-gray-500">Nilai awal terkoreksi</dt><dd class="mt-1 font-semibold">{{.AssessmentCorrection.Detail.Score.CorrectedValue}}</dd></div>
     <div><dt class="text-sm text-gray-500">{{if eq .AssessmentCorrection.Detail.Score.ActivityType "sumatif"}}Nilai efektif Sumatif{{else}}Nilai berlaku Formatif{{end}}</dt><dd class="mt-1 font-semibold">{{.AssessmentCorrection.Detail.Score.EffectiveValue}}</dd></div>
   </dl>
+  <p class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">Koreksi digunakan untuk memperbaiki kesalahan pencatatan nilai awal. Jika siswa mengikuti penilaian ulang, gunakan menu Remedial.</p>
   <form method="post" class="mt-6 max-w-xl space-y-4">
     {{.CSRF}}<input type="hidden" name="expected_version" value="{{.AssessmentCorrection.ExpectedVersion}}">
     <div><label for="correction-value">Nilai baru</label><input id="correction-value" name="value" type="text" inputmode="decimal" required maxlength="6" value="{{.AssessmentCorrection.Value}}" placeholder="0–100, maksimal dua desimal"><p class="mt-1 text-xs text-gray-500">Gunakan angka 0–100, misalnya 86,00.</p></div>
