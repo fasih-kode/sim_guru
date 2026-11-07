@@ -17,7 +17,7 @@
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-3"><span class="block text-xs text-blue-700">Nilai efektif saat ini</span><strong class="text-blue-900">{{.AssessmentRemedial.Detail.Effective}}</strong></div>
   </div>
   <form method="post" action="/guru/nilai-awal/{{.AssessmentRemedial.Detail.Score.ID}}/remedial" class="mt-6 grid gap-4 sm:grid-cols-2">
-    {{.CSRF}}
+    {{.CSRF}}<input type="hidden" name="submission_key" value="{{.AssessmentRemedial.SubmissionKey}}">
     <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-value">Nilai remedial</label><input id="remedial-value" name="value" type="text" inputmode="decimal" value="{{.AssessmentRemedial.Value}}" required autocomplete="off"><p class="mt-1 text-xs text-gray-500">Angka 0–100, maksimal dua angka desimal.</p></div>
     <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-date">Tanggal pelaksanaan</label><input id="remedial-date" name="remedial_date" type="date" value="{{.AssessmentRemedial.Date}}" required></div>
     <div class="sm:col-span-2"><button class="button-primary" type="submit">Catat Remedial</button></div>

@@ -57,6 +57,8 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 		t.Fatal(err)
 	}
 	date := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+	keyNumber := 0
+	submissionKey := func() string { keyNumber++; return fmt.Sprintf("00000000-0000-4000-8000-%012x", keyNumber) }
 	if err = store.CreateAssessmentActivity(ctx, owner.ID, semesterID, classID, subjectID, "Sumatif remedial "+suffix, "sumatif", date, []int64{objectiveID}); err != nil {
 		t.Fatal("buat Sumatif", err)
 	}
@@ -143,52 +145,75 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, otherTeacher.ID, time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -1)); err != nil {
 		t.Fatal("pengalihan fixture ke guru baru", err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, "90", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, submissionKey(), "90", date); err == nil {
 		t.Error("guru baru dengan assignment aktif dapat memberi remedial atas bukti sebelumnya")
 	}
 	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, ownerTeacher.ID, time.Now().In(time.FixedZone("WIB", 7*60*60))); err != nil {
 		t.Fatal("kembalikan assignment fixture ke pemilik", err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, "90", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, submissionKey(), "90", date); err == nil {
 		t.Error("guru dengan assignment kedaluwarsa dapat memberi remedial")
 	}
 	if err = store.AssignTeacher(ctx, curriculum.ID, semesterID, classID, subjectID, otherTeacher.ID, time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, 7)); err != nil {
 		t.Fatal("buat assignment masa depan", err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, "90", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, submissionKey(), "90", date); err == nil {
 		t.Error("guru dengan assignment masa depan dapat memberi remedial")
 	}
 	for _, value := range []string{"75", "85", "65"} {
-		if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, value, date); err != nil {
+		if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), value, date); err != nil {
 			t.Fatalf("catat remedial %s: %v", value, err)
 		}
 	}
 	// Nilai batas 0 dan 100 sah; nilai efektif menjadi maksimum 100.
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreB, "0", date); err != nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreB, submissionKey(), "0", date); err != nil {
 		t.Fatal("nilai 0 harus sah", err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreB, "100", date); err != nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreB, submissionKey(), "100", date); err != nil {
 		t.Fatal("nilai 100 harus sah", err)
 	}
 	for _, invalid := range []string{"-0.01", "100.01", "82.567", ""} {
-		if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, invalid, date); err == nil {
+		if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), invalid, date); err == nil {
 			t.Errorf("nilai tidak sah %q diterima", invalid)
 		}
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, "80", "2026-02-30"); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "80", "2026-02-30"); err == nil {
 		t.Error("tanggal remedial invalid diterima")
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, formatifScore, "90", date); err == nil {
+	yesterday := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, 1).Format("2006-01-02")
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "80", yesterday); err == nil {
+		t.Error("remedial sebelum tanggal kegiatan diterima")
+	}
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "80", tomorrow); err == nil {
+		t.Error("remedial setelah hari ini WIB diterima")
+	}
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, formatifScore, submissionKey(), "90", date); err == nil {
 		t.Error("remedial Formatif diterima")
 	}
 	if _, err = db.Exec(`INSERT INTO app.assessment_activity_score_remedials(initial_score_id,score,remedial_date,recorded_by) VALUES($1,90,$2::date,$3)`, formatifScore, date, owner.ID); err == nil {
 		t.Error("guard database menerima remedial pada nilai awal Formatif")
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, 9223372036854770000, "90", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, 9223372036854770000, submissionKey(), "90", date); err == nil {
 		t.Error("remedial tanpa nilai awal diterima")
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, "90", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, other.ID, scoreA, submissionKey(), "90", date); err == nil {
 		t.Error("guru lain tanpa assignment tidak berhak")
+	}
+	// Replay kunci dan isi yang sama tidak menggandakan histori. Kunci baru
+	// tetap membuat catatan terpisah walau nilai dan tanggalnya sama.
+	replayKey := submissionKey()
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, replayKey, "75", date); err != nil {
+		t.Fatalf("submission remedial gagal: %v", err)
+	}
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, replayKey, "75.00", date); err != nil {
+		t.Fatalf("replay identik harus berhasil: %v", err)
+	}
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, replayKey, "76", date); err == nil {
+		t.Fatal("kunci sama dengan payload berbeda tidak menghasilkan konflik")
+	}
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "75", date); err != nil {
+		t.Fatalf("submission terpisah dengan nilai/tanggal sama ditolak: %v", err)
 	}
 	var initial, corrected, maxRemedial, count string
 	err = db.QueryRow(`SELECT sc.score::text,c.after_score::text,max(r.score)::text,count(r.id)::text
@@ -196,21 +221,57 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 		JOIN app.assessment_activity_score_corrections c ON c.initial_score_id=sc.id
 		LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id
 		WHERE sc.id=$1 GROUP BY sc.id,c.after_score`, scoreA).Scan(&initial, &corrected, &maxRemedial, &count)
-	if err != nil || initial != "60.00" || corrected != "70.00" || maxRemedial != "85.00" || count != "3" {
+	if err != nil || initial != "60.00" || corrected != "70.00" || maxRemedial != "85.00" || count != "5" {
 		t.Fatalf("snapshot nilai tidak sesuai initial=%s corrected=%s max=%s count=%s err=%v", initial, corrected, maxRemedial, count, err)
 	}
 	detail, err := store.AssessmentScoreRemedialDetail(ctx, owner.ID, scoreA)
-	if err != nil || detail.CorrectedInitial != "70.00" || detail.Effective != "85.00" || len(detail.History) != 3 {
+	if err != nil || detail.CorrectedInitial != "70.00" || detail.Effective != "85.00" || len(detail.History) != 5 {
 		t.Fatalf("detail remedial tidak memakai maksimum/history: %+v err=%v", detail, err)
+	}
+	ownedScores, err := store.OwnedAssessmentInitialScores(ctx, owner.ID, AssessmentOwnedScoreFilter{Page: 1})
+	if err != nil {
+		t.Fatalf("daftar nilai milik guru gagal: %v", err)
+	}
+	var listed *AssessmentOwnedScore
+	for i := range ownedScores.Items {
+		if ownedScores.Items[i].ID == scoreA {
+			listed = &ownedScores.Items[i]
+			break
+		}
+	}
+	if listed == nil || listed.InitialValue != "60.00" || listed.CorrectedValue != "70.00" || listed.EffectiveValue != "85.00" {
+		t.Fatalf("daftar mencampur nilai asli, terkoreksi, dan efektif: %+v", listed)
+	}
+	correctionDetail, err := store.AssessmentScoreCorrectionDetail(ctx, owner.ID, scoreA)
+	if err != nil || correctionDetail.Score.InitialValue != "60.00" || correctionDetail.Score.CorrectedValue != "70.00" || correctionDetail.Score.EffectiveValue != "85.00" {
+		t.Fatalf("detail koreksi tidak memisahkan nilai atau tidak menerapkan maksimum Sumatif: %+v err=%v", correctionDetail.Score, err)
+	}
+	sheetAt85, err := store.AssessmentActivityScoreSheet(ctx, owner.ID, sumatifID)
+	if err != nil {
+		t.Fatalf("baca lembar nilai setelah koreksi dan remedial: %v", err)
+	}
+	var effectiveAt85 string
+	for _, student := range sheetAt85.Students {
+		if student.ID != studentA {
+			continue
+		}
+		for _, cell := range student.Scores {
+			if cell.ObjectiveID == objectiveID {
+				effectiveAt85 = cell.Value
+			}
+		}
+	}
+	if effectiveAt85 != "85.00" {
+		t.Fatalf("lembar nilai harus menampilkan maksimum nilai terkoreksi 70 dan remedial 85, dapat %q", effectiveAt85)
 	}
 	if err = store.CorrectAssessmentInitialScore(ctx, owner.ID, scoreA, 1, "90", "Koreksi setelah remedial"); err != nil {
 		t.Fatal("koreksi awal setelah remedial", err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, "80", date); err != nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "80", date); err != nil {
 		t.Fatal("remedial di bawah nilai awal terkoreksi", err)
 	}
 	detail, err = store.AssessmentScoreRemedialDetail(ctx, owner.ID, scoreA)
-	if err != nil || detail.CorrectedInitial != "90.00" || detail.Effective != "90.00" || len(detail.History) != 4 {
+	if err != nil || detail.CorrectedInitial != "90.00" || detail.Effective != "90.00" || len(detail.History) != 6 {
 		t.Fatalf("remedial lebih rendah tidak mempertahankan nilai terkoreksi: %+v err=%v", detail, err)
 	}
 	var effective string
@@ -227,15 +288,25 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 		t.Error("baris remedial dapat dihapus")
 	}
 
-	// Dua request konkuren untuk satu bukti harus sama-sama tercatat tanpa lost update.
+	// Dua request konkuren dengan kunci sama hanya boleh membuat satu baris.
 	var wg sync.WaitGroup
-	results := make(chan error, 2)
-	for _, value := range []string{"72", "73"} {
+	results := make(chan error, 4)
+	concurrentKey := submissionKey()
+	for i := 0; i < 2; i++ {
 		wg.Add(1)
-		go func(value string) {
+		go func() {
 			defer wg.Done()
-			results <- store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, value, date)
-		}(value)
+			results <- store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, concurrentKey, "72", date)
+		}()
+	}
+	// Dua kunci berbeda dengan payload sama tetap mewakili dua tindakan.
+	for i := 0; i < 2; i++ {
+		key := submissionKey()
+		wg.Add(1)
+		go func(key string) {
+			defer wg.Done()
+			results <- store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, key, "73", date)
+		}(key)
 	}
 	wg.Wait()
 	close(results)
@@ -244,7 +315,7 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 			t.Errorf("remedial konkuren gagal: %v", err)
 		}
 	}
-	if err = db.QueryRow(`SELECT count(*)::text FROM app.assessment_activity_score_remedials WHERE initial_score_id=$1`, scoreA).Scan(&count); err != nil || count != "6" {
+	if err = db.QueryRow(`SELECT count(*)::text FROM app.assessment_activity_score_remedials WHERE initial_score_id=$1`, scoreA).Scan(&count); err != nil || count != "9" {
 		t.Fatalf("remedial konkuren tidak seluruhnya tercatat: count=%s err=%v", count, err)
 	}
 	var normalized sql.NullString
@@ -289,7 +360,7 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 	if _, err = db.Exec(`UPDATE app.users SET active=false WHERE id=$1`, owner.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, "99", date); err == nil {
+	if err = store.RecordAssessmentScoreRemedial(ctx, owner.ID, scoreA, submissionKey(), "99", date); err == nil {
 		t.Error("guru dengan identitas nonaktif dapat menambah remedial")
 	}
 }

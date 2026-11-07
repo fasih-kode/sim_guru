@@ -3,7 +3,9 @@ package academic
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -97,9 +99,13 @@ func (s *Store) AssessmentScoreRemedialDetail(ctx context.Context, actor, scoreI
 // RecordAssessmentScoreRemedial menambahkan hasil baru tanpa mengubah nilai awal
 // atau histori koreksi. Penguncian baris mencegah dua penulis membaca konteks
 // otorisasi yang berbeda untuk nilai yang sama.
-func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreID int64, value, date string) error {
+func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreID int64, submissionKey, value, date string) error {
 	if scoreID < 1 {
 		return ValidationError("Catatan nilai tidak valid.")
+	}
+	submissionKey, err := normalizeRemedialSubmissionKey(submissionKey)
+	if err != nil {
+		return err
 	}
 	cents, present, err := parseInitialScore(value)
 	if err != nil {
@@ -122,11 +128,13 @@ func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreI
 		return err
 	}
 	var semesterID, classID, subjectID int64
-	err = tx.QueryRowContext(ctx, `SELECT a.semester_id,a.class_id,a.subject_id
+	var activityDate, todayWIB string
+	err = tx.QueryRowContext(ctx, `SELECT a.semester_id,a.class_id,a.subject_id,a.activity_date::text,
+		(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date::text
 		FROM app.assessment_activity_initial_scores sc
 		JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id
 		WHERE sc.id=$1 AND sc.recorded_by=$2 AND a.teacher_id=$3 AND a.activity_type='sumatif'
-		FOR UPDATE OF sc,a`, scoreID, actor, teacherID).Scan(&semesterID, &classID, &subjectID)
+		FOR UPDATE OF sc,a`, scoreID, actor, teacherID).Scan(&semesterID, &classID, &subjectID, &activityDate, &todayWIB)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}
@@ -140,11 +148,47 @@ func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreI
 	if !allowed {
 		return ErrForbidden
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app.assessment_activity_score_remedials
-		(initial_score_id,score,remedial_date,recorded_by) VALUES($1,$2::numeric,$3::date,$4)`,
-		scoreID, formatScore(cents), date, actor)
+	if date < activityDate {
+		return ValidationError("Tanggal remedial tidak boleh sebelum tanggal kegiatan Sumatif.")
+	}
+	if date > todayWIB {
+		return ValidationError("Tanggal remedial tidak boleh setelah hari ini.")
+	}
+	var remedialID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO app.assessment_activity_score_remedials
+		(initial_score_id,score,remedial_date,recorded_by,submission_key)
+		VALUES($1,$2::numeric,$3::date,$4,$5::uuid)
+		ON CONFLICT (recorded_by,submission_key) DO NOTHING
+		RETURNING id`, scoreID, formatScore(cents), date, actor, submissionKey).Scan(&remedialID)
+	if errors.Is(err, sql.ErrNoRows) {
+		var existingScoreID int64
+		var existingValue, existingDate string
+		if err = tx.QueryRowContext(ctx, `SELECT initial_score_id,score::text,remedial_date::text
+			FROM app.assessment_activity_score_remedials
+			WHERE recorded_by=$1 AND submission_key=$2::uuid`, actor, submissionKey).
+			Scan(&existingScoreID, &existingValue, &existingDate); err != nil {
+			return err
+		}
+		if existingScoreID != scoreID || existingValue != formatScore(cents) || existingDate != date {
+			return ErrConflict
+		}
+		return tx.Commit()
+	}
 	if err != nil {
 		return dbError(err)
 	}
 	return tx.Commit()
+}
+
+func normalizeRemedialSubmissionKey(raw string) (string, error) {
+	if len(raw) != 36 || raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
+		return "", ValidationError("Kunci pengiriman tidak valid. Muat ulang formulir.")
+	}
+	compact := strings.ReplaceAll(raw, "-", "")
+	decoded, err := hex.DecodeString(compact)
+	if err != nil || len(decoded) != 16 {
+		return "", ValidationError("Kunci pengiriman tidak valid. Muat ulang formulir.")
+	}
+	compact = strings.ToLower(compact)
+	return compact[:8] + "-" + compact[8:12] + "-" + compact[12:16] + "-" + compact[16:20] + "-" + compact[20:], nil
 }

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -159,7 +160,9 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	body := read(page)
 	csrfRE := regexp.MustCompile(`name="gorilla.csrf.Token" value="([^"]+)"`)
 	match := csrfRE.FindStringSubmatch(body)
-	if len(match) != 2 || !strings.Contains(body, "Nilai awal asli") || !strings.Contains(body, "Nilai efektif saat ini") || !strings.Contains(body, "Riwayat Remedial") {
+	keyRE := regexp.MustCompile(`name="submission_key" value="([^"]+)"`)
+	keyMatch := keyRE.FindStringSubmatch(body)
+	if len(match) != 2 || len(keyMatch) != 2 || !strings.Contains(body, "Nilai awal asli") || !strings.Contains(body, "Nilai efektif saat ini") || !strings.Contains(body, "Riwayat Remedial") {
 		t.Fatal("form remedial tidak menampilkan konteks, nilai atau CSRF")
 	}
 	otherGet, err := otherClient.Get(server.URL + path)
@@ -192,11 +195,34 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	if invalidBody := read(invalid); !strings.Contains(invalidBody, "dua angka desimal") {
 		t.Fatal("pesan validasi remedial tidak jelas")
 	}
-	valid, err := ownerClient.PostForm(server.URL+path, url.Values{"gorilla.csrf.Token": {match[1]}, "value": {"75,00"}, "remedial_date": {date}})
+	validForm := url.Values{"gorilla.csrf.Token": {match[1]}, "submission_key": {keyMatch[1]}, "value": {"75,00"}, "remedial_date": {date}}
+	valid, err := ownerClient.PostForm(server.URL+path, validForm)
 	if err != nil || valid.StatusCode != http.StatusSeeOther {
 		t.Fatalf("POST remedial sah gagal: %v %v", valid, err)
 	}
 	_ = read(valid)
+	// Pengiriman ulang byte-for-byte berhasil tanpa membuat baris kedua.
+	replay, err := ownerClient.PostForm(server.URL+path, validForm)
+	if err != nil || replay.StatusCode != http.StatusSeeOther {
+		t.Fatalf("replay POST identik gagal: %v %v", replay, err)
+	}
+	_ = read(replay)
+	// Payload berbeda dengan kunci yang sama ditolak dan tidak mengubah histori.
+	conflictForm := url.Values{"gorilla.csrf.Token": {match[1]}, "submission_key": {keyMatch[1]}, "value": {"76"}, "remedial_date": {date}}
+	conflict, err := ownerClient.PostForm(server.URL+path, conflictForm)
+	if err != nil || conflict.StatusCode != http.StatusConflict {
+		t.Fatalf("kunci yang dipakai ulang dengan nilai berbeda tidak konflik: %v %v", conflict, err)
+	}
+	if !strings.Contains(read(conflict), "Data telah berubah") {
+		t.Fatal("pesan konflik kunci pengiriman tidak jelas")
+	}
+	// Kunci terpisah tetap menyimpan tindakan berbeda dengan payload yang sama.
+	separateForm := url.Values{"gorilla.csrf.Token": {match[1]}, "submission_key": {"00000000-0000-4000-8000-000000000001"}, "value": {"75,00"}, "remedial_date": {date}}
+	separate, err := ownerClient.PostForm(server.URL+path, separateForm)
+	if err != nil || separate.StatusCode != http.StatusSeeOther {
+		t.Fatalf("submission terpisah dengan nilai sama ditolak: %v %v", separate, err)
+	}
+	_ = read(separate)
 	after, err := ownerClient.Get(server.URL + path)
 	if err != nil || after.StatusCode != http.StatusOK {
 		t.Fatalf("GET remedial setelah simpan gagal: %v %v", after, err)
@@ -205,8 +231,24 @@ func TestAssessmentScoreRemedialHTTPAuthorizationCSRFAndHistoryIntegration(t *te
 	if !strings.Contains(afterBody, "75.00") || !strings.Contains(afterBody, owner.DisplayName) {
 		t.Fatal("nilai remedial/aktor tidak tampil setelah redirect")
 	}
+	owned, err := ownerClient.Get(server.URL + "/guru/nilai-awal-saya")
+	if err != nil || owned.StatusCode != http.StatusOK {
+		t.Fatalf("daftar Nilai Milik Saya gagal: %v %v", owned, err)
+	}
+	ownedBody := read(owned)
+	if !strings.Contains(ownedBody, "Nilai awal asli") || !strings.Contains(ownedBody, "Nilai awal terkoreksi") || !strings.Contains(ownedBody, "Nilai efektif") || !strings.Contains(ownedBody, "0.00") || !strings.Contains(ownedBody, "75.00") {
+		t.Fatal("daftar nilai tidak membedakan nilai asli, terkoreksi, dan efektif")
+	}
+	correction, err := ownerClient.Get(server.URL + "/guru/nilai-awal/" + strconv.FormatInt(scoreID, 10) + "/koreksi")
+	if err != nil || correction.StatusCode != http.StatusOK {
+		t.Fatalf("detail koreksi nilai gagal: %v %v", correction, err)
+	}
+	correctionBody := read(correction)
+	if !strings.Contains(correctionBody, "Nilai awal asli (tetap)") || !strings.Contains(correctionBody, "Nilai awal terkoreksi") || !strings.Contains(correctionBody, "Nilai efektif Sumatif") || !strings.Contains(correctionBody, "75.00") {
+		t.Fatal("detail koreksi menampilkan nilai Sumatif yang saling bertentangan")
+	}
 	var initial, count string
-	if err = db.QueryRow(`SELECT sc.score::text,count(r.id)::text FROM app.assessment_activity_initial_scores sc LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id WHERE sc.id=$1 GROUP BY sc.id`, scoreID).Scan(&initial, &count); err != nil || initial != "0.00" || count != "1" {
+	if err = db.QueryRow(`SELECT sc.score::text,count(r.id)::text FROM app.assessment_activity_initial_scores sc LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id WHERE sc.id=$1 GROUP BY sc.id`, scoreID).Scan(&initial, &count); err != nil || initial != "0.00" || count != "2" {
 		t.Fatalf("nilai awal berubah atau remedial tidak atomik: initial=%s count=%s err=%v", initial, count, err)
 	}
 }

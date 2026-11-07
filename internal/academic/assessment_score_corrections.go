@@ -19,7 +19,7 @@ type AssessmentOwnedScoreFilter struct {
 type AssessmentOwnedScore struct {
 	ID, ActivityID, StudentID, ObjectiveID                int64
 	SemesterID, ClassID, SubjectID, TeacherID, CreatedBy  int64
-	InitialValue, EffectiveValue                          string
+	InitialValue, CorrectedValue, EffectiveValue          string
 	Version                                               int64
 	StudentName, ActivityName, ActivityType               string
 	Date, ClassName, SubjectName, SemesterName, Objective string
@@ -93,7 +93,7 @@ func (s *Store) OwnedAssessmentInitialScores(ctx context.Context, actor int64, f
 	for rows.Next() {
 		var item AssessmentOwnedScore
 		if err = rows.Scan(&item.ID, &item.ActivityID, &item.StudentID, &item.ObjectiveID, &item.InitialValue,
-			&item.EffectiveValue, &item.Version, &item.StudentName, &item.ActivityName, &item.ActivityType,
+			&item.CorrectedValue, &item.EffectiveValue, &item.Version, &item.StudentName, &item.ActivityName, &item.ActivityType,
 			&item.Date, &item.ClassName, &item.SubjectName, &item.Objective, &item.SemesterName); err != nil {
 			return AssessmentOwnedScorePage{}, err
 		}
@@ -103,7 +103,10 @@ func (s *Store) OwnedAssessmentInitialScores(ctx context.Context, actor int64, f
 }
 
 const assessmentOwnedScoreQuery = `SELECT sc.id,a.id,sc.student_id,sc.learning_objective_id,sc.score::text,
-	coalesce(latest.after_score,sc.score)::text,coalesce(latest.version,0),st.name,a.name,a.activity_type,
+	coalesce(latest.after_score,sc.score)::text,
+	CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))
+		ELSE coalesce(latest.after_score,sc.score) END::text,
+	coalesce(latest.version,0),st.name,a.name,a.activity_type,
 	a.activity_date::text,cl.grade::text||cl.name,su.name,lo.definition,y.name||' · Semester '||sm.number::text
 	FROM app.assessment_activity_initial_scores sc
 	JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id
@@ -113,6 +116,8 @@ const assessmentOwnedScoreQuery = `SELECT sc.id,a.id,sc.student_id,sc.learning_o
 	JOIN app.semesters sm ON sm.id=a.semester_id JOIN app.school_years y ON y.id=sm.school_year_id
 	LEFT JOIN LATERAL (SELECT c.after_score,c.version FROM app.assessment_activity_score_corrections c
 		WHERE c.initial_score_id=sc.id ORDER BY c.version DESC LIMIT 1) latest ON true
+	LEFT JOIN LATERAL (SELECT max(r.score) AS best_score FROM app.assessment_activity_score_remedials r
+		WHERE r.initial_score_id=sc.id) remedial ON true
 	WHERE sc.recorded_by=$1 AND a.teacher_id=$2 AND ($3='' OR st.name ILIKE $4 OR a.name ILIKE $4 OR
 		cl.grade::text||cl.name ILIKE $4 OR su.name ILIKE $4 OR lo.definition ILIKE $4)
 	ORDER BY a.activity_date DESC,a.id DESC,st.name,lo.id,sc.id
@@ -134,7 +139,10 @@ func (s *Store) AssessmentScoreCorrectionDetail(ctx context.Context, actor, scor
 	}
 	var out AssessmentScoreCorrectionDetail
 	err = tx.QueryRowContext(ctx, `SELECT sc.id,a.id,sc.student_id,sc.learning_objective_id,sc.score::text,
-		coalesce(latest.after_score,sc.score)::text,coalesce(latest.version,0),st.name,a.name,a.activity_type,
+		coalesce(latest.after_score,sc.score)::text,
+		CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))
+			ELSE coalesce(latest.after_score,sc.score) END::text,
+		coalesce(latest.version,0),st.name,a.name,a.activity_type,
 		a.activity_date::text,cl.grade::text||cl.name,su.name,lo.definition,
 		a.semester_id,a.class_id,a.subject_id,a.teacher_id,a.created_by,
 		y.name||' · Semester '||sm.number::text
@@ -146,9 +154,11 @@ func (s *Store) AssessmentScoreCorrectionDetail(ctx context.Context, actor, scor
 		JOIN app.semesters sm ON sm.id=a.semester_id JOIN app.school_years y ON y.id=sm.school_year_id
 		LEFT JOIN LATERAL (SELECT c.after_score,c.version FROM app.assessment_activity_score_corrections c
 			WHERE c.initial_score_id=sc.id ORDER BY c.version DESC LIMIT 1) latest ON true
+		LEFT JOIN LATERAL (SELECT max(r.score) AS best_score FROM app.assessment_activity_score_remedials r
+			WHERE r.initial_score_id=sc.id) remedial ON true
 		WHERE sc.id=$1 AND sc.recorded_by=$2 AND a.teacher_id=$3`, scoreID, actor, teacherID).Scan(
 		&out.Score.ID, &out.Score.ActivityID, &out.Score.StudentID, &out.Score.ObjectiveID, &out.Score.InitialValue,
-		&out.Score.EffectiveValue, &out.CurrentVersion, &out.Score.StudentName, &out.Score.ActivityName,
+		&out.Score.CorrectedValue, &out.Score.EffectiveValue, &out.CurrentVersion, &out.Score.StudentName, &out.Score.ActivityName,
 		&out.Score.ActivityType, &out.Score.Date, &out.Score.ClassName, &out.Score.SubjectName,
 		&out.Score.Objective, &out.Score.SemesterID, &out.Score.ClassID, &out.Score.SubjectID,
 		&out.Score.TeacherID, &out.Score.CreatedBy, &out.Score.SemesterName)
