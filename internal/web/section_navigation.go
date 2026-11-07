@@ -54,6 +54,9 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 	if path == "/guru/tujuan-pembelajaran" {
 		return "Guru Mapel", "learning-objectives"
 	}
+	if path == "/guru/rekap-nilai-tp" {
+		return "Guru Mapel", "assessment-tp-recap"
+	}
 	if path == "/guru/kegiatan-penilaian" || strings.HasPrefix(path, "/guru/kegiatan-penilaian/") {
 		return "Guru Mapel", "assessment-activities"
 	}
@@ -214,6 +217,8 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 			navigationTab{ID: "learning-objectives", Label: "Tujuan Pembelajaran", Href: "/guru/tujuan-pembelajaran", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke-linecap="round" stroke-linejoin="round"/>`},
 			navigationTab{ID: "assessment-activities", Label: "Kegiatan Penilaian", Href: "/guru/kegiatan-penilaian", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2Zm2 5h8m-8 4h8m-8 4h5" stroke-linecap="round" stroke-linejoin="round"/>`},
 			navigationTab{ID: "assessment-score-history", Label: "Nilai Milik Saya", Href: "/guru/nilai-awal-saya", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h4m-4 4h8" stroke-linecap="round" stroke-linejoin="round"/><path d="m14 11 2 2 4-5" stroke-linecap="round" stroke-linejoin="round"/>`},
+
+			navigationTab{ID: "assessment-tp-recap", Label: "Rekap Nilai TP/NH", Href: "/guru/rekap-nilai-tp", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19.5V4.5M4 19.5h17M8 16v-4m4 4V7m4 9v-6m4 6V4" stroke-linecap="round" stroke-linejoin="round"/>`},
 		}
 	case "Penanganan Kehadiran Guru":
 		if user == nil || !user.HasRole("pengelola_kehadiran_guru") {

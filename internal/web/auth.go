@@ -89,6 +89,7 @@ type view struct {
 	AssessmentOwnedScores               *assessmentOwnedScoresView
 	AssessmentCorrection                *assessmentCorrectionView
 	AssessmentRemedial                  *assessmentRemedialView
+	AssessmentTPRecap                   *assessmentTPRecapView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -169,6 +170,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/guru/tujuan-pembelajaran":
 		if user != nil && user.HasRole("guru_mapel") {
 			return "learning-objectives", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/rekap-nilai-tp":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "assessment-tp-recap", "guru-mapel"
 		}
 		return "", ""
 	case path == "/guru/kegiatan-penilaian" || strings.HasPrefix(path, "/guru/kegiatan-penilaian/"):
