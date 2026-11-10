@@ -1,6 +1,6 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **Status terbaru (10 November 2026):** CP10-01 sampai CP10-09 CLOSED sesuai Product Owner. CP10-10 koreksi nilai ASTS/ASAS telah diimplementasikan, diuji terfokus dan menunggu review independen; belum UAT/CLOSED. TEST 45/45; DEV dan UAT masih pada migration terpasang 44/45. CP10-11 belum dimulai.
+> **Status terbaru (10 November 2026):** CP10-01 sampai CP10-09 CLOSED. CP10-10 review independen dan UAT ulang PASS; FINAL GATE PASS, layak CLOSED menunggu verifikasi supervisor. DEV, UAT dan TEST 45/45. CP10-11 belum dimulai.
 
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.
@@ -192,3 +192,5 @@ CP10-09 (7 November 2026): nilai awal ASTS/ASAS dengan tanggal dan sumber per si
 CP10-09 final gate (10 November 2026): UAT 2/2 PASS; empat bukti ASTS/ASAS terverifikasi (A 82,50/90,00; B 0,00/75,00). Seluruh baris historis UAT pra-fixture tetap identik; backup DEV tervalidasi dan migration 00044 membawa DEV ke 44/44 dengan 87/87 tabel serta 664 objek schema lama identik. DEV/UAT 44/44, health dan login HTTP 200; login DEV belum diuji. Tes otomatis terarah sebelumnya tetap berlaku; full integration suite tidak dijalankan. CP10-09 layak CLOSED menunggu supervisor, CP10-10 belum dimulai.
 
 CP10-10 (10 November 2026): migration 00045 mencatat histori koreksi ASTS/ASAS append-only dan expected version; pemilik historis aktif dapat mengoreksi tanpa penugasan saat ini. Regresi terpilih CP10-06–09 serta tes race, Go dan build PASS. Pengecualian administratif BK-05 belum dibangun; visual browser belum diuji; CP10-10 menunggu review independen, belum UAT/CLOSED. Rincian di HANDOVER.
+
+CP10-10 final gate (10 November 2026): review independen PASS. UAT pertama berbeda dari data aktual; histori koreksi sumber 5 dan 6 dipertahankan. UAT ulang PASS berdasarkan audit database read-only: ASTS sumber 7 awal 72,50, koreksi 82,50 lalu 0,00; ASAS sumber 8 awal 65,00 tanpa koreksi. Seluruh baris historis 88 tabel dan 678 objek schema UAT lama cocok dengan backup pra-fixture. Backup DEV tervalidasi; migration resmi 00045 membawa DEV ke 45/45 dengan semua tabel dan objek schema lama identik. DEV/UAT/TEST 45/45; health dan login kedua preview HTTP 200, login DEV terautentikasi belum diuji. Tes terdahulu tetap berlaku; full integration tidak diulang. FINAL GATE PASS, layak CLOSED menunggu supervisor; CP10-11 belum dimulai.
