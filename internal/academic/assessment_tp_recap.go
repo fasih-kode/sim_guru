@@ -187,7 +187,7 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		           AND app.student_placement_class_at(p.id,a.activity_date)=$3
 		       ) END AS applicable,
 		       CASE WHEN sc.id IS NULL THEN NULL ELSE
-		           greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))::text
+		           greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))::text
 		       END AS effective_value
 		FROM class_students st
 		CROSS JOIN app.learning_objectives lo

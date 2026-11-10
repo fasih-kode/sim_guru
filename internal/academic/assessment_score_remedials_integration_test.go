@@ -275,7 +275,7 @@ func TestAssessmentScoreRemedialsAreAppendOnlyScopedAndUseMaximumIntegration(t *
 		t.Fatalf("remedial lebih rendah tidak mempertahankan nilai terkoreksi: %+v err=%v", detail, err)
 	}
 	var effective string
-	if err = db.QueryRow(`SELECT greatest(coalesce(c.after_score,sc.score),coalesce(max(r.score),sc.score))::text FROM app.assessment_activity_initial_scores sc LEFT JOIN app.assessment_activity_score_corrections c ON c.initial_score_id=sc.id LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id WHERE sc.id=$1 GROUP BY sc.id,c.after_score`, scoreB).Scan(&effective); err != nil || effective != "100.00" {
+	if err = db.QueryRow(`SELECT greatest(coalesce(c.after_score,sc.score),coalesce(max(r.score),coalesce(c.after_score,sc.score)))::text FROM app.assessment_activity_initial_scores sc LEFT JOIN app.assessment_activity_score_corrections c ON c.initial_score_id=sc.id LEFT JOIN app.assessment_activity_score_remedials r ON r.initial_score_id=sc.id WHERE sc.id=$1 GROUP BY sc.id,c.after_score`, scoreB).Scan(&effective); err != nil || effective != "100.00" {
 		t.Fatalf("nilai batas tidak menghasilkan efektif 100: %s err=%v", effective, err)
 	}
 	if _, err = store.AssessmentScoreRemedialDetail(ctx, other.ID, scoreA); err == nil {

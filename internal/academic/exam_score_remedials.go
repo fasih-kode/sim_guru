@@ -30,7 +30,7 @@ func (s *Store) ExamScoreRemedialDetail(ctx context.Context, actor, scoreID int6
 		return out, err
 	}
 	var semester, class, subject int64
-	err = tx.QueryRowContext(ctx, `SELECT e.id,st.name,e.component,e.exam_date::text,cl.grade::text||cl.name,su.name,y.name||' · Semester '||sm.number::text,e.score::text,coalesce(c.after_score,e.score)::text,greatest(coalesce(c.after_score,e.score),coalesce(r.best,e.score))::text,e.semester_id,e.class_id,e.subject_id
+	err = tx.QueryRowContext(ctx, `SELECT e.id,st.name,e.component,e.exam_date::text,cl.grade::text||cl.name,su.name,y.name||' · Semester '||sm.number::text,e.score::text,coalesce(c.after_score,e.score)::text,greatest(coalesce(c.after_score,e.score),coalesce(r.best,coalesce(c.after_score,e.score)))::text,e.semester_id,e.class_id,e.subject_id
  FROM app.exam_initial_scores e JOIN app.students st ON st.id=e.student_id JOIN app.classes cl ON cl.id=e.class_id JOIN app.subjects su ON su.id=e.subject_id JOIN app.semesters sm ON sm.id=e.semester_id JOIN app.school_years y ON y.id=e.school_year_id
  LEFT JOIN LATERAL (SELECT after_score FROM app.exam_score_corrections WHERE initial_score_id=e.id ORDER BY version DESC LIMIT 1) c ON true
  LEFT JOIN LATERAL (SELECT max(score) best FROM app.exam_score_remedials WHERE initial_score_id=e.id) r ON true

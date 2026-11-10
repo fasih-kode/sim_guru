@@ -112,7 +112,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		return AssessmentScoreSheet{}, err
 	}
 	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,s.name,coalesce(s.nis,''),lo.id,sc.id,
-		CASE WHEN sc.id IS NULL THEN NULL ELSE greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))::text END,sc.recorded_by
+		CASE WHEN sc.id IS NULL THEN NULL ELSE greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))::text END,sc.recorded_by
 		FROM app.student_placements p JOIN app.students s ON s.id=p.student_id
 		CROSS JOIN app.assessment_activity_objectives ao
 		JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id

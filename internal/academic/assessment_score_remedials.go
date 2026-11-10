@@ -41,7 +41,7 @@ func (s *Store) AssessmentScoreRemedialDetail(ctx context.Context, actor, scoreI
 	var out AssessmentScoreRemedialDetail
 	err = tx.QueryRowContext(ctx, `SELECT sc.id,a.id,sc.student_id,sc.learning_objective_id,sc.score::text,
 		coalesce(c.after_score,sc.score)::text,
-		greatest(coalesce(c.after_score,sc.score),coalesce(r.best_score,sc.score))::text,
+		greatest(coalesce(c.after_score,sc.score),coalesce(r.best_score,coalesce(c.after_score,sc.score)))::text,
 		coalesce(c.version,0),st.name,a.name,a.activity_type,a.activity_date::text,
 		cl.grade::text||cl.name,su.name,lo.definition,a.semester_id,a.class_id,a.subject_id,a.teacher_id,a.created_by,
 		y.name||' · Semester '||sm.number::text

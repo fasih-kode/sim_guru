@@ -104,7 +104,7 @@ func (s *Store) OwnedAssessmentInitialScores(ctx context.Context, actor int64, f
 
 const assessmentOwnedScoreQuery = `SELECT sc.id,a.id,sc.student_id,sc.learning_objective_id,sc.score::text,
 	coalesce(latest.after_score,sc.score)::text,
-	CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))
+	CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))
 		ELSE coalesce(latest.after_score,sc.score) END::text,
 	coalesce(latest.version,0),st.name,a.name,a.activity_type,
 	a.activity_date::text,cl.grade::text||cl.name,su.name,lo.definition,y.name||' · Semester '||sm.number::text
@@ -140,7 +140,7 @@ func (s *Store) AssessmentScoreCorrectionDetail(ctx context.Context, actor, scor
 	var out AssessmentScoreCorrectionDetail
 	err = tx.QueryRowContext(ctx, `SELECT sc.id,a.id,sc.student_id,sc.learning_objective_id,sc.score::text,
 		coalesce(latest.after_score,sc.score)::text,
-		CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,sc.score))
+		CASE WHEN a.activity_type='sumatif' THEN greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))
 			ELSE coalesce(latest.after_score,sc.score) END::text,
 		coalesce(latest.version,0),st.name,a.name,a.activity_type,
 		a.activity_date::text,cl.grade::text||cl.name,su.name,lo.definition,
