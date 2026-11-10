@@ -93,6 +93,7 @@ type view struct {
 	ExamInitial                         *examInitialView
 	ExamOwnedScores                     *examOwnedScoresView
 	ExamCorrection                      *examCorrectionView
+	ExamRemedial                        *examRemedialView
 }
 
 func principal(r *http.Request) *auth.User {

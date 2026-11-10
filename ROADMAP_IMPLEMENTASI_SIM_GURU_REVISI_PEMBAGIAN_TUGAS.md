@@ -1,6 +1,6 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **Status terbaru (10 November 2026):** CP10-01 sampai CP10-09 CLOSED. CP10-10 review independen dan UAT ulang PASS; FINAL GATE PASS, layak CLOSED menunggu verifikasi supervisor. DEV, UAT dan TEST 45/45. CP10-11 belum dimulai.
+> **Status terbaru (11 November 2026):** CP10-01 sampai CP10-10 CLOSED sesuai instruksi Product Owner. CP10-11 remedial ASTS/ASAS diimplementasikan dan menunggu review independen; belum UAT/CLOSED. TEST 46/46; DEV dan UAT tetap terpasang 45/46. CP10-12 belum dimulai.
 
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.
@@ -194,3 +194,5 @@ CP10-09 final gate (10 November 2026): UAT 2/2 PASS; empat bukti ASTS/ASAS terve
 CP10-10 (10 November 2026): migration 00045 mencatat histori koreksi ASTS/ASAS append-only dan expected version; pemilik historis aktif dapat mengoreksi tanpa penugasan saat ini. Regresi terpilih CP10-06–09 serta tes race, Go dan build PASS. Pengecualian administratif BK-05 belum dibangun; visual browser belum diuji; CP10-10 menunggu review independen, belum UAT/CLOSED. Rincian di HANDOVER.
 
 CP10-10 final gate (10 November 2026): review independen PASS. UAT pertama berbeda dari data aktual; histori koreksi sumber 5 dan 6 dipertahankan. UAT ulang PASS berdasarkan audit database read-only: ASTS sumber 7 awal 72,50, koreksi 82,50 lalu 0,00; ASAS sumber 8 awal 65,00 tanpa koreksi. Seluruh baris historis 88 tabel dan 678 objek schema UAT lama cocok dengan backup pra-fixture. Backup DEV tervalidasi; migration resmi 00045 membawa DEV ke 45/45 dengan semua tabel dan objek schema lama identik. DEV/UAT/TEST 45/45; health dan login kedua preview HTTP 200, login DEV terautentikasi belum diuji. Tes terdahulu tetap berlaku; full integration tidak diulang. FINAL GATE PASS, layak CLOSED menunggu supervisor; CP10-11 belum dimulai.
+
+CP10-11 (11 November 2026): migration 00046 menambahkan remedial ASTS/ASAS append-only dan submission key idempotensi. Nilai efektif merupakan maksimum nilai awal terkoreksi dan remedial pada sumber yang sama; pencatatan mensyaratkan pemilik, penugasan aktif, dan penempatan yang sah pada tanggal remedial. TEST 46/46; DEV/UAT tidak dimigrasikan. Tes terfokus dan build dijelaskan di HANDOVER; full integration dan visual browser belum dijalankan. Menunggu review independen; belum UAT/CLOSED dan CP10-12 belum dimulai.

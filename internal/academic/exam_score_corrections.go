@@ -22,6 +22,7 @@ type ExamOwnedScorePage struct {
 type ExamScoreCorrectionDetail struct {
 	Score          ExamOwnedScore
 	CurrentVersion int64
+	CanRemedial    bool
 	History        []AssessmentScoreCorrection
 }
 
@@ -91,6 +92,15 @@ func (s *Store) ExamScoreCorrectionDetail(ctx context.Context, actor, scoreID in
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, ErrNotFound
 	}
+	if err != nil {
+		return out, err
+	}
+	var semester, class, subject int64
+	err = tx.QueryRowContext(ctx, `SELECT semester_id,class_id,subject_id FROM app.exam_initial_scores WHERE id=$1`, scoreID).Scan(&semester, &class, &subject)
+	if err != nil {
+		return out, err
+	}
+	out.CanRemedial, err = learningObjectiveAssignment(ctx, tx, teacher, semester, class, subject)
 	if err != nil {
 		return out, err
 	}

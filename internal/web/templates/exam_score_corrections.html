@@ -17,6 +17,7 @@
 {{define "exam-score-correction"}}
 <section class="panel mb-5">
   <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-ujian-saya">← Kembali ke Nilai ASTS/ASAS Milik Saya</a>
+  <a class="button-secondary mt-4 inline-flex" href="/guru/nilai-ujian/{{.ExamCorrection.Detail.Score.ID}}/remedial">{{if .ExamCorrection.Detail.CanRemedial}}Remedial ASTS/ASAS{{else}}Riwayat Remedial{{end}}</a>
   <h2 class="mt-4 text-xl font-semibold text-gray-900">{{if eq .ExamCorrection.Detail.Score.Component "asts"}}ASTS{{else}}ASAS{{end}} · {{.ExamCorrection.Detail.Score.StudentName}}</h2>
   <p class="mt-1 text-sm text-gray-500">{{.ExamCorrection.Detail.Score.SemesterName}} · {{.ExamCorrection.Detail.Score.ClassName}} · {{.ExamCorrection.Detail.Score.SubjectName}} · {{.ExamCorrection.Detail.Score.Date}}</p>
 </section>

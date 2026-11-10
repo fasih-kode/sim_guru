@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-11 — remedial ASTS/ASAS (11 November 2026)
+
+CP10-01 sampai CP10-10 CLOSED sesuai instruksi Product Owner. CP10-11 menambahkan migration 00046 untuk histori remedial per sumber nilai ujian: FK sumber dan pencatat, nilai 0–100, tanggal, submission key unik per pencatat dan trigger append-only. Nilai efektif dihitung dari nilai awal terkoreksi terbaru dan maksimum remedial sumber yang sama; sumber lintas kelas tidak dipilih atau digabung otomatis. Koreksi administratif dan nilai asli tetap utuh. Pemilik historis dapat membaca riwayat; mutasi memerlukan akun/guru aktif, kepemilikan, penugasan aktif dan penempatan siswa di kelas sumber pada tanggal remedial. Tanggal dibatasi sejak tanggal ujian sampai hari ini WIB. Pengakuan sumber pindahan dan pemilihan sumber aktif tetap di luar cakupan.
+
+Service dan form SSR menggunakan validasi server, CSRF, PRG, transaksi dengan penguncian serta kunci idempotensi persisten. Replay yang sama tidak menambah baris; payload berbeda dengan kunci sama ditolak. Pemilik tanpa penugasan aktif hanya mendapat riwayat baca-saja. Migration diterapkan hanya pada `sim_guru_test` 45 → 46; DEV/UAT tidak dimigrasikan dan preview tidak direstart. Pengujian PostgreSQL terfokus dengan race detector untuk remedial, koreksi/penilaian ujian, remedial Sumatif, TP/NH dan bobot PASS; pengujian HTTP terfokus serta regresi CP10-06–10 dengan race detector PASS. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check` PASS. Full integration suite tidak dijalankan; visual browser kode baru belum diuji. Kedua proses preview tidak berjalan saat diperiksa dan tidak direstart. CP10-11 menunggu review independen, belum UAT/CLOSED; CP10-12 belum dimulai.
+
 ## CP10-10 — final gate, menunggu verifikasi supervisor (10 November 2026)
 
 CP10-01 sampai CP10-09 CLOSED. Review independen CP10-10 PASS; UAT pertama tidak cocok dengan database dan bukti sumber 5/6 dipertahankan sebagaimana catatan kronologis di bawah. Supervisor menerima UAT ulang berdasarkan audit transaksi REPEATABLE READ READ ONLY: ASTS sumber 7 asli 72,50, koreksi ID 3 versi 1 menjadi 82,50 dan ID 4 versi 2 menjadi 0,00, keduanya beralasan `Kesalahan pencatatan nilai`, pelaku 377; ASAS sumber 8 asli 65,00 tanpa koreksi. Tidak ada koreksi tambahan akibat input invalid. UAT ulang PASS.
