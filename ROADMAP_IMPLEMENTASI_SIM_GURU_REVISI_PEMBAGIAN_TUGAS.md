@@ -1,6 +1,6 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **Status terbaru (10 November 2026):** CP10-01 sampai CP10-07 CLOSED. CP10-08 review dan UAT PASS; layak CLOSED menunggu supervisor. CP10-09 review independen dan UAT Product Owner PASS 2/2; empat nilai ASTS/ASAS dan integritas histori diverifikasi. Backup DEV tervalidasi dan migration 00044 selesai; DEV dan UAT 44/44 dengan health/live/login HTTP 200. CP10-09 layak CLOSED menunggu verifikasi supervisor. CP10-10 belum dimulai.
+> **Status terbaru (10 November 2026):** CP10-01 sampai CP10-09 CLOSED sesuai Product Owner. CP10-10 koreksi nilai ASTS/ASAS telah diimplementasikan, diuji terfokus dan menunggu review independen; belum UAT/CLOSED. TEST 45/45; DEV dan UAT masih pada migration terpasang 44/45. CP10-11 belum dimulai.
 
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.
@@ -190,3 +190,5 @@ CP10-08 final gate (7 November 2026): fixture UAT membuktikan TP1 80, TP2 90, NH
 CP10-09 (7 November 2026): nilai awal ASTS/ASAS dengan tanggal dan sumber per siswa tersimpan immutable melalui migration 00044. TEST 44/44; DEV/UAT 43/43. Integration terfokus dengan race dan regresi terpilih CP10-05–08 PASS; build dan pemeriksaan Go/frontend PASS. Visual browser belum diuji; belum UAT/CLOSED dan CP10-10 belum dimulai. Rincian di HANDOVER.
 
 CP10-09 final gate (10 November 2026): UAT 2/2 PASS; empat bukti ASTS/ASAS terverifikasi (A 82,50/90,00; B 0,00/75,00). Seluruh baris historis UAT pra-fixture tetap identik; backup DEV tervalidasi dan migration 00044 membawa DEV ke 44/44 dengan 87/87 tabel serta 664 objek schema lama identik. DEV/UAT 44/44, health dan login HTTP 200; login DEV belum diuji. Tes otomatis terarah sebelumnya tetap berlaku; full integration suite tidak dijalankan. CP10-09 layak CLOSED menunggu supervisor, CP10-10 belum dimulai.
+
+CP10-10 (10 November 2026): migration 00045 mencatat histori koreksi ASTS/ASAS append-only dan expected version; pemilik historis aktif dapat mengoreksi tanpa penugasan saat ini. Regresi terpilih CP10-06–09 serta tes race, Go dan build PASS. Pengecualian administratif BK-05 belum dibangun; visual browser belum diuji; CP10-10 menunggu review independen, belum UAT/CLOSED. Rincian di HANDOVER.

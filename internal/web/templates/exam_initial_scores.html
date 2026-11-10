@@ -1,6 +1,7 @@
 {{define "exam-initial-scores"}}
 <section class="panel mb-5 max-w-5xl">
   <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
+  <p class="mt-2"><a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian-saya">Lihat nilai ASTS/ASAS milik saya dan koreksi →</a></p>
   <p class="mt-2 text-sm text-gray-600">Pilih tanggal untuk melihat siswa yang berada di kelas pada tanggal tersebut. Tanggal pelaksanaan dapat diisi untuk masing-masing siswa.</p>
   <form method="get" action="/guru/nilai-asts-asas" class="mt-4 flex flex-wrap items-end gap-3">
     <div class="min-w-0 flex-1">
@@ -39,7 +40,9 @@
         <div class="rounded-lg bg-gray-50 p-3">
           <h4 class="font-semibold">ASTS</h4>
           {{if .ASTS.Recorded}}
-          <p class="mt-2 text-sm">Sudah dicatat: <strong>{{.ASTS.Value}}</strong> · {{.ASTS.Date}}</p>
+          <p class="mt-2 text-sm">Sudah dicatat · Nilai awal asli: <strong>{{.ASTS.Value}}</strong> · {{.ASTS.Date}}</p>
+          <p class="text-sm">Nilai terkoreksi terbaru: <strong>{{.ASTS.CorrectedValue}}</strong></p>
+          {{if .ASTS.CanCorrect}}<a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.ASTS.ScoreID}}/koreksi">Koreksi nilai</a>{{end}}
           <p class="text-sm text-gray-600">Guru: {{.ASTS.TeacherName}} · Pencatat: {{.ASTS.RecordedBy}} · {{.ASTS.RecordedAt}} WIB</p>
           {{if .ASTS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASTS.AttemptedValue}} · {{.ASTS.AttemptedDate}}</p>{{end}}
           {{else}}
@@ -53,7 +56,9 @@
         <div class="rounded-lg bg-gray-50 p-3">
           <h4 class="font-semibold">ASAS</h4>
           {{if .ASAS.Recorded}}
-          <p class="mt-2 text-sm">Sudah dicatat: <strong>{{.ASAS.Value}}</strong> · {{.ASAS.Date}}</p>
+          <p class="mt-2 text-sm">Sudah dicatat · Nilai awal asli: <strong>{{.ASAS.Value}}</strong> · {{.ASAS.Date}}</p>
+          <p class="text-sm">Nilai terkoreksi terbaru: <strong>{{.ASAS.CorrectedValue}}</strong></p>
+          {{if .ASAS.CanCorrect}}<a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.ASAS.ScoreID}}/koreksi">Koreksi nilai</a>{{end}}
           <p class="text-sm text-gray-600">Guru: {{.ASAS.TeacherName}} · Pencatat: {{.ASAS.RecordedBy}} · {{.ASAS.RecordedAt}} WIB</p>
           {{if .ASAS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASAS.AttemptedValue}} · {{.ASAS.AttemptedDate}}</p>{{end}}
           {{else}}

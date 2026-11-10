@@ -1,0 +1,40 @@
+{{define "exam-owned-scores"}}
+<section class="panel">
+  <h2 class="text-lg font-semibold text-gray-900">Nilai ASTS/ASAS yang saya catat</h2>
+  <p class="mt-1 text-sm text-gray-500">Nilai awal milik Anda tetap tersedia setelah penugasan berakhir. Catatan guru lain tidak ditampilkan.</p>
+  <form method="get" action="/guru/nilai-ujian-saya" class="table-toolbar table-toolbar--search-only mb-4 mt-4">
+    <div class="table-search"><label class="sr-only" for="exam-owned-search">Cari nilai ASTS/ASAS</label><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8"/></svg><input id="exam-owned-search" type="search" name="q" data-instant-search maxlength="120" value="{{.ExamOwnedScores.Page.Search}}" placeholder="Cari siswa, kelas, mapel, atau jenis"></div>
+  </form>
+  {{if .ExamOwnedScores.Page.Items}}
+  <div class="table-surface"><table class="app-table"><thead><tr><th>Tanggal</th><th>Siswa</th><th>Jenis</th><th>Konteks</th><th>Nilai awal asli</th><th>Nilai terkoreksi</th><th>Tindakan</th></tr></thead><tbody>
+    {{range .ExamOwnedScores.Page.Items}}<tr><td>{{.Date}}</td><td>{{.StudentName}}</td><td>{{if eq .Component "asts"}}ASTS{{else}}ASAS{{end}}</td><td>{{.SemesterName}}<span class="mt-1 block text-xs text-gray-500">{{.ClassName}} · {{.SubjectName}}</span></td><td>{{.InitialValue}}</td><td>{{.CorrectedValue}}</td><td><a class="button-secondary" href="/guru/nilai-ujian/{{.ID}}/koreksi">Detail dan koreksi</a></td></tr>{{end}}
+  </tbody></table></div>
+  {{if or .ExamOwnedScores.PreviousURL .ExamOwnedScores.NextURL}}<nav class="mt-4 flex items-center justify-between" aria-label="Halaman nilai ASTS dan ASAS">{{if .ExamOwnedScores.PreviousURL}}<a class="button-secondary" href="{{.ExamOwnedScores.PreviousURL}}">Sebelumnya</a>{{else}}<span></span>{{end}}<span class="text-sm text-gray-500">Halaman {{.ExamOwnedScores.Page.Page}} dari {{.ExamOwnedScores.Page.TotalPages}}</span>{{if .ExamOwnedScores.NextURL}}<a class="button-secondary" href="{{.ExamOwnedScores.NextURL}}">Berikutnya</a>{{end}}</nav>{{end}}
+  {{else}}<p class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">{{if .ExamOwnedScores.Page.Search}}Tidak ada nilai milik Anda yang cocok dengan pencarian.{{else}}Belum ada nilai ASTS/ASAS yang Anda catat.{{end}}</p>{{end}}
+</section>
+{{end}}
+
+{{define "exam-score-correction"}}
+<section class="panel mb-5">
+  <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-ujian-saya">← Kembali ke Nilai ASTS/ASAS Milik Saya</a>
+  <h2 class="mt-4 text-xl font-semibold text-gray-900">{{if eq .ExamCorrection.Detail.Score.Component "asts"}}ASTS{{else}}ASAS{{end}} · {{.ExamCorrection.Detail.Score.StudentName}}</h2>
+  <p class="mt-1 text-sm text-gray-500">{{.ExamCorrection.Detail.Score.SemesterName}} · {{.ExamCorrection.Detail.Score.ClassName}} · {{.ExamCorrection.Detail.Score.SubjectName}} · {{.ExamCorrection.Detail.Score.Date}}</p>
+</section>
+<section class="panel">
+  <dl class="grid gap-4 sm:grid-cols-2">
+    <div><dt class="text-sm text-gray-500">Nilai awal asli (tetap)</dt><dd class="mt-1 font-semibold">{{.ExamCorrection.Detail.Score.InitialValue}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Nilai terkoreksi terbaru</dt><dd class="mt-1 font-semibold">{{.ExamCorrection.Detail.Score.CorrectedValue}}</dd></div>
+  </dl>
+  <p class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">Koreksi memperbaiki kesalahan pencatatan nilai awal. Nilai awal dan seluruh riwayat tetap tersimpan.</p>
+  <form method="post" class="mt-6 max-w-xl space-y-4">
+    {{.CSRF}}<input type="hidden" name="expected_version" value="{{.ExamCorrection.ExpectedVersion}}">
+    <div><label for="exam-correction-value">Nilai baru</label><input id="exam-correction-value" name="value" type="text" inputmode="decimal" required maxlength="6" value="{{.ExamCorrection.Value}}" placeholder="0–100, maksimal dua desimal"></div>
+    <div><label for="exam-correction-reason">Alasan koreksi</label><textarea id="exam-correction-reason" name="reason" rows="3" maxlength="500" required>{{.ExamCorrection.Reason}}</textarea></div>
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan Koreksi</button>
+  </form>
+</section>
+<section class="panel mt-5">
+  <h3 class="text-lg font-semibold text-gray-900">Riwayat Perubahan</h3>
+  {{if .ExamCorrection.Detail.History}}<ol class="mt-4 space-y-3">{{range .ExamCorrection.Detail.History}}<li class="rounded-lg border border-gray-200 p-4"><div class="flex flex-wrap justify-between gap-2"><strong>Koreksi {{.Version}} · {{.Before}} → {{.After}}</strong><span class="text-sm text-gray-500">{{.At}} WIB · {{.Actor}}</span></div><p class="mt-2 text-sm text-gray-700">{{.Reason}}</p></li>{{end}}</ol>{{else}}<p class="mt-3 text-sm text-gray-600">Belum ada koreksi nilai awal.</p>{{end}}
+</section>
+{{end}}

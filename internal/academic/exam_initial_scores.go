@@ -15,10 +15,12 @@ type ExamInitialInput struct {
 	Component, Date, Value string
 }
 type ExamInitialCell struct {
-	Component, Date, Value              string
-	TeacherName, RecordedBy, RecordedAt string
-	AttemptedValue, AttemptedDate       string
-	Recorded, Entered                   bool
+	Component, Date, Value, CorrectedValue string
+	TeacherName, RecordedBy, RecordedAt    string
+	AttemptedValue, AttemptedDate          string
+	Recorded, Entered                      bool
+	CanCorrect                             bool
+	ScoreID                                int64
 }
 type ExamInitialStudent struct {
 	ID         int64
@@ -65,8 +67,8 @@ func (s *Store) ExamInitialScores(ctx context.Context, actor, semester, class, s
 	rows, err := tx.QueryContext(ctx, `WITH pupils AS (
  SELECT p.student_id FROM app.student_placements p WHERE p.school_year_id=$1 AND p.starts_on IS NOT NULL AND p.starts_on<=$4::date AND app.student_placement_class_at(p.id,$4::date)=$2
  UNION SELECT student_id FROM app.exam_initial_scores WHERE semester_id=$5 AND class_id=$2 AND subject_id=$3)
- SELECT s.id,s.name,coalesce(s.nis,''), e.component,e.exam_date::text,e.score::text,t.name,u.username,to_char(e.recorded_at AT TIME ZONE 'Asia/Jakarta','DD-MM-YYYY HH24:MI')
- FROM pupils p JOIN app.students s ON s.id=p.student_id LEFT JOIN app.exam_initial_scores e ON e.student_id=s.id AND e.semester_id=$5 AND e.class_id=$2 AND e.subject_id=$3 LEFT JOIN app.teachers t ON t.id=e.teacher_id LEFT JOIN app.users u ON u.id=e.recorded_by ORDER BY s.name,s.id,e.component`, year, class, subject, date, semester)
+ SELECT s.id,s.name,coalesce(s.nis,''), e.component,e.exam_date::text,e.score::text,coalesce(latest.after_score,e.score)::text,e.id,e.teacher_id,e.recorded_by,t.name,u.username,to_char(e.recorded_at AT TIME ZONE 'Asia/Jakarta','DD-MM-YYYY HH24:MI')
+ FROM pupils p JOIN app.students s ON s.id=p.student_id LEFT JOIN app.exam_initial_scores e ON e.student_id=s.id AND e.semester_id=$5 AND e.class_id=$2 AND e.subject_id=$3 LEFT JOIN LATERAL (SELECT c.after_score FROM app.exam_score_corrections c WHERE c.initial_score_id=e.id ORDER BY c.version DESC LIMIT 1) latest ON true LEFT JOIN app.teachers t ON t.id=e.teacher_id LEFT JOIN app.users u ON u.id=e.recorded_by ORDER BY s.name,s.id,e.component`, year, class, subject, date, semester)
 	if err != nil {
 		return out, err
 	}
@@ -75,8 +77,9 @@ func (s *Store) ExamInitialScores(ctx context.Context, actor, semester, class, s
 	for rows.Next() {
 		var id int64
 		var name, nis string
-		var component, examDate, value, teacherName, recordedBy, recordedAt sql.NullString
-		if err = rows.Scan(&id, &name, &nis, &component, &examDate, &value, &teacherName, &recordedBy, &recordedAt); err != nil {
+		var component, examDate, value, corrected, teacherName, recordedBy, recordedAt sql.NullString
+		var scoreID, ownerID, actorID sql.NullInt64
+		if err = rows.Scan(&id, &name, &nis, &component, &examDate, &value, &corrected, &scoreID, &ownerID, &actorID, &teacherName, &recordedBy, &recordedAt); err != nil {
 			return out, err
 		}
 		i, exists := index[id]
@@ -86,7 +89,7 @@ func (s *Store) ExamInitialScores(ctx context.Context, actor, semester, class, s
 			out.Students = append(out.Students, ExamInitialStudent{ID: id, Name: name, NIS: nis})
 		}
 		if component.Valid {
-			cell := ExamInitialCell{Component: component.String, Date: examDate.String, Value: strings.ReplaceAll(value.String, ".", ","), Recorded: true, TeacherName: teacherName.String, RecordedBy: recordedBy.String, RecordedAt: recordedAt.String}
+			cell := ExamInitialCell{Component: component.String, Date: examDate.String, Value: strings.ReplaceAll(value.String, ".", ","), CorrectedValue: strings.ReplaceAll(corrected.String, ".", ","), ScoreID: scoreID.Int64, CanCorrect: ownerID.Int64 == teacher && actorID.Int64 == actor, Recorded: true, TeacherName: teacherName.String, RecordedBy: recordedBy.String, RecordedAt: recordedAt.String}
 			if component.String == "asts" {
 				out.Students[i].ASTS = cell
 			} else {

@@ -27,6 +27,8 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Guru Mapel", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 8},
 		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Guru Mapel", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 8},
 		{"kegiatan Guru Mapel", "/guru/kegiatan-penilaian", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 8},
+		{"daftar ujian historis", "/guru/nilai-ujian-saya", "Guru Mapel", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 8},
+		{"koreksi ujian", "/guru/nilai-ujian/123/koreksi", "Guru Mapel", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 8},
 		{"nilai ujian Guru Mapel", "/guru/nilai-asts-asas", "Guru Mapel", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 8},
 		{"rekap nilai TP Guru Mapel", "/guru/rekap-nilai-tp", "Guru Mapel", "assessment-tp-recap", "guru-mapel", []string{"guru_mapel"}, 8},
 		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Guru Mapel", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 8},
