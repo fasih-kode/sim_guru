@@ -195,7 +195,7 @@ func TestCurriculumSidebarUsesSharedTabsWithoutRoleDuplicates(t *testing.T) {
 	for _, tc := range []struct {
 		section string
 		want    int
-	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 3}, {"Pengaturan Jadwal", 6}, {"Siswa & Penempatan", 5}} {
+	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 4}, {"Pengaturan Jadwal", 6}, {"Siswa & Penempatan", 5}} {
 		if got := len(sectionNavigationTabs(tc.section, "", curriculum)); got != tc.want {
 			t.Errorf("jumlah tab Kurikulum %q = %d, ingin %d", tc.section, got, tc.want)
 		}

@@ -1,6 +1,6 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **Status terbaru (11 November 2026):** CP10-01 sampai CP10-10 CLOSED. CP10-11 FINAL GATE PASS, layak CLOSED menunggu verifikasi supervisor. TEST, DEV dan UAT 46/46. CP10-12 belum dimulai.
+> **Status terbaru (11 November 2026):** CP10-01 sampai CP10-11 CLOSED sesuai instruksi Product Owner. CP10-12 indikator ketercapaian TP menunggu review independen; belum UAT/CLOSED. TEST 47/47; DEV/UAT tetap terpasang 46/47. CP10-13 belum dimulai.
 
 **Tujuan:** panduan agen AI membangun SIM-GURU dari nol sampai siap dipakai pada satu SMP.\
 **Prinsip:** sederhana untuk pengguna, ketat pada integritas data dan keamanan. Tidak ada sistem mandat/delegasi/approval rutin.
@@ -198,3 +198,5 @@ CP10-10 final gate (10 November 2026): review independen PASS. UAT pertama berbe
 CP10-11 (11 November 2026): migration 00046 menambahkan remedial ASTS/ASAS append-only dan submission key idempotensi. Nilai efektif merupakan maksimum nilai awal terkoreksi dan remedial pada sumber yang sama; pencatatan mensyaratkan pemilik, penugasan aktif, dan penempatan yang sah pada tanggal remedial. TEST 46/46; DEV/UAT tidak dimigrasikan. Tes terfokus dan build dijelaskan di HANDOVER; full integration dan visual browser belum dijalankan. Menunggu review independen; belum UAT/CLOSED dan CP10-12 belum dimulai.
 
 CP10-11 final gate (11 November 2026): review dan UAT awal PASS; final gate pertama menemukan fallback salah untuk koreksi menurun. Hotfix `c2a8ea7` review ulang dan verifikasi browser PASS: ID 6/7 efektif 0,00, ID 9 efektif 85,00 dari koreksi 70 dan remedial 75/85/60, ID 10 efektif 80,00 dari remedial 70. Backup UAT membuktikan 89 tabel dan 687 objek schema historis identik. Backup DEV tervalidasi dan migration 00046 membawa DEV ke 46/46 tanpa perubahan data/schema lama; TEST dan UAT juga 46/46. Kedua preview health/login HTTP 200; login DEV terautentikasi belum diuji. Full integration tidak diulang; kasus Sumatif koreksi menurun diuji di TEST, bukan UAT manual. FINAL GATE PASS, layak CLOSED menunggu supervisor; CP10-12 belum dimulai.
+
+CP10-12 (11 November 2026): pedoman Kurikulum, batas bawaan dan pengecualian per TP dengan histori berversi serta indikator rekap memakai rata-rata sebelum pembulatan. Migration 00047 diterapkan pada TEST saja; regression terarah dan build PASS, full integration serta visual browser belum dijalankan. Menunggu review independen; belum UAT/CLOSED dan CP10-13 belum dimulai.

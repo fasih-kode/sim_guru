@@ -51,7 +51,7 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 	if path == "/jurnal-saya" || strings.HasPrefix(path, "/jurnal-saya/") {
 		return "Guru Mapel", "teaching-journal"
 	}
-	if path == "/guru/tujuan-pembelajaran" {
+	if path == "/guru/tujuan-pembelajaran" || path == "/guru/kriteria-tp" {
 		return "Guru Mapel", "learning-objectives"
 	}
 	if path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/") {
@@ -124,6 +124,8 @@ func curriculumNavigationState(path string, user *auth.User) (section, active st
 		return "Struktur Kurikulum", "curriculum-structure"
 	case path == "/master/subjects":
 		return "Struktur Kurikulum", "curriculum-subjects"
+	case path == "/akademik/pedoman-tp":
+		return "Struktur Kurikulum", "curriculum-tp-guidance"
 	case path == "/akademik/bobot-penilaian":
 		return "Struktur Kurikulum", "curriculum-assessment-weights"
 	case path == "/akademik/waktu-sekolah":
@@ -176,6 +178,7 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 		}
 	case "Struktur Kurikulum":
 		tabs = []navigationTab{
+			{ID: "curriculum-tp-guidance", Label: "Pedoman TP", Href: "/akademik/pedoman-tp", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5" stroke-linecap="round"/></svg>`},
 			{ID: "curriculum-structure", Label: "Struktur Kurikulum", Href: "/akademik/struktur-kurikulum", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8m-8 4h8" stroke-linecap="round" stroke-linejoin="round"/>`},
 			{ID: "curriculum-subjects", Label: "Mata Pelajaran", Href: "/master/subjects", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v18H7.5A2.5 2.5 0 0 0 5 22V4.5ZM5 5h12m-8 4h7m-7 4h7" stroke-linecap="round" stroke-linejoin="round"/>`},
 			{ID: "curriculum-assessment-weights", Label: "Bobot Penilaian", Href: "/akademik/bobot-penilaian", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19h16M6 16V9m6 7V5m6 11v-4" stroke-linecap="round"/><circle cx="6" cy="7" r="1.5"/><circle cx="12" cy="3" r="1.5"/><circle cx="18" cy="10" r="1.5"/></svg>`},

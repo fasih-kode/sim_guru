@@ -84,6 +84,8 @@ type view struct {
 	LessonAttendance                    *lessonAttendanceView
 	TeachingJournal                     *teachingJournalView
 	LearningObjectives                  *learningObjectivesView
+	TPCriteria                          *tpCriteriaView
+	TPGuidance                          *academic.TPGuidance
 	AssessmentActivities                *assessmentActivitiesView
 	AssessmentScores                    *assessmentScoresView
 	AssessmentOwnedScores               *assessmentOwnedScoresView
@@ -171,7 +173,7 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 			return "teaching-journal", "guru-mapel"
 		}
 		return "", ""
-	case path == "/guru/tujuan-pembelajaran":
+	case path == "/guru/tujuan-pembelajaran" || path == "/guru/kriteria-tp":
 		if user != nil && user.HasRole("guru_mapel") {
 			return "learning-objectives", "guru-mapel"
 		}
@@ -270,6 +272,8 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "lesson-periods", "curriculum-schedule"
 	case path == "/akademik/struktur-kurikulum":
 		return "curriculum-structure", "curriculum-subjects"
+	case path == "/akademik/pedoman-tp":
+		return "tp-guidance", "curriculum-subjects"
 	case path == "/akademik/bobot-penilaian":
 		return "assessment-weights", "curriculum-subjects"
 	case path == "/akademik/batasan-jadwal":

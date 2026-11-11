@@ -28,13 +28,14 @@ type AssessmentTPRecapStudent struct {
 }
 
 type AssessmentTPRecapObjective struct {
-	ID, Definition string
-	Activities     []AssessmentTPRecapActivity
-	RequiredCount  int
-	ScoredCount    int
-	Average        string
-	Complete       bool
-	Missing        []string
+	ID, Definition                          string
+	Activities                              []AssessmentTPRecapActivity
+	RequiredCount                           int
+	ScoredCount                             int
+	Average                                 string
+	Threshold, ThresholdSource, Achievement string
+	Complete                                bool
+	Missing                                 []string
 }
 
 type AssessmentTPRecapActivity struct {
@@ -136,6 +137,31 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		return AssessmentTPRecap{}, err
 	}
 
+	// Kriteria dan nilai dibaca pada snapshot yang sama agar indikator konsisten.
+	criteria := map[int64]string{}
+	var defaultThreshold string
+	criteriaRows, err := tx.QueryContext(ctx, `SELECT coalesce(objective_id,0),threshold::text FROM app.tp_achievement_criteria WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND threshold IS NOT NULL`, semesterID, classID, subjectID)
+	if err != nil {
+		return AssessmentTPRecap{}, err
+	}
+	for criteriaRows.Next() {
+		var id int64
+		var threshold string
+		if err = criteriaRows.Scan(&id, &threshold); err != nil {
+			criteriaRows.Close()
+			return AssessmentTPRecap{}, err
+		}
+		if id == 0 {
+			defaultThreshold = threshold
+		} else {
+			criteria[id] = threshold
+		}
+	}
+	if err = criteriaRows.Err(); err != nil {
+		criteriaRows.Close()
+		return AssessmentTPRecap{}, err
+	}
+	criteriaRows.Close()
 	rows, err := tx.QueryContext(ctx, `
 		WITH calendar AS (
 			SELECT starts_on, ends_on FROM app.semester_calendars WHERE semester_id=$1
@@ -272,6 +298,19 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		values := make([]*big.Rat, 0, len(student.Objectives))
 		for j := range student.Objectives {
 			objective := &student.Objectives[j]
+			objective.Threshold = defaultThreshold
+			if objective.Threshold != "" {
+				objective.ThresholdSource = "Bawaan"
+			}
+			objectiveID, parseErr := strconv.ParseInt(objective.ID, 10, 64)
+			if parseErr != nil {
+				return AssessmentTPRecap{}, parseErr
+			}
+			if v, ok := criteria[objectiveID]; ok {
+				objective.Threshold = v
+				objective.ThresholdSource = "Pengecualian"
+			}
+			objective.Achievement = "Belum Lengkap"
 			if objective.RequiredCount == 0 {
 				objective.Missing = append(objective.Missing, "Belum ada kegiatan Sumatif yang menjadi kewajiban siswa pada TP ini.")
 				continue
@@ -285,6 +324,7 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 			}
 			objective.Average = strings.ReplaceAll(average.FloatString(2), ".", ",")
 			objective.Complete = true
+			objective.Achievement = tpAchievement(average, true, objective.Threshold)
 			values = append(values, average)
 		}
 		if len(student.Objectives) > 0 && len(values) == len(student.Objectives) {
