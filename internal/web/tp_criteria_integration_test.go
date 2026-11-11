@@ -50,14 +50,21 @@ func TestTPCriteriaHTTPAuthorizationAndCSRFIntegration(t *testing.T) {
 		return w
 	}
 	if w := get(owner, "/akademik/pedoman-tp"); w.Code != 403 {
-		t.Fatalf("Guru membaca pedoman Kurikulum %d", w.Code)
+		t.Fatalf("Guru tidak boleh membuka halaman administrasi pedoman: %d", w.Code)
 	}
 	guidanceUser := auth.User{ID: cur.ID, Active: true, Roles: []string{"kurikulum"}}
 	if w := get(guidanceUser, "/akademik/pedoman-tp"); w.Code != 200 || !strings.Contains(w.Body.String(), "Pedoman umum sekolah") {
 		t.Fatalf("pedoman %d", w.Code)
 	}
+	current, err := store.TPGuidance(ctx, cur.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.SaveTPGuidance(ctx, cur.ID, current.Version, "Pedoman terkini guru", "Uji HTTP"); err != nil {
+		t.Fatal(err)
+	}
 	w := get(owner, urlPath)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "TP uji HTTP") || !strings.Contains(w.Body.String(), "Belum diatur") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "TP uji HTTP") || !strings.Contains(w.Body.String(), "Belum diatur") || !strings.Contains(w.Body.String(), "Pedoman terkini guru") {
 		t.Fatalf("GET %d %s", w.Code, w.Body.String())
 	}
 	if w := get(other, urlPath); w.Code != 403 {
@@ -88,10 +95,27 @@ func TestTPCriteriaHTTPAuthorizationAndCSRFIntegration(t *testing.T) {
 	if w := post(other, true); w.Code != 403 {
 		t.Fatalf("guru lain POST %d", w.Code)
 	}
+	form.Set("threshold", "100,01")
+	form.Set("reason", "Alasan dipertahankan")
+	if invalid := post(owner, true); invalid.Code != 422 || !strings.Contains(invalid.Body.String(), `value="100,01"`) || !strings.Contains(invalid.Body.String(), `value="Alasan dipertahankan"`) || !strings.Contains(invalid.Body.String(), `name="version" value="0"`) {
+		t.Fatalf("input 422 tidak dipertahankan: %d", invalid.Code)
+	}
+	form.Set("threshold", "75")
 	if w := post(owner, true); w.Code != 303 {
 		t.Fatalf("POST %d: %s", w.Code, w.Body.String())
 	}
-	if w := post(owner, true); w.Code != 409 {
-		t.Fatalf("versi basi %d", w.Code)
+	if w := post(owner, true); w.Code != 409 || !strings.Contains(w.Body.String(), `value="75"`) || !strings.Contains(w.Body.String(), `value="Alasan dipertahankan"`) || !strings.Contains(w.Body.String(), `name="version" value="0"`) {
+		t.Fatalf("versi basi atau input tidak dipertahankan %d", w.Code)
+	}
+	req := httptest.NewRequest("POST", "/akademik/pedoman-tp", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	req = req.WithContext(context.WithValue(req.Context(), principalKey{}, &owner))
+	denied := httptest.NewRecorder()
+	h.ServeHTTP(denied, req)
+	if denied.Code != 403 {
+		t.Fatalf("guru POST pedoman: %d", denied.Code)
 	}
 }

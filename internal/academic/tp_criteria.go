@@ -203,6 +203,25 @@ func (s *Store) TPGuidance(ctx context.Context, actor int64) (TPGuidance, error)
 	}
 	return out, rows.Err()
 }
+
+// TPGuidanceForTeacher hanya membuka teks terkini untuk konteks penugasan sah.
+// Histori dan mutasi pedoman tetap dibatasi kepada Kurikulum.
+func (s *Store) TPGuidanceForTeacher(ctx context.Context, actor, semester, class, subject int64) (string, error) {
+	tx, err := s.reader(ctx, actor, "guru_mapel")
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if err = tpAuthorized(ctx, tx, actor, semester, class, subject); err != nil {
+		return "", err
+	}
+	var text string
+	err = tx.QueryRowContext(ctx, `SELECT guidance FROM app.tp_achievement_guidance WHERE id=1`).Scan(&text)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return text, err
+}
 func (s *Store) SaveTPGuidance(ctx context.Context, actor, expected int64, text, reason string) error {
 	text = strings.TrimSpace(text)
 	if !utf8.ValidString(text) || strings.ContainsRune(text, 0) || utf8.RuneCountInString(text) < 1 || utf8.RuneCountInString(text) > 4000 || expected < 0 {

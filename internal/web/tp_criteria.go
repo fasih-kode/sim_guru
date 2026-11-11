@@ -8,11 +8,15 @@ import (
 )
 
 type tpCriteriaView struct {
-	Contexts    []academic.LearningObjectiveContext
-	Selected    academic.LearningObjectiveContext
-	SelectedSet bool
-	Criteria    academic.TPCriteria
-	Objectives  []academic.LearningObjective
+	Contexts                                  []academic.LearningObjectiveContext
+	Selected                                  academic.LearningObjectiveContext
+	SelectedSet                               bool
+	Criteria                                  academic.TPCriteria
+	Objectives                                []academic.LearningObjective
+	Guidance                                  string
+	Submitted                                 bool
+	InputObjective                            int64
+	InputThreshold, InputReason, InputVersion string
 }
 
 func (a *application) tpCriteria(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +55,13 @@ func (a *application) tpCriteria(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			objective, e1 := strconv.ParseInt(r.PostForm.Get("objective_id"), 10, 64)
 			version, e2 := strconv.ParseInt(r.PostForm.Get("version"), 10, 64)
+			if e1 == nil {
+				data.Submitted = true
+				data.InputObjective = objective
+				data.InputThreshold = r.PostForm.Get("threshold")
+				data.InputReason = r.PostForm.Get("reason")
+				data.InputVersion = r.PostForm.Get("version")
+			}
 			if e1 != nil || e2 != nil {
 				err = academic.ValidationError("Versi atau TP tidak valid.")
 			} else {
@@ -68,6 +79,11 @@ func (a *application) tpCriteria(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.Objectives, loadErr = a.options.Academics.LearningObjectives(r.Context(), actor, semester, class, subject)
+		if loadErr != nil {
+			a.academicFailure(w, loadErr)
+			return
+		}
+		data.Guidance, loadErr = a.options.Academics.TPGuidanceForTeacher(r.Context(), actor, semester, class, subject)
 		if loadErr != nil {
 			a.academicFailure(w, loadErr)
 			return

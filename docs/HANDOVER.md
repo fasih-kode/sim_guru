@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-12 — perbaikan akses pedoman, menunggu review ulang (11 November 2026)
+
+Review independen menemukan pedoman Kurikulum belum dapat dibaca Guru Mapel sebagai acuan penetapan kriteria. Service baca terpisah kini hanya mengembalikan teks pedoman terkini setelah role, identitas aktif, mapel dan penugasan konteks diverifikasi; halaman kriteria menampilkan pedoman atau kondisi kosong tanpa menetapkan batas otomatis. Halaman administrasi, histori dan perubahan pedoman tetap khusus Kurikulum. Isian batas, alasan dan expected version dipertahankan pada HTTP 422/409; versi basi tidak diganti otomatis sehingga tidak menimpa perubahan lain.
+
+Regression PostgreSQL TEST dengan race detector mencakup pembacaan dan pembaruan pedoman, penugasan tidak sah/tidak berlaku, identitas dan mapel nonaktif, histori, kriteria serta indikator dan NH yang tidak berubah akibat perubahan teks. Tes HTTP mencakup CSRF, pemisahan hak, dan input 422/409; tes unit mencakup tampilan pedoman kosong. Pengujian Go, vet, check, build, frontend build dan diff-check lulus. Full integration suite dan visual browser tidak dijalankan; preview tidak direstart. Tidak ada migration baru: TEST 47/47, DEV/UAT tetap terpasang 46/47. CP10-12 menunggu review ulang, belum UAT/CLOSED; CP10-13 belum dimulai.
+
 ## CP10-12 — indikator ketercapaian TP, menunggu review (11 November 2026)
 
 CP10-01 sampai CP10-11 CLOSED sesuai instruksi Product Owner. Migration aditif 00047 menambahkan pedoman umum Kurikulum, batas bawaan per semester/kelas/mapel, pengecualian per TP dan histori append-only dengan aktor, alasan, waktu serta versi. Pengecualian dapat dikembalikan ke bawaan tanpa menghapus histori. Tidak ada angka default otomatis; pengaturan Guru Mapel membutuhkan penugasan aktif, identitas dan mapel aktif, dan konteks TP diperiksa di server. Salinan TP tetap hanya menyalin definisi.

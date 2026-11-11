@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/fasih-kode/sim_guru/internal/testutil"
 	"math/big"
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -110,13 +111,35 @@ func TestTPCriteriaScopeVersionAndPrecisionIntegration(t *testing.T) {
 	if err = s.SaveTPGuidance(ctx, cur.ID, guidance.Version, "Pedoman sekolah", "Penetapan"); err != nil {
 		t.Fatal(err)
 	}
+	readGuidance := func(actor, class int64) (string, error) {
+		return s.TPGuidanceForTeacher(ctx, actor, f.Semester, class, f.Subject)
+	}
+	if text, e := readGuidance(f.Teacher, f.Class); e != nil || text != "Pedoman sekolah" {
+		t.Fatalf("pedoman guru: %q %v", text, e)
+	}
+	if _, e := readGuidance(f.Other, f.Class); !errors.Is(e, ErrForbidden) {
+		t.Fatalf("penugasan lain baca pedoman: %v", e)
+	}
+	if _, e := readGuidance(cur.ID, f.Class); !errors.Is(e, ErrForbidden) {
+		t.Fatalf("tanpa role guru: %v", e)
+	}
+	if e := s.SaveTPGuidance(ctx, cur.ID, guidance.Version+1, "Pedoman terbaru", "Pembaruan"); e != nil {
+		t.Fatal(e)
+	}
+	if text, e := readGuidance(f.Teacher, f.Class); e != nil || text != "Pedoman terbaru" {
+		t.Fatalf("pedoman terbaru: %q %v", text, e)
+	}
+	audit, e := s.TPGuidance(ctx, cur.ID)
+	if e != nil || audit.Version != guidance.Version+2 || len(audit.History) < 2 || audit.History[0].After != "Pedoman terbaru" {
+		t.Fatalf("histori pedoman: %+v %v", audit, e)
+	}
 	if err = s.SaveTPGuidance(ctx, cur.ID, guidance.Version, "Versi basi", "Uji"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("versi pedoman basi: %v", err)
 	}
 	if _, err = db.Exec(`UPDATE app.tp_achievement_guidance_history SET reason='rusak'`); err == nil {
 		t.Fatal("histori pedoman dapat diubah")
 	}
-	if err = s.SaveTPGuidance(ctx, f.Teacher, guidance.Version+1, "Tidak sah", "uji"); !errors.Is(err, ErrForbidden) {
+	if err = s.SaveTPGuidance(ctx, f.Teacher, guidance.Version+2, "Tidak sah", "uji"); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("hak pedoman: %v", err)
 	}
 	for i, v := range []string{"74,99", "75,00"} {
@@ -205,6 +228,24 @@ func TestTPCriteriaScopeVersionAndPrecisionIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT sc.id FROM app.assessment_activity_initial_scores sc JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id WHERE a.class_id=$1 AND a.name='Sumatif 0' AND sc.student_id=$2`, f.Class, f.StudentA).Scan(&score); err != nil {
 		t.Fatal(err)
 	}
+	beforeGuide, e := s.AssessmentTPRecap(ctx, f.Teacher, f.Semester, f.Class, f.Subject)
+	if e != nil {
+		t.Fatal(e)
+	}
+	latestGuide, e := s.TPGuidance(ctx, cur.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.SaveTPGuidance(ctx, cur.ID, latestGuide.Version, "Teks tanpa batas baru", "Uji indikator"); e != nil {
+		t.Fatal(e)
+	}
+	afterGuide, e := s.AssessmentTPRecap(ctx, f.Teacher, f.Semester, f.Class, f.Subject)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !reflect.DeepEqual(beforeGuide, afterGuide) {
+		t.Fatal("perubahan teks pedoman mengubah rekap atau indikator")
+	}
 	if err = s.CorrectAssessmentInitialScore(ctx, f.Teacher, score, 0, "75", "Koreksi uji"); err != nil {
 		t.Fatal(err)
 	}
@@ -243,6 +284,9 @@ func TestTPCriteriaScopeVersionAndPrecisionIntegration(t *testing.T) {
 		if _, err = db.Exec(q, f.Class); err != nil {
 			t.Fatal(err)
 		}
+		if _, e := readGuidance(f.Teacher, f.Class); !errors.Is(e, ErrForbidden) {
+			t.Fatalf("pedoman penugasan tidak berlaku: %v", e)
+		}
 		if _, err = s.TPCriteriaForContext(ctx, f.Teacher, f.Semester, f.Class, f.Subject); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("penugasan tidak berlaku: %v", err)
 		}
@@ -263,6 +307,9 @@ func TestTPCriteriaScopeVersionAndPrecisionIntegration(t *testing.T) {
 		}
 		if _, err = s.TPCriteriaForContext(ctx, f.Teacher, f.Semester, f.Class, f.Subject); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("%s nonaktif: %v", item.table, err)
+		}
+		if _, e := readGuidance(f.Teacher, f.Class); !errors.Is(e, ErrForbidden) {
+			t.Fatalf("pedoman %s nonaktif: %v", item.table, e)
 		}
 		if _, err = db.Exec(q, item.id, true); err != nil {
 			t.Fatal(err)
