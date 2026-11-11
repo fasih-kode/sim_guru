@@ -204,6 +204,70 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 	if foundA.Objectives[1].ScoredCount != 1 || foundA.Objectives[1].RequiredCount != 1 || foundA.Objectives[1].Average != "90,00" {
 		t.Fatalf("nilai TP2 dari kegiatan multi-TP salah: %+v", foundA.Objectives[1])
 	}
+
+	// Rekomendasi memakai snapshot dan nilai NH eksak dari rekap yang sama.
+	recommendation, e := store.SemesterRecommendations(ctx, teacher.ID, semesterID, classID, subjectID)
+	if e != nil || recommendation.Weights.Configured {
+		t.Fatalf("bobot belum ditetapkan: %+v %v", recommendation, e)
+	}
+	if _, e = store.SemesterRecommendations(ctx, otherTeacher.ID, semesterID, classID, subjectID); e != ErrForbidden {
+		t.Fatalf("lintas penugasan: %v", e)
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, NH: 100}, 0); e != nil {
+		t.Fatal(e)
+	}
+	keepFixture = true
+	findRecommendation := func() SemesterRecommendationStudent {
+		t.Helper()
+		r, e := store.SemesterRecommendations(ctx, teacher.ID, semesterID, classID, subjectID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, student := range r.Students {
+			if student.ID == fmt.Sprint(studentA) {
+				return student
+			}
+		}
+		t.Fatal("siswa tidak ditemukan")
+		return SemesterRecommendationStudent{}
+	}
+	if item := findRecommendation(); item.Status != "Siap Final" || item.Recommendation != "85" {
+		t.Fatalf("NH lengkap dengan bobot ujian nol: %+v", item)
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, NH: 60, ASTS: 20, ASAS: 20}, 1); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Belum Lengkap" || item.Recommendation != "" {
+		t.Fatalf("ujian kosong: %+v", item)
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, ASTS: 100}, 2); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Belum Dinilai" || item.Recommendation != "" {
+		t.Fatalf("hanya nilai bobot nol tidak termasuk bukti: %+v", item)
+	}
+	if e = store.SaveExamInitialScores(ctx, teacher.ID, semesterID, classID, subjectID, []ExamInitialInput{{StudentID: studentA, Component: "asts", Date: today, Value: "70"}, {StudentID: studentA, Component: "asas", Date: today, Value: "90"}}); e != nil {
+		t.Fatal(e)
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, NH: 60, ASTS: 20, ASAS: 20}, 3); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Siap Final" || item.Recommendation != "83" {
+		t.Fatalf("rekomendasi lengkap: %+v", item)
+	}
+
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, NH: 70, ASAS: 30}, 4); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Siap Final" || item.Recommendation != "87" {
+		t.Fatalf("ASTS berbobot nol: %+v", item)
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, ASTS: 40, ASAS: 60}, 5); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Siap Final" || item.Recommendation != "82" {
+		t.Fatalf("NH berbobot nol: %+v", item)
+	}
 	if err = store.CorrectAssessmentInitialScore(ctx, teacher.ID, correctionScoreID, 0, "70", "Koreksi uji rekap"); err != nil {
 		t.Fatal("koreksi nilai uji", err)
 	}
@@ -224,6 +288,12 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 		if student.ID == fmt.Sprint(studentA) && (student.Objectives[0].Average != "88,33" || student.NH != "89,17" || !student.NHComplete) {
 			t.Fatalf("nilai efektif Sumatif tidak memakai koreksi/remedial satu kali: %+v", student)
 		}
+	}
+	if e = store.SaveAssessmentWeight(ctx, curriculum.ID, AssessmentWeights{SemesterID: semesterID, NH: 100}, 6); e != nil {
+		t.Fatal(e)
+	}
+	if item := findRecommendation(); item.Status != "Siap Final" || item.Recommendation != "89" {
+		t.Fatalf("rekomendasi mengikuti koreksi dan remedial: %+v", item)
 	}
 	if _, err = store.AssessmentTPRecap(ctx, otherTeacher.ID, semesterID, classID, subjectID); err != ErrForbidden {
 		t.Fatalf("guru tanpa penugasan harus ditolak: %v", err)
@@ -262,6 +332,9 @@ func TestAssessmentTPRecapTwoLevelCompletenessPlacementAndAuthorizationIntegrati
 		if student.ID == fmt.Sprint(studentA) && (student.NHComplete || student.Objectives[2].Complete || student.Objectives[2].RequiredCount != 0) {
 			t.Fatalf("TP tanpa Sumatif tidak boleh menampilkan NH lengkap: %+v", student)
 		}
+	}
+	if item := findRecommendation(); item.Status != "Belum Lengkap" || item.Recommendation != "" {
+		t.Fatalf("sebagian Sumatif bernilai dan TP lain kosong: %+v", item)
 	}
 	activityPending := createActivity("Sumatif setelah penempatan", "sumatif", tomorrow, objective1)
 	pending, err := store.AssessmentTPRecap(ctx, teacher.ID, semesterID, classID, subjectID)

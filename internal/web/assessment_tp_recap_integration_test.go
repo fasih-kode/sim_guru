@@ -143,6 +143,25 @@ func TestAssessmentTPRecapHTTPContextAuthorizationIntegration(t *testing.T) {
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("guru yang hanya diampu kelas lain harus ditolak pada HTTP: status=%d body=%s", denied.Code, denied.Body.String())
 	}
+	// Rekomendasi memakai otorisasi konteks yang sama dan tidak mengarang bobot.
+	recommendationPath := strings.Replace(path, "/guru/rekap-nilai-tp", "/guru/rekomendasi-semester", 1)
+	for _, tc := range []struct {
+		user   auth.User
+		status int
+		text   string
+	}{
+		{auth.User{ID: teacher.ID, Active: true, Roles: []string{"guru_mapel"}}, http.StatusOK, "Bobot semester belum ditetapkan"},
+		{auth.User{ID: other.ID, Active: true, Roles: []string{"guru_mapel"}}, http.StatusForbidden, ""},
+		{auth.User{ID: teacher.ID, Active: true, Roles: []string{"kurikulum"}}, http.StatusForbidden, ""},
+	} {
+		r := httptest.NewRequest(http.MethodGet, recommendationPath, nil)
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &tc.user))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != tc.status || (tc.text != "" && !strings.Contains(w.Body.String(), tc.text)) {
+			t.Fatalf("rekomendasi status=%d want=%d body=%s", w.Code, tc.status, w.Body.String())
+		}
+	}
 	roleDenied := httptest.NewRecorder()
 	handler.ServeHTTP(roleDenied, requestFor(auth.User{ID: teacher.ID, Active: true, Roles: []string{"kurikulum"}}))
 	if roleDenied.Code != http.StatusForbidden {

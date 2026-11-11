@@ -53,3 +53,52 @@ func (a *application) assessmentTPRecap(w http.ResponseWriter, r *http.Request) 
 	}
 	page(http.StatusOK, "")
 }
+
+type semesterRecommendationView struct {
+	Contexts    []academic.LearningObjectiveContext
+	Selected    academic.LearningObjectiveContext
+	SelectedSet bool
+	Result      *academic.SemesterRecommendation
+}
+
+func (a *application) semesterRecommendations(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	data := &semesterRecommendationView{}
+	page := func(status int, message string) {
+		a.render(w, r, "page", status, view{Page: "semester-recommendations", Title: "Rekomendasi Nilai Semester", Error: message, SemesterRecommendations: data})
+	}
+	contexts, err := a.options.Academics.LearningObjectiveContexts(r.Context(), actor)
+	if err != nil {
+		code, msg := academicError(err)
+		page(code, msg)
+		return
+	}
+	data.Contexts = contexts
+	semesterID, classID, subjectID, selected, err := learningObjectiveSelection(r)
+	if err != nil {
+		code, msg := academicError(err)
+		page(code, msg)
+		return
+	}
+	if selected {
+		for _, item := range contexts {
+			if item.SemesterID == semesterID && item.ClassID == classID && item.SubjectID == subjectID {
+				data.Selected = item
+				data.SelectedSet = true
+				break
+			}
+		}
+		if !data.SelectedSet {
+			a.academicFailure(w, academic.ErrForbidden)
+			return
+		}
+		result, e := a.options.Academics.SemesterRecommendations(r.Context(), actor, semesterID, classID, subjectID)
+		if e != nil {
+			code, msg := academicError(e)
+			page(code, msg)
+			return
+		}
+		data.Result = &result
+	}
+	page(http.StatusOK, "")
+}

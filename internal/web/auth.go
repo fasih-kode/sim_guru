@@ -92,6 +92,7 @@ type view struct {
 	AssessmentCorrection                *assessmentCorrectionView
 	AssessmentRemedial                  *assessmentRemedialView
 	AssessmentTPRecap                   *assessmentTPRecapView
+	SemesterRecommendations             *semesterRecommendationView
 	ExamInitial                         *examInitialView
 	ExamOwnedScores                     *examOwnedScoresView
 	ExamCorrection                      *examCorrectionView
@@ -181,6 +182,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/"):
 		if user != nil && user.HasRole("guru_mapel") {
 			return "exam-initial-scores", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/rekomendasi-semester":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "semester-recommendations", "guru-mapel"
 		}
 		return "", ""
 	case path == "/guru/rekap-nilai-tp":

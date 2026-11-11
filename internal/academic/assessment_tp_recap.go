@@ -57,6 +57,11 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		return AssessmentTPRecap{}, err
 	}
 	defer tx.Rollback()
+	return s.assessmentTPRecap(ctx, tx, actor, semesterID, classID, subjectID, false)
+}
+
+func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool) (AssessmentTPRecap, error) {
+	var err error
 	if err = s.authorize(ctx, tx, actor, "guru_mapel"); err != nil {
 		return AssessmentTPRecap{}, err
 	}
@@ -216,7 +221,7 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		           greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))::text
 		       END AS effective_value
 		FROM class_students st
-		CROSS JOIN app.learning_objectives lo
+		LEFT JOIN app.learning_objectives lo ON lo.school_year_id=$2 AND lo.semester_id=$1 AND lo.class_id=$3 AND lo.subject_id=$4
 		CROSS JOIN calendar cal
 		LEFT JOIN app.assessment_activity_objectives ao
 		  ON ao.learning_objective_id=lo.id
@@ -239,7 +244,6 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 			SELECT max(r.score) AS best_score FROM app.assessment_activity_score_remedials r
 			WHERE r.initial_score_id=sc.id
 		) remedial ON true
-		WHERE lo.school_year_id=$2 AND lo.semester_id=$1 AND lo.class_id=$3 AND lo.subject_id=$4
 		ORDER BY st.name,st.student_id,lo.id,a.activity_date,a.id`,
 		semesterID, schoolYearID, classID, subjectID)
 	if err != nil {
@@ -248,13 +252,18 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 	defer rows.Close()
 	studentIndex := make(map[int64]int)
 	for rows.Next() {
-		var studentID, objectiveID int64
-		var studentName, nis, definition string
+		var studentID int64
+		var objectiveID sql.NullInt64
+		var studentName, nis string
+		var definition sql.NullString
 		var activityID, activityName, activityDate, effective sql.NullString
 		var outOfCalendar, applicable bool
 		if err = rows.Scan(&studentID, &studentName, &nis, &objectiveID, &definition,
 			&activityID, &activityName, &activityDate, &outOfCalendar, &applicable, &effective); err != nil {
 			return AssessmentTPRecap{}, err
+		}
+		if !objectiveID.Valid && !includeEmptyRoster {
+			continue
 		}
 		idx, exists := studentIndex[studentID]
 		if !exists {
@@ -263,9 +272,12 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 			out.Students = append(out.Students, AssessmentTPRecapStudent{ID: fmtID(studentID), NIS: nis, Name: studentName})
 		}
 		student := &out.Students[idx]
+		if !objectiveID.Valid {
+			continue
+		}
 		objectiveIdx := len(student.Objectives) - 1
-		if objectiveIdx < 0 || student.Objectives[objectiveIdx].ID != fmtID(objectiveID) {
-			student.Objectives = append(student.Objectives, AssessmentTPRecapObjective{ID: fmtID(objectiveID), Definition: definition})
+		if objectiveIdx < 0 || student.Objectives[objectiveIdx].ID != fmtID(objectiveID.Int64) {
+			student.Objectives = append(student.Objectives, AssessmentTPRecapObjective{ID: fmtID(objectiveID.Int64), Definition: definition.String})
 			objectiveIdx = len(student.Objectives) - 1
 		}
 		objective := &student.Objectives[objectiveIdx]

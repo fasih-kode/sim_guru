@@ -1,0 +1,24 @@
+{{define "semester-recommendations"}}
+<section class="panel mb-5 max-w-5xl">
+ <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
+ {{if .SemesterRecommendations.Contexts}}
+ <form method="get" action="/guru/rekomendasi-semester" class="mt-4 flex flex-wrap items-end gap-3">
+  <div class="min-w-0 flex-1"><label for="semester-recommendation-context">Semester · Kelas · Mata pelajaran</label>
+   <select id="semester-recommendation-context" name="context" required><option value="">Pilih konteks</option>
+   {{range .SemesterRecommendations.Contexts}}<option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.SemesterRecommendations.SelectedSet (eq .SemesterID $.SemesterRecommendations.Selected.SemesterID) (eq .ClassID $.SemesterRecommendations.Selected.ClassID) (eq .SubjectID $.SemesterRecommendations.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>{{end}}</select></div>
+  <button type="submit" class="button-secondary">Lihat Rekomendasi</button>
+ </form>{{else}}<p class="mt-3 text-sm">Belum ada penugasan resmi yang berlaku.</p>{{end}}
+</section>
+{{if .SemesterRecommendations.SelectedSet}}
+<section class="panel max-w-5xl">
+ <h2 class="text-lg font-semibold">{{.SemesterRecommendations.Selected.ClassName}} · {{.SemesterRecommendations.Selected.SubjectName}}</h2>
+ <p class="mt-1 text-sm text-gray-500">{{.SemesterRecommendations.Selected.SemesterName}} · Rekomendasi baca-saja, bukan finalisasi.</p>
+ {{if .SemesterRecommendations.Result.Weights.Configured}}<p class="mt-3 text-sm">Bobot Kurikulum: NH {{.SemesterRecommendations.Result.Weights.NH}}% · ASTS {{.SemesterRecommendations.Result.Weights.ASTS}}% · ASAS {{.SemesterRecommendations.Result.Weights.ASAS}}%</p>{{else}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Bobot semester belum ditetapkan. Rekomendasi dan status belum dapat ditentukan.</p>{{end}}
+ {{if gt .SemesterRecommendations.Result.UnknownPlacementCount 0}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">{{.SemesterRecommendations.Result.UnknownPlacementCount}} penempatan belum dapat dipastikan karena tanggal mulai belum diketahui; tidak termasuk daftar.</p>{{end}}
+ <div class="mt-5 space-y-4">{{range .SemesterRecommendations.Result.Students}}
+  <article class="rounded-lg border border-gray-200 p-4"><h3 class="font-semibold">{{.Name}}</h3><p class="mt-2 text-sm">NH{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.NH 0)}} (bobot 0%, tidak wajib){{end}}: {{if .NH}}{{.NH}}{{else}}Belum lengkap{{end}} · ASTS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASTS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASTS}}{{.ASTS}}{{else}}Belum tersedia{{end}} · ASAS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASAS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASAS}}{{.ASAS}}{{else}}Belum tersedia{{end}}</p>
+   {{if $.SemesterRecommendations.Result.Weights.Configured}}<p class="mt-2 text-sm font-semibold">{{.Status}}{{if .Recommendation}} · Rekomendasi {{.Recommendation}}{{end}}</p>{{end}}
+   {{if .Missing}}<ul class="mt-2 list-disc pl-5 text-sm text-gray-600">{{range .Missing}}<li>{{.}}</li>{{end}}</ul>{{end}}
+  </article>{{else}}<p class="text-sm text-gray-500">Belum ada siswa dengan penempatan yang dapat dipastikan.</p>{{end}}</div>
+</section>{{end}}
+{{end}}
