@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-13 — perbaikan review peringatan kalender (12 November 2026)
+
+Review independen menemukan jumlah kegiatan Sumatif di luar kalender dari rekap TP belum diteruskan ke halaman rekomendasi. Jumlah tersebut kini dibaca dari snapshot rekap yang sama dan ditampilkan sebagai informasi netral; kegiatan tetap dihitung menurut penempatan siswa pada tanggal pelaksanaan. Peringatan penempatan tanpa tanggal tetap tersedia. Tidak ada perubahan rumus, histori, otorisasi atau migration.
+
+Regression PostgreSQL pada `sim_guru_test` dengan race detector membuktikan dua kegiatan di luar kalender tetap menghasilkan NH eksak 82,495 dan rekomendasi 82, hitungan tepat, serta pembacaan tidak mengubah nilai maupun histori. Tes HTTP memeriksa peringatan dengan dan tanpa kegiatan di luar kalender bersama peringatan penempatan. Regresi terfokus CP10-08/11/12/13, `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Full integration suite dan pemeriksaan visual tidak dijalankan. TEST/UAT/DEV tetap 47/47; preview tidak direstart. CP10-13 menunggu review ulang, belum UAT/CLOSED; CP10-14 belum dimulai.
+
 ## CP10-13 — rekomendasi semester, menunggu review independen (12 November 2026)
 
 CP10-01 sampai CP10-12 CLOSED sesuai keputusan supervisor. CP10-13 menambahkan halaman Guru Mapel baca-saja untuk rekomendasi semester pada konteks penugasan resmi. Bobot sekolah dibaca dalam transaksi REPEATABLE READ READ ONLY bersama rekap, penempatan dan sumber ujian. NH menggunakan rata-rata TP eksak; NH, ASTS dan ASAS dibobot tanpa floating-point atau pembulatan antara, kemudian dibulatkan half-up satu kali pada hasil akhir. Bobot belum dikonfigurasi tidak menghasilkan angka atau status; komponen 0% tidak menjadi syarat atau bukti. Status terbatas pada Belum Dinilai, Belum Lengkap dan Siap Final; status terakhir tidak memfinalkan nilai.

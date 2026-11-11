@@ -10,10 +10,11 @@ import (
 
 // SemesterRecommendation merupakan pembacaan pra-Final tanpa menyimpan nilai akhir.
 type SemesterRecommendation struct {
-	Context               LearningObjectiveContext
-	Weights               AssessmentWeights
-	UnknownPlacementCount int
-	Students              []SemesterRecommendationStudent
+	Context                    LearningObjectiveContext
+	Weights                    AssessmentWeights
+	UnknownPlacementCount      int
+	OutOfCalendarActivityCount int
+	Students                   []SemesterRecommendationStudent
 }
 
 type SemesterRecommendationStudent struct {
@@ -41,7 +42,7 @@ func (s *Store) SemesterRecommendations(ctx context.Context, actor, semesterID, 
 	if err != nil {
 		return SemesterRecommendation{}, err
 	}
-	out := SemesterRecommendation{Context: recap.Context, UnknownPlacementCount: recap.UnknownPlacementCount}
+	out := SemesterRecommendation{Context: recap.Context, UnknownPlacementCount: recap.UnknownPlacementCount, OutOfCalendarActivityCount: recap.OutOfCalendarActivityCount}
 	out.Weights.SemesterID = semesterID
 	err = tx.QueryRowContext(ctx, `SELECT nh,asts,asas FROM app.semester_assessment_weights WHERE semester_id=$1`, semesterID).Scan(&out.Weights.NH, &out.Weights.ASTS, &out.Weights.ASAS)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {

@@ -28,6 +28,9 @@ func TestSemesterRecommendationsZeroWeightAndSourceIsolationIntegration(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.OutOfCalendarActivityCount != 0 {
+		t.Fatalf("konteks tanpa kegiatan luar kalender: %d", result.OutOfCalendarActivityCount)
+	}
 	var a, b *SemesterRecommendationStudent
 	for i := range result.Students {
 		p := &result.Students[i]
@@ -116,5 +119,75 @@ func TestSemesterRecommendationsZeroWeightAndSourceIsolationIntegration(t *testi
 	}
 	if _, err = s.SemesterRecommendations(ctx, f.Teacher, f.Semester, f.Class, f.Subject); err != ErrForbidden {
 		t.Fatalf("akun nonaktif: %v", err)
+	}
+}
+
+func TestSemesterRecommendationOutsideCalendarIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	ctx := context.Background()
+	f := testutil.ExamFixtureFor(t, db, testutil.Random(t)[:8])
+	s := &Store{DB: db}
+	if _, err := db.Exec(`INSERT INTO app.semester_calendars(semester_id,starts_on,ends_on,school_days) VALUES($1,'2020-01-01','2020-12-31','[1,2,3,4,5]'::jsonb)`, f.Semester); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO app.semester_assessment_weights(semester_id,nh,asts,asas,version,actor_id) VALUES($1,100,0,0,1,$2)`, f.Semester, f.Teacher); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateLearningObjective(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "TP presisi luar kalender"); err != nil {
+		t.Fatal(err)
+	}
+	var objective int64
+	if err := db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, f.Semester, f.Class, f.Subject).Scan(&objective); err != nil {
+		t.Fatal(err)
+	}
+	for i, entry := range []struct{ date, value string }{{"2021-01-04", "82.49"}, {"2021-01-05", "82.50"}} {
+		name := fmt.Sprintf("Luar kalender %d", i)
+		if err := s.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, name, "sumatif", entry.date, []int64{objective}); err != nil {
+			t.Fatal(err)
+		}
+		var activity int64
+		if err := db.QueryRow(`SELECT id FROM app.assessment_activities WHERE semester_id=$1 AND name=$2`, f.Semester, name).Scan(&activity); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveAssessmentActivityInitialScores(ctx, f.Teacher, activity, []AssessmentScoreInput{{StudentID: f.StudentA, ObjectiveID: objective, Value: entry.value}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Pembacaan harus murni: seluruh kolom nilai dan histori dibandingkan sebelum dan sesudah.
+	fingerprint := func() string {
+		t.Helper()
+		var result string
+		err := db.QueryRow(`SELECT md5(
+			coalesce((SELECT string_agg(row_to_json(x)::text,'' ORDER BY x.id) FROM app.assessment_activity_initial_scores x WHERE x.semester_id=$1),'') ||
+			coalesce((SELECT string_agg(row_to_json(c)::text,'' ORDER BY c.id) FROM app.assessment_activity_score_corrections c JOIN app.assessment_activity_initial_scores x ON x.id=c.initial_score_id WHERE x.semester_id=$1),'') ||
+			coalesce((SELECT string_agg(row_to_json(r)::text,'' ORDER BY r.id) FROM app.assessment_activity_score_remedials r JOIN app.assessment_activity_initial_scores x ON x.id=r.initial_score_id WHERE x.semester_id=$1),'')
+		)`, f.Semester).Scan(&result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	before := fingerprint()
+	result, err := s.SemesterRecommendations(ctx, f.Teacher, f.Semester, f.Class, f.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OutOfCalendarActivityCount != 2 {
+		t.Fatalf("jumlah luar kalender=%d", result.OutOfCalendarActivityCount)
+	}
+	found := false
+	for _, student := range result.Students {
+		if student.ID == fmt.Sprint(f.StudentA) {
+			found = true
+			if student.NH != "82,50" || student.Recommendation != "82" || student.Status != "Siap Final" {
+				t.Fatalf("nilai eksak 82,495 harus dibulatkan menjadi 82: %+v", student)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("siswa A tidak ditemukan")
+	}
+	if before != fingerprint() {
+		t.Fatal("pembacaan mengubah nilai historis")
 	}
 }

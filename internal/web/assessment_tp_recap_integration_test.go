@@ -162,6 +162,24 @@ func TestAssessmentTPRecapHTTPContextAuthorizationIntegration(t *testing.T) {
 			t.Fatalf("rekomendasi status=%d want=%d body=%s", w.Code, tc.status, w.Body.String())
 		}
 	}
+	// Peringatan rekomendasi tetap tampil bersama penempatan tidak pasti.
+	teacherRequest := func() *http.Request {
+		r := httptest.NewRequest(http.MethodGet, recommendationPath, nil)
+		return r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: teacher.ID, Active: true, Roles: []string{"guru_mapel"}}))
+	}
+	withWarning := httptest.NewRecorder()
+	handler.ServeHTTP(withWarning, teacherRequest())
+	if withWarning.Code != http.StatusOK || !strings.Contains(withWarning.Body.String(), "Ada 1 kegiatan Sumatif dengan tanggal di luar rentang kalender semester") || !strings.Contains(withWarning.Body.String(), "1 penempatan belum dapat dipastikan") {
+		t.Fatalf("peringatan rekomendasi: %d %s", withWarning.Code, withWarning.Body.String())
+	}
+	if _, err = db.Exec(`UPDATE app.semester_calendars SET ends_on=$2::date WHERE semester_id=$1`, semesterID, today.AddDate(0, 0, 30).Format("2006-01-02")); err != nil {
+		t.Fatal(err)
+	}
+	withoutWarning := httptest.NewRecorder()
+	handler.ServeHTTP(withoutWarning, teacherRequest())
+	if withoutWarning.Code != http.StatusOK || strings.Contains(withoutWarning.Body.String(), "kegiatan Sumatif dengan tanggal di luar rentang kalender semester") || !strings.Contains(withoutWarning.Body.String(), "1 penempatan belum dapat dipastikan") {
+		t.Fatalf("peringatan tanpa kegiatan di luar kalender: %d %s", withoutWarning.Code, withoutWarning.Body.String())
+	}
 	roleDenied := httptest.NewRecorder()
 	handler.ServeHTTP(roleDenied, requestFor(auth.User{ID: teacher.ID, Active: true, Roles: []string{"kurikulum"}}))
 	if roleDenied.Code != http.StatusForbidden {
