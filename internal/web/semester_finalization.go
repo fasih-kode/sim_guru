@@ -1,0 +1,148 @@
+package web
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/fasih-kode/sim_guru/internal/academic"
+)
+
+type semesterFinalView struct {
+	Selected                     academic.LearningObjectiveContext
+	Preview                      academic.SemesterFinalPreview
+	Score, Reason, SubmissionKey string
+	URL, ReturnURL               string
+	StaleRequest                 bool
+}
+
+func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Request) {
+	actor := principal(r).ID
+	values := r.URL.Query()
+	if r.Method == http.MethodPost {
+		if !parseForm(w, r) {
+			return
+		}
+		values = r.PostForm
+	}
+	semesterID, classID, subjectID, selected, err := learningObjectiveSelectionValues(values)
+	if err != nil || !selected {
+		a.academicFailure(w, academic.ValidationError("Konteks semester, kelas, dan mata pelajaran tidak valid."))
+		return
+	}
+	studentID, e := strconv.ParseInt(values.Get("student_id"), 10, 64)
+	if e != nil || studentID < 1 {
+		a.academicFailure(w, academic.ValidationError("Siswa tidak valid."))
+		return
+	}
+	contexts, err := a.options.Academics.LearningObjectiveContexts(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	data := &semesterFinalView{}
+	data.URL = semesterFinalURL(semesterID, classID, subjectID, studentID)
+	data.ReturnURL = "/guru/rekomendasi-semester?context=" + url.QueryEscape(fmt.Sprintf("%d:%d:%d", semesterID, classID, subjectID))
+	for _, item := range contexts {
+		if item.SemesterID == semesterID && item.ClassID == classID && item.SubjectID == subjectID {
+			data.Selected = item
+			break
+		}
+	}
+	if data.Selected.SemesterID == 0 {
+		a.academicFailure(w, academic.ErrForbidden)
+		return
+	}
+	page := func(status int, message string) {
+		a.render(w, r, "page", status, view{Page: "semester-finalization", Title: "Pratinjau Final Nilai Semester", Error: message, SemesterFinalization: data})
+	}
+	if r.Method == http.MethodPost {
+		data.Score = values.Get("final_score")
+		data.Reason = values.Get("reason")
+		data.SubmissionKey = values.Get("submission_key")
+		score, parseErr := strconv.Atoi(data.Score)
+		if parseErr != nil {
+			parseErr = academic.ValidationError("Nilai Final harus berupa bilangan bulat 0–100.")
+		}
+		if parseErr == nil {
+			parseErr = a.options.Academics.FinalizeSemesterNormal(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
+		}
+		if parseErr != nil {
+			status, message := academicError(parseErr)
+			if status >= 500 {
+				a.failure(w, parseErr)
+				return
+			}
+			if errors.Is(parseErr, academic.ErrForbidden) {
+				http.Error(w, message, status)
+				return
+			}
+			data.Preview, err = a.options.Academics.SemesterFinalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
+			if err != nil {
+				code, denied := academicError(err)
+				http.Error(w, denied, code)
+				return
+			}
+			data.StaleRequest = errors.Is(parseErr, academic.ErrConflict)
+			page(status, message)
+			return
+		}
+		http.Redirect(w, r, data.URL+"&saved=1", http.StatusSeeOther)
+		return
+	}
+	data.Preview, err = a.options.Academics.SemesterFinalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
+	if data.Preview.CanFinalize {
+		data.Score = data.Preview.Student.Recommendation
+		data.SubmissionKey, err = newFinalSubmissionKey()
+		if err != nil {
+			a.failure(w, err)
+			return
+		}
+	}
+	if r.URL.Query().Get("saved") == "1" {
+		page(http.StatusOK, "Final Nilai Semester berhasil disimpan.")
+		return
+	}
+	page(http.StatusOK, "")
+}
+
+func learningObjectiveSelectionValues(values url.Values) (int64, int64, int64, bool, error) {
+	parts := strings.Split(values.Get("context"), ":")
+	if len(parts) != 3 {
+		return 0, 0, 0, false, academic.ValidationError("Pilih konteks semester, kelas, dan mata pelajaran.")
+	}
+	semester, err1 := strconv.ParseInt(parts[0], 10, 64)
+	class, err2 := strconv.ParseInt(parts[1], 10, 64)
+	subject, err3 := strconv.ParseInt(parts[2], 10, 64)
+	if err1 != nil || err2 != nil || err3 != nil || semester < 1 || class < 1 || subject < 1 {
+		return 0, 0, 0, false, academic.ValidationError("Konteks semester, kelas, dan mata pelajaran tidak valid.")
+	}
+	return semester, class, subject, true, nil
+}
+
+func semesterFinalURL(semester, class, subject, student int64) string {
+	q := url.Values{}
+	q.Set("context", fmt.Sprintf("%d:%d:%d", semester, class, subject))
+	q.Set("student_id", strconv.FormatInt(student, 10))
+	return "/guru/rekomendasi-semester/final?" + q.Encode()
+}
+
+func newFinalSubmissionKey() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	raw[6] = (raw[6] & 0x0f) | 0x40
+	raw[8] = (raw[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(raw[:])
+	return encoded[:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:], nil
+}

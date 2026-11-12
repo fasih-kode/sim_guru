@@ -121,6 +121,11 @@ func (s *Store) CreateAssessmentActivity(ctx context.Context, actor, semesterID,
 	if !allowed {
 		return ErrForbidden
 	}
+	if activityType == "sumatif" {
+		if err = ensureRoutineStructureOpen(ctx, tx, semesterID, classID, subjectID); err != nil {
+			return err
+		}
+	}
 	var yearID int64
 	err = tx.QueryRowContext(ctx, `SELECT school_year_id FROM app.semesters WHERE id=$1`, semesterID).Scan(&yearID)
 	if errors.Is(err, sql.ErrNoRows) {

@@ -12,13 +12,19 @@
 {{if .SemesterRecommendations.SelectedSet}}
 <section class="panel max-w-5xl">
  <h2 class="text-lg font-semibold">{{.SemesterRecommendations.Selected.ClassName}} · {{.SemesterRecommendations.Selected.SubjectName}}</h2>
- <p class="mt-1 text-sm text-gray-500">{{.SemesterRecommendations.Selected.SemesterName}} · Rekomendasi baca-saja, bukan finalisasi.</p>
+ <p class="mt-1 text-sm text-gray-500">{{.SemesterRecommendations.Selected.SemesterName}} · Rekomendasi tidak menetapkan Final secara otomatis.</p>
  {{if .SemesterRecommendations.Result.Weights.Configured}}<p class="mt-3 text-sm">Bobot Kurikulum: NH {{.SemesterRecommendations.Result.Weights.NH}}% · ASTS {{.SemesterRecommendations.Result.Weights.ASTS}}% · ASAS {{.SemesterRecommendations.Result.Weights.ASAS}}%</p>{{else}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Bobot semester belum ditetapkan. Rekomendasi dan status belum dapat ditentukan.</p>{{end}}
  {{if gt .SemesterRecommendations.Result.UnknownPlacementCount 0}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">{{.SemesterRecommendations.Result.UnknownPlacementCount}} penempatan belum dapat dipastikan karena tanggal mulai belum diketahui; tidak termasuk daftar.</p>{{end}}
  {{if gt .SemesterRecommendations.Result.OutOfCalendarActivityCount 0}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Ada {{.SemesterRecommendations.Result.OutOfCalendarActivityCount}} kegiatan Sumatif dengan tanggal di luar rentang kalender semester. Kegiatan tersebut tetap dihitung berdasarkan penempatan siswa pada tanggal pelaksanaan sebenarnya.</p>{{end}}
  <div class="mt-5 space-y-4">{{range .SemesterRecommendations.Result.Students}}
   <article class="rounded-lg border border-gray-200 p-4"><h3 class="font-semibold">{{.Name}}</h3><p class="mt-2 text-sm">NH{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.NH 0)}} (bobot 0%, tidak wajib){{end}}: {{if .NH}}{{.NH}}{{else}}Belum lengkap{{end}} · ASTS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASTS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASTS}}{{.ASTS}}{{else}}Belum tersedia{{end}} · ASAS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASAS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASAS}}{{.ASAS}}{{else}}Belum tersedia{{end}}</p>
-   {{if $.SemesterRecommendations.Result.Weights.Configured}}<p class="mt-2 text-sm font-semibold">{{.Status}}{{if .Recommendation}} · Rekomendasi {{.Recommendation}}{{end}}</p>{{end}}
+   {{if $.SemesterRecommendations.Result.Weights.Configured}}<p class="mt-2 text-sm font-semibold">{{.Status}}{{if .Recommendation}} · Rekomendasi {{.Recommendation}}{{end}}{{if .Finalized}} · Nilai Final {{.FinalValue}}{{end}}</p>{{end}}
+   {{if .Finalized}}
+    {{if .NeedsReview}}<p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Final tersimpan, tetapi bukti atau konteks berubah setelah Final dibuat. Periksa snapshot untuk melihat penanda Perlu Ditinjau.</p>{{end}}
+    <a class="button-secondary mt-3 inline-flex" href="/guru/rekomendasi-semester/final?context={{$.SemesterRecommendations.Selected.SemesterID}}:{{$.SemesterRecommendations.Selected.ClassID}}:{{$.SemesterRecommendations.Selected.SubjectID}}&amp;student_id={{.ID}}">Lihat snapshot Final</a>
+   {{else if eq .Status "Siap Final"}}
+    <a class="button-primary mt-3 inline-flex" href="/guru/rekomendasi-semester/final?context={{$.SemesterRecommendations.Selected.SemesterID}}:{{$.SemesterRecommendations.Selected.ClassID}}:{{$.SemesterRecommendations.Selected.SubjectID}}&amp;student_id={{.ID}}">Pratinjau dan tetapkan Final</a>
+   {{end}}
    {{if .Missing}}<ul class="mt-2 list-disc pl-5 text-sm text-gray-600">{{range .Missing}}<li>{{.}}</li>{{end}}</ul>{{end}}
   </article>{{else}}<p class="text-sm text-gray-500">Belum ada siswa dengan penempatan yang dapat dipastikan.</p>{{end}}</div>
 </section>{{end}}

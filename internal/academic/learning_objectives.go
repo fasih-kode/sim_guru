@@ -135,6 +135,9 @@ func (s *Store) CreateLearningObjective(ctx context.Context, actor int64, semest
 	if !allowed {
 		return ErrForbidden
 	}
+	if err = ensureRoutineStructureOpen(ctx, tx, semesterID, classID, subjectID); err != nil {
+		return err
+	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO app.learning_objectives(school_year_id,semester_id,class_id,subject_id,definition,created_by)
 		VALUES($1,$2,$3,$4,$5,$6)`, yearID, semesterID, classID, subjectID, definition, actor)
@@ -191,6 +194,9 @@ func (s *Store) CopyLearningObjective(ctx context.Context, actor, sourceID, sour
 	}
 	if !allowed {
 		return 0, ErrForbidden
+	}
+	if err = ensureRoutineStructureOpen(ctx, tx, targetSemesterID, targetClassID, targetSubjectID); err != nil {
+		return 0, err
 	}
 	if sourceSemesterID != targetSemesterID || sourceSubjectID != targetSubjectID {
 		return 0, ValidationError("Kelas tujuan harus memakai semester dan mata pelajaran yang sama dengan TP sumber.")

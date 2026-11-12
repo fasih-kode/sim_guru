@@ -30,6 +30,23 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatal(err)
 	}
 	date := time.Now().In(time.FixedZone("WIB", 7*60*60)).Truncate(24 * time.Hour)
+	// Database test dipakai berulang tanpa reset. Pilih occurrence sebelum
+	// cutover terlama yang sudah ada, tetap pada hari minggu yang sama agar
+	// fixture jadwal dapat digunakan tanpa bergantung pada tanggal run tertentu.
+	historicalDate := date.AddDate(0, 0, -7)
+	var oldestCutover sql.NullString
+	if err := db.QueryRow(`SELECT min(cutover_date)::text FROM app.teaching_journal_cutover_batches`).Scan(&oldestCutover); err != nil {
+		t.Fatal(err)
+	}
+	if oldestCutover.Valid {
+		cutoverDate, parseErr := time.Parse("2006-01-02", oldestCutover.String)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		for !historicalDate.Before(cutoverDate) {
+			historicalDate = historicalDate.AddDate(0, 0, -7)
+		}
+	}
 	weekday := int(date.Weekday())
 	if weekday == 0 {
 		weekday = 7
@@ -58,7 +75,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 			_, _ = db.Exec(`UPDATE app.semesters SET active=true WHERE id=$1`, priorSemester.Int64)
 		}
 	})
-	if err = s.SaveSemesterCalendar(ctx, cur.ID, SemesterCalendar{SemesterID: semester, StartsOn: date.AddDate(0, 0, -40).Format("2006-01-02"), EndsOn: date.AddDate(0, 0, 40).Format("2006-01-02"), SchoolDays: []int{weekday}}, "Rentang test jurnal"); err != nil {
+	if err = s.SaveSemesterCalendar(ctx, cur.ID, SemesterCalendar{SemesterID: semester, StartsOn: historicalDate.AddDate(0, 0, -40).Format("2006-01-02"), EndsOn: date.AddDate(0, 0, 40).Format("2006-01-02"), SchoolDays: []int{weekday}}, "Rentang test jurnal"); err != nil {
 		t.Fatal(err)
 	}
 	class, err := s.SaveClass(ctx, admin.ID, 0, year.ID, 7, "J"+testutil.Random(t)[:5], "", 0)
@@ -92,7 +109,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err = db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "J"+testutil.Random(t)[:10], "Mapel Jurnal").Scan(&subjectID); err != nil {
 		t.Fatal(err)
 	}
-	effective := date.AddDate(0, 0, -20)
+	effective := historicalDate.AddDate(0, 0, -20)
 	if err = s.AssignTeacher(ctx, cur.ID, semester, class.ID, subjectID, teacherID, effective); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +285,6 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	}
 	// Pemetaan historis harus ditolak bila gate presensi D-050 belum lengkap,
 	// lalu dapat dibuat untuk satu slot resmi setelah bukti dilengkapi.
-	historicalDate := date.AddDate(0, 0, -7)
 	mapInput := TeachingJournalHistoricalMappingInput{Date: historicalDate.Format("2006-01-02"), RevisionID: r2Draft.ID, EntryID: publishedEntry, Reason: "Pemetaan occurrence terverifikasi Kurikulum"}
 	if _, err = s.MapTeachingJournalHistoricalOccurrence(ctx, cur.ID, TeachingJournalHistoricalMappingInput{Date: mapInput.Date, RevisionID: r1, EntryID: e1, Reason: "Revision lama tidak boleh dipilih"}); err == nil {
 		t.Fatal("mapping accepted a published revision that was not effective on the occurrence date")

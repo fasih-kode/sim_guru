@@ -1,0 +1,49 @@
+{{define "semester-finalization"}}
+<section class="panel">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a class="text-sm text-brand-600 hover:underline" href="{{.SemesterFinalization.ReturnURL}}">← Kembali ke rekomendasi semester</a>
+      <h2 class="mt-3 text-xl font-semibold text-gray-900">Pratinjau Final Nilai Semester</h2>
+      <p class="mt-1 text-sm text-gray-600">{{.SemesterFinalization.Selected.SemesterName}} · {{.SemesterFinalization.Selected.ClassName}} · {{.SemesterFinalization.Selected.SubjectName}}</p>
+    </div>
+    {{if .SemesterFinalization.Preview.Finalized}}
+      {{if .SemesterFinalization.Preview.NeedsReview}}<span class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">Final · Perlu Ditinjau</span>{{else}}<span class="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">Final</span>{{end}}
+    {{else if eq .SemesterFinalization.Preview.Student.Status "Siap Final"}}<span class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">Siap Final</span>{{else}}<span class="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{{.SemesterFinalization.Preview.Student.Status}}</span>{{end}}
+  </div>
+
+  <div class="mt-5 rounded-lg border border-gray-200 bg-white p-4">
+    <h3 class="font-semibold text-gray-900">{{.SemesterFinalization.Preview.Student.Name}}</h3>
+    <p class="mt-1 text-sm text-gray-500">{{.SemesterFinalization.Preview.Student.NIS}}</p>
+    <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="rounded-lg bg-gray-50 p-3"><dt class="text-xs font-medium uppercase text-gray-500">NH</dt><dd class="mt-1 font-semibold">{{if .SemesterFinalization.Preview.Student.NH}}{{.SemesterFinalization.Preview.Student.NH}}{{else}}Belum lengkap{{end}}</dd></div>
+      <div class="rounded-lg bg-gray-50 p-3"><dt class="text-xs font-medium uppercase text-gray-500">ASTS</dt><dd class="mt-1 font-semibold">{{if .SemesterFinalization.Preview.Student.ASTS}}{{.SemesterFinalization.Preview.Student.ASTS}}{{else}}Belum tersedia{{end}}</dd></div>
+      <div class="rounded-lg bg-gray-50 p-3"><dt class="text-xs font-medium uppercase text-gray-500">ASAS</dt><dd class="mt-1 font-semibold">{{if .SemesterFinalization.Preview.Student.ASAS}}{{.SemesterFinalization.Preview.Student.ASAS}}{{else}}Belum tersedia{{end}}</dd></div>
+    </dl>
+    <p class="mt-4 text-sm text-gray-700">Bobot resmi Kurikulum: NH {{.SemesterFinalization.Preview.Weights.NH}}% · ASTS {{.SemesterFinalization.Preview.Weights.ASTS}}% · ASAS {{.SemesterFinalization.Preview.Weights.ASAS}}%</p>
+    <p class="mt-2 text-sm font-semibold text-gray-900">Rekomendasi: {{.SemesterFinalization.Preview.Student.Recommendation}}</p>
+    {{if .SemesterFinalization.Preview.Finalized}}
+      <p class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">Nilai Final resmi versi {{.SemesterFinalization.Preview.FinalVersion}}: <strong>{{.SemesterFinalization.Preview.FinalValue}}</strong>. Snapshot nilai, bobot, TP, kriteria, dan bukti sumber saat Final disimpan sebagai histori.</p>
+      {{if .SemesterFinalization.Preview.NeedsReview}}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Bukti atau konteks berubah setelah Final dibuat. Final lama tetap utuh dan ditandai Perlu Ditinjau; checkpoint ini belum menyediakan konfirmasi ulang Final.</p>{{end}}
+    {{end}}
+  </div>
+
+  {{if .SemesterFinalization.StaleRequest}}
+    <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Data berubah setelah pratinjau dibuka atau Final sudah tersimpan. Tidak ada Final baru yang dibuat dari pratinjau lama. Muat ulang pratinjau sebelum mencoba lagi.</div>
+    <a class="button-secondary mt-4 inline-flex" href="{{.SemesterFinalization.URL}}">Muat ulang pratinjau</a>
+  {{else if .SemesterFinalization.Preview.CanFinalize}}
+    <div class="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Tindakan ini menetapkan Nilai Final resmi untuk satu siswa. Periksa kembali semua komponen sebelum menyimpan. Rekomendasi bukan nilai Final otomatis.</div>
+    <form method="post" action="{{.SemesterFinalization.URL}}" class="mt-5 space-y-4">
+      {{.CSRF}}
+      <input type="hidden" name="context" value="{{.SemesterFinalization.Preview.SemesterID}}:{{.SemesterFinalization.Preview.ClassID}}:{{.SemesterFinalization.Preview.SubjectID}}">
+      <input type="hidden" name="student_id" value="{{.SemesterFinalization.Preview.Student.ID}}">
+      <input type="hidden" name="snapshot_token" value="{{.SemesterFinalization.Preview.SnapshotToken}}">
+      <input type="hidden" name="submission_key" value="{{.SemesterFinalization.SubmissionKey}}">
+      <div><label for="final-score">Nilai Final</label><input id="final-score" name="final_score" type="number" min="0" max="100" step="1" inputmode="numeric" required value="{{.SemesterFinalization.Score}}"><p class="mt-1 text-xs text-gray-500">Masukkan bilangan bulat 0–100. Jika berbeda dari rekomendasi, alasan wajib diisi.</p></div>
+      <div><label for="final-reason">Alasan bila Nilai Final berbeda</label><textarea id="final-reason" name="reason" rows="3" maxlength="500">{{.SemesterFinalization.Reason}}</textarea></div>
+      <button class="button-primary" type="submit">Simpan Nilai Final</button>
+    </form>
+  {{else if not .SemesterFinalization.Preview.Finalized}}
+    <p class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Final normal belum dapat disimpan. Siswa harus berstatus Siap Final dan seluruh komponen berbobot positif harus lengkap.</p>
+  {{end}}
+</section>
+{{end}}

@@ -20,7 +20,12 @@ type SemesterRecommendation struct {
 type SemesterRecommendationStudent struct {
 	ID, Name, NIS                          string
 	NH, ASTS, ASAS, Status, Recommendation string
+	NHExact                                string
 	Missing                                []string
+	Finalized                              bool
+	FinalValue                             string
+	FinalVersion                           int64
+	NeedsReview                            bool
 }
 
 type examEvidence struct {
@@ -38,6 +43,17 @@ func (s *Store) SemesterRecommendations(ctx context.Context, actor, semesterID, 
 		return SemesterRecommendation{}, err
 	}
 	defer tx.Rollback()
+	out, err := s.semesterRecommendationsTx(ctx, tx, actor, semesterID, classID, subjectID)
+	if err != nil {
+		return out, err
+	}
+	if err = s.overlaySemesterFinals(ctx, tx, &out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64) (SemesterRecommendation, error) {
 	recap, err := s.assessmentTPRecap(ctx, tx, actor, semesterID, classID, subjectID, true)
 	if err != nil {
 		return SemesterRecommendation{}, err
@@ -106,6 +122,7 @@ func (s *Store) SemesterRecommendations(ctx context.Context, actor, semesterID, 
 				nh.Add(nh, avg)
 			}
 			nh.Quo(nh, big.NewRat(int64(len(student.Objectives)), 1))
+			item.NHExact = nh.RatString()
 		}
 		asts := evidence[student.ID+":asts"]
 		asas := evidence[student.ID+":asas"]

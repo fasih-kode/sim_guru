@@ -57,8 +57,18 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 43 {
+	if err != nil || current != target || target < 48 {
 		t.Fatal("unexpected migration version")
+	}
+	var semesterFinalSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_versions') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_versions_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_lock_new_objectives' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_lock_new_sumatif' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_recommendation_score_check' AND contype='c')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_final_score_check' AND contype='c')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_unique' AND contype='u')`).Scan(&semesterFinalSchema); err != nil || !semesterFinalSchema {
+		t.Fatal("missing immutable semester final table, score constraints, or routine structure guards")
 	}
 	var exists bool
 	if err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='app')").Scan(&exists); err != nil || !exists {
