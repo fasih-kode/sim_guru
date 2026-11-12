@@ -35,17 +35,20 @@ func TestSemesterFinalizationHTTPPreviewCSRFAndOwnerAuthorizationIntegration(t *
 	if err = s.CreateLearningObjective(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "TP Final HTTP"); err != nil {
 		t.Fatal(err)
 	}
-	var tp, activity int64
-	if err = db.QueryRow(`SELECT id FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, f.Semester, f.Class, f.Subject).Scan(&tp); err != nil {
+	if err = s.CreateLearningObjective(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "TP kedua HTTP"); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "Sumatif Final HTTP", "sumatif", "2020-01-10", []int64{tp}); err != nil {
+	var tp, tp2, activity int64
+	if err = db.QueryRow(`SELECT min(id),max(id) FROM app.learning_objectives WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, f.Semester, f.Class, f.Subject).Scan(&tp, &tp2); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "Sumatif Final HTTP", "sumatif", "2020-01-10", []int64{tp, tp2}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, f.Semester, f.Class, f.Subject).Scan(&activity); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.SaveAssessmentActivityInitialScores(ctx, f.Teacher, activity, []academic.AssessmentScoreInput{{StudentID: f.StudentA, ObjectiveID: tp, Value: "80"}}); err != nil {
+	if err = s.SaveAssessmentActivityInitialScores(ctx, f.Teacher, activity, []academic.AssessmentScoreInput{{StudentID: f.StudentA, ObjectiveID: tp, Value: "80"}, {StudentID: f.StudentA, ObjectiveID: tp2, Value: "80"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.SaveExamInitialScores(ctx, f.Teacher, f.Semester, f.Class, f.Subject, []academic.ExamInitialInput{{StudentID: f.StudentA, Component: "asts", Date: "2020-01-10", Value: "70"}, {StudentID: f.StudentA, Component: "asas", Date: "2020-01-10", Value: "90"}}); err != nil {
@@ -87,7 +90,7 @@ func TestSemesterFinalizationHTTPPreviewCSRFAndOwnerAuthorizationIntegration(t *
 		return w
 	}
 	page := request(http.MethodGet, path, nil, nil, owner)
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Nilai Final") || !strings.Contains(page.Body.String(), "Bobot resmi Kurikulum") || !strings.Contains(page.Body.String(), "Rekomendasi: 80") {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Nilai Final") || !strings.Contains(page.Body.String(), "Bobot resmi Kurikulum") || !strings.Contains(page.Body.String(), "Rekomendasi: 80") || !strings.Contains(page.Body.String(), "TP kedua HTTP") {
 		t.Fatalf("pratinjau Final HTTP: %d %s", page.Code, page.Body.String())
 	}
 	token := regexp.MustCompile(`name="gorilla.csrf.Token" value="([^"]+)"`).FindStringSubmatch(page.Body.String())
@@ -118,7 +121,14 @@ func TestSemesterFinalizationHTTPPreviewCSRFAndOwnerAuthorizationIntegration(t *
 	if got := request(http.MethodPost, path, invalid, cookies, owner); got.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("Final berbeda tanpa alasan harus ditolak: %d %s", got.Code, got.Body.String())
 	}
-	// Perubahan bobot setelah pratinjau harus menghasilkan 409 tanpa Final parsial.
+	// Perubahan salah satu sumber multi-TP setelah pratinjau harus menghasilkan 409.
+	var scoreID int64
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND learning_objective_id=$2 AND student_id=$3`, activity, tp2, f.StudentA).Scan(&scoreID); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CorrectAssessmentInitialScore(ctx, f.Teacher, scoreID, 0, "84", "Koreksi uji"); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.SaveAssessmentWeight(ctx, cur.ID, academic.AssessmentWeights{SemesterID: f.Semester, NH: 50, ASTS: 20, ASAS: 30}, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +152,7 @@ func TestSemesterFinalizationHTTPPreviewCSRFAndOwnerAuthorizationIntegration(t *
 		t.Fatal("token form terbaru tidak ditemukan")
 	}
 	cookies = page.Result().Cookies()
-	form = url.Values{"gorilla.csrf.Token": {token[1]}, "context": {ctxValue}, "student_id": {fmt.Sprint(f.StudentA)}, "snapshot_token": {snapshot[1]}, "submission_key": {key[1]}, "final_score": {"81"}, "reason": {""}}
+	form = url.Values{"gorilla.csrf.Token": {token[1]}, "context": {ctxValue}, "student_id": {fmt.Sprint(f.StudentA)}, "snapshot_token": {snapshot[1]}, "submission_key": {key[1]}, "final_score": {"82"}, "reason": {""}}
 	if got := request(http.MethodPost, path, form, cookies, owner); got.Code != http.StatusSeeOther {
 		t.Fatalf("simpan Final: %d %s", got.Code, got.Body.String())
 	}

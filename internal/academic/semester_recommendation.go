@@ -21,6 +21,7 @@ type SemesterRecommendationStudent struct {
 	ID, Name, NIS                          string
 	NH, ASTS, ASAS, Status, Recommendation string
 	NHExact                                string
+	Objectives                             []AssessmentTPRecapObjective
 	Missing                                []string
 	Finalized                              bool
 	FinalValue                             string
@@ -104,7 +105,7 @@ func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor
 	}
 	rows.Close()
 	for _, student := range recap.Students {
-		item := SemesterRecommendationStudent{ID: student.ID, Name: student.Name, NIS: student.NIS, NH: student.NH}
+		item := SemesterRecommendationStudent{ID: student.ID, Name: student.Name, NIS: student.NIS, NH: student.NH, Objectives: student.Objectives}
 		var nh *big.Rat
 		scored := false
 		for _, objective := range student.Objectives {

@@ -199,11 +199,14 @@ func TestSemesterFinalNormalZeroWeightAndAuthorizationIntegration(t *testing.T) 
 	if err = s.SaveAssessmentWeight(ctx, cur.ID, AssessmentWeights{SemesterID: f.Semester, NH: 0, ASTS: 40, ASAS: 60}, 0); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.CreateLearningObjective(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "TP belum lengkap pada bobot NH nol"); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.SaveExamInitialScores(ctx, f.Teacher, f.Semester, f.Class, f.Subject, []ExamInitialInput{{StudentID: f.StudentA, Component: "asts", Date: "2020-01-10", Value: "0"}, {StudentID: f.StudentA, Component: "asas", Date: "2020-01-10", Value: "100"}}); err != nil {
 		t.Fatal(err)
 	}
 	p, err := s.SemesterFinalPreview(ctx, f.Teacher, f.Semester, f.Class, f.Subject, f.StudentA)
-	if err != nil || !p.CanFinalize || p.Student.Recommendation != "60" {
+	if err != nil || !p.CanFinalize || p.Student.Recommendation != "60" || len(p.Student.Objectives) != 1 || p.Student.Objectives[0].Achievement != "Belum Lengkap" {
 		t.Fatalf("bobot NH nol dan nilai 0 sah: %+v %v", p, err)
 	}
 	if err = s.FinalizeSemesterNormal(ctx, f.Other, f.Semester, f.Class, f.Subject, f.StudentA, 60, "", p.SnapshotToken, "00000000-0000-4000-8000-000000000011"); !errors.Is(err, ErrForbidden) {

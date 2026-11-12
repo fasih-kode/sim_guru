@@ -75,11 +75,11 @@ SELECT jsonb_build_object(
  'activities',coalesce((SELECT jsonb_agg(jsonb_build_object(
       'activity',to_jsonb(a),
       'objectives',coalesce((SELECT jsonb_agg(to_jsonb(ao) ORDER BY ao.learning_objective_id) FROM app.assessment_activity_objectives ao WHERE ao.activity_id=a.id),'[]'::jsonb),
-      'score',coalesce((SELECT jsonb_build_object(
+      'scores',coalesce((SELECT jsonb_agg(jsonb_build_object(
           'initial',to_jsonb(sc),
           'corrections',coalesce((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.version,c.id) FROM app.assessment_activity_score_corrections c WHERE c.initial_score_id=sc.id),'[]'::jsonb),
           'remedials',coalesce((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.recorded_at,r.id) FROM app.assessment_activity_score_remedials r WHERE r.initial_score_id=sc.id),'[]'::jsonb)
-        ) FROM app.assessment_activity_initial_scores sc WHERE sc.assessment_activity_id=a.id AND sc.student_id=$4),'null'::jsonb)
+        ) ORDER BY sc.learning_objective_id,sc.id) FROM app.assessment_activity_initial_scores sc WHERE sc.assessment_activity_id=a.id AND sc.student_id=$4),'[]'::jsonb)
     ) ORDER BY a.id)
     FROM app.assessment_activities a WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3 AND a.activity_type='sumatif'),'[]'::jsonb),
  'exam_sources',coalesce((SELECT jsonb_agg(jsonb_build_object(

@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-14 — tindak lanjut review snapshot (12 November 2026)
+
+Review independen implementasi awal `cb1e414` menghasilkan NEEDS FIX: subquery snapshot mengasumsikan satu nilai per siswa/kegiatan sehingga kegiatan multi-TP gagal dengan cardinality error, dan indikator serta kriteria efektif belum dicatat eksplisit. Snapshot kini menyimpan koleksi sumber nilai per TP yang terurut, termasuk koreksi dan remedial masing-masing. Pratinjau menggunakan rekap CP10-12 dalam transaksi yang sama untuk menampilkan dan menyimpan definisi, rata-rata tampilan dan eksak, batas efektif, asal batas, serta indikator. Snapshot lama tidak ditimpa; hash baru menandai perubahan bukti untuk ditinjau.
+
+Regression PostgreSQL dan HTTP terfokus dengan race detector PASS: dua nilai berbeda dalam satu kegiatan, konflik snapshot setelah koreksi tanpa Final parsial, presisi 74,995 yang tampil 75,00 tetapi Belum Mencapai pada batas 75,00, dan snapshot tetap identik setelah perubahan batas. Kasus bobot NH 0% dengan TP belum lengkap dan regresi CP10-08/11/12/13/14 terpilih juga PASS. Full integration serial dengan race detector PASS; tes bobot nol yang diperluas setelah run dimulai dijalankan terpisah dan PASS. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check` PASS. Tidak ada migration baru atau mutasi DEV/UAT; visual browser dan UAT belum dilakukan. CP10-14 menunggu review independen ulang; CP10-15 belum dimulai.
+
 ## CP10-14 — implementasi, menunggu review independen (12 November 2026)
 
 CP10-01 sampai CP10-13 menjadi baseline CLOSED sesuai keputusan supervisor; CP10-14 mengimplementasikan Finalisasi Nilai Normal individual. Guru Mapel hanya dapat mengakses siswa pada konteks penugasan aktif dan status `Siap Final`; nilai Final ditetapkan eksplisit sebagai bilangan bulat 0–100 sesuai keputusan Product Owner. Nilai yang sama dengan rekomendasi tidak mewajibkan alasan; nilai berbeda mewajibkan alasan yang divalidasi server. Belum ada finalisasi massal, Final dengan pengecualian, koreksi/penerbitan ulang Final, pengakuan sumber pindahan, atau workflow pemeriksaan lintas sekolah.

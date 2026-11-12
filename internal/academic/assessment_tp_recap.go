@@ -32,7 +32,7 @@ type AssessmentTPRecapObjective struct {
 	Activities                              []AssessmentTPRecapActivity
 	RequiredCount                           int
 	ScoredCount                             int
-	Average                                 string
+	Average, AverageExact                   string
 	Threshold, ThresholdSource, Achievement string
 	Complete                                bool
 	Missing                                 []string
@@ -335,6 +335,7 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 				return AssessmentTPRecap{}, averageErr
 			}
 			objective.Average = strings.ReplaceAll(average.FloatString(2), ".", ",")
+			objective.AverageExact = average.RatString()
 			objective.Complete = true
 			objective.Achievement = tpAchievement(average, true, objective.Threshold)
 			values = append(values, average)
