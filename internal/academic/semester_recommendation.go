@@ -27,6 +27,9 @@ type SemesterRecommendationStudent struct {
 	FinalValue                             string
 	FinalVersion                           int64
 	NeedsReview                            bool
+	ExceptionEligible                      bool     `json:"-"`
+	ExceptionEvidence                      []string `json:"-"`
+	FinalType                              string   `json:"-"`
 }
 
 type examEvidence struct {
@@ -175,6 +178,26 @@ func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor
 			default:
 				item.Status = "Belum Lengkap"
 			}
+		}
+		// Bukti pengecualian berasal dari nilai yang sah pada komponen berbobot positif.
+		// Field presentasi tidak ikut hash snapshot agar Final lama tetap stabil.
+		if out.Weights.Configured && item.Status == "Belum Lengkap" {
+			if out.Weights.NH > 0 {
+				for _, objective := range item.Objectives {
+					for _, activity := range objective.Activities {
+						if activity.HasValue {
+							item.ExceptionEvidence = append(item.ExceptionEvidence, "Sumatif "+activity.Name+" · "+objective.Definition+": "+activity.EffectiveValue)
+						}
+					}
+				}
+			}
+			if out.Weights.ASTS > 0 && a != nil {
+				item.ExceptionEvidence = append(item.ExceptionEvidence, "ASTS: "+item.ASTS)
+			}
+			if out.Weights.ASAS > 0 && b != nil {
+				item.ExceptionEvidence = append(item.ExceptionEvidence, "ASAS: "+item.ASAS)
+			}
+			item.ExceptionEligible = len(item.ExceptionEvidence) > 0
 		}
 		out.Students = append(out.Students, item)
 	}

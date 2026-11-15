@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-16 — implementasi selesai, menunggu review independen (16 November 2026)
+
+Cakupan FN-01–FN-07, AC-10–AC-13, BK-02/BK-03: Final pengecualian individual hanya untuk siswa Belum Lengkap dengan sedikitnya satu bukti Sumatif sah berbobot positif; nilai bulat manual dan alasan wajib, tanpa rekomendasi semu. Kelayakan mengikuti bukti roster/penempatan dan sumber yang sah; Formatif, nilai berbobot nol dan sumber kelas asal yang belum diakui tidak menjadi bukti. Service memakai kunci mutasi akademik bersama, pemeriksaan penugasan sebelum replay, token snapshot dan idempotensi; status Final dan penanda pengecualian/Perlu Ditinjau tetap terpisah.
+
+Migration aditif 00050 menambah tipe `normal`/`exception` dan constraint rekomendasi NULL khusus pengecualian; baris lama memakai default normal tanpa ditulis ulang dan Down menolak histori pengecualian. Field presentasi baru dikecualikan dari JSON snapshot agar hash historis tetap stabil. Halaman guru menampilkan alasan, bukti, kekurangan dan snapshot historis. Migration diuji hanya pada TEST 50/50; DEV/UAT terpasang 49/50, tanpa restart preview atau fixture UAT baru. Regression service/HTTP race, Final normal/massal, rekap, kriteria, remedial serta migration terfokus PASS. Full integration pertama gagal pada fixture Jurnal Mengajar: pembulatan 24 jam memakai batas UTC sebelum 07.00 WIB sehingga bukti presensi hari lampau tidak lengkap. Fixture diperbaiki memakai tanggal WIB, jadwal sintetis yang sudah dimulai, dan tanggal historis negatif yang tidak berbenturan dengan pemetaan TEST lama; tes terisolasi kemudian PASS, tanpa perubahan domain presensi. Full integration ulang `go test -p 1 -count=1 -race -timeout 45m -tags=integration ./...` PASS setelah perbaikan fixture; tambahan tes HTTP snapshot basi sesudah suite juga PASS tanpa perubahan kode aplikasi; unit `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Visual browser belum diuji karena preview DEV/UAT tidak direstart; belum UAT, review independen atau CLOSED.
+
 ## CP10-15 — CLOSED (16 November 2026)
 
 Supervisor menetapkan CP10-15 CLOSED setelah final gate `496585bc35f257c288461a85d5306f61e90d02fe`. Kronologi UAT, audit, integritas historis dan keterbatasan di bawah tetap berlaku. CP10-16 belum dimulai pada saat penutupan ini dicatat.

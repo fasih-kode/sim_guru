@@ -57,8 +57,14 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 49 {
+	if err != nil || current != target || target < 50 {
 		t.Fatal("unexpected migration version")
+	}
+	var exceptionSchema bool
+	if err = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='semester_final_versions' AND column_name='final_type' AND is_nullable='NO')
+		AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='semester_final_versions' AND column_name='recommendation_score' AND is_nullable='YES')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_type_check' AND convalidated)`).Scan(&exceptionSchema); err != nil || !exceptionSchema {
+		t.Fatal("missing Final type or exception constraint")
 	}
 	var batchSchema bool
 	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_batches') IS NOT NULL

@@ -21,10 +21,15 @@ type SemesterFinalPreview struct {
 	Weights                        AssessmentWeights
 	SnapshotToken                  string
 	CanFinalize                    bool
+	CanFinalizeException           bool
+	FinalType                      string
 	Finalized                      bool
 	FinalValue                     string
 	FinalVersion                   int64
 	NeedsReview                    bool
+	HistoricalStudent              SemesterRecommendationStudent
+	HistoricalWeights              AssessmentWeights
+	RecordedBy, RecordedAt, Reason string
 }
 
 type semesterFinalSnapshot struct {
@@ -143,19 +148,32 @@ func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, cla
 		return out, err
 	}
 	out.SnapshotToken = hex.EncodeToString(hash[:])
-	var value, recommendation int
+	var value int
 	var version int64
-	var storedHash []byte
-	err = tx.QueryRowContext(ctx, `SELECT final_score,recommendation_score,version,snapshot_sha256
-		FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4
-		ORDER BY version DESC LIMIT 1`, semesterID, classID, subjectID, studentID).Scan(&value, &recommendation, &version, &storedHash)
+	var storedHash, storedSnapshot []byte
+	err = tx.QueryRowContext(ctx, `SELECT v.final_score,v.version,v.snapshot_sha256,v.final_type,v.snapshot,v.reason,u.display_name,to_char(v.recorded_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS')
+		FROM app.semester_final_versions v JOIN app.users u ON u.id=v.recorded_by WHERE v.semester_id=$1 AND v.class_id=$2 AND v.subject_id=$3 AND v.student_id=$4
+		ORDER BY v.version DESC LIMIT 1`, semesterID, classID, subjectID, studentID).Scan(&value, &version, &storedHash, &out.FinalType, &storedSnapshot, &out.Reason, &out.RecordedBy, &out.RecordedAt)
 	if err == nil {
+		var historic semesterFinalSnapshot
+		if err = json.Unmarshal(storedSnapshot, &historic); err != nil {
+			return out, err
+		}
+		out.HistoricalStudent = historic.Student
+		var evidence struct {
+			Weights struct{ NH, ASTS, ASAS int } `json:"weights"`
+		}
+		if err = json.Unmarshal(historic.Evidence, &evidence); err != nil {
+			return out, err
+		}
+		out.HistoricalWeights = AssessmentWeights{NH: evidence.Weights.NH, ASTS: evidence.Weights.ASTS, ASAS: evidence.Weights.ASAS, Configured: true}
 		out.Finalized = true
 		out.FinalValue = strconv.Itoa(value)
 		out.FinalVersion = version
 		out.NeedsReview = !equalHash(storedHash, hash[:])
 		out.Student.Status = "Final"
 		out.Student.Finalized = true
+		out.Student.FinalType = out.FinalType
 		out.Student.FinalValue = out.FinalValue
 		out.Student.FinalVersion = version
 		out.Student.NeedsReview = out.NeedsReview
@@ -163,6 +181,7 @@ func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, cla
 		return out, err
 	}
 	out.CanFinalize = !out.Finalized && result.Weights.Configured && student.Status == "Siap Final" && student.Recommendation != ""
+	out.CanFinalizeException = !out.Finalized && student.ExceptionEligible
 	return out, nil
 }
 
@@ -178,7 +197,7 @@ func equalHash(a, b []byte) bool {
 }
 
 func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *SemesterRecommendation) error {
-	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT ON (student_id) student_id,final_score,version,snapshot_sha256
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT ON (student_id) student_id,final_score,version,snapshot_sha256,final_type
 		FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3
 		ORDER BY student_id,version DESC`, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID)
 	if err != nil {
@@ -189,11 +208,12 @@ func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *S
 		value     int
 		version   int64
 		hash      []byte
+		finalType string
 	}
 	finals := []finalRow{}
 	for rows.Next() {
 		var f finalRow
-		if err = rows.Scan(&f.studentID, &f.value, &f.version, &f.hash); err != nil {
+		if err = rows.Scan(&f.studentID, &f.value, &f.version, &f.hash, &f.finalType); err != nil {
 			rows.Close()
 			return err
 		}
@@ -217,6 +237,7 @@ func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *S
 				return e
 			}
 			student.Finalized = true
+			student.FinalType = f.finalType
 			student.FinalValue = strconv.Itoa(f.value)
 			student.FinalVersion = f.version
 			student.NeedsReview = !equalHash(f.hash, currentHash[:])

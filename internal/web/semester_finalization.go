@@ -19,6 +19,7 @@ type semesterFinalView struct {
 	Score, Reason, SubmissionKey string
 	URL, ReturnURL               string
 	StaleRequest                 bool
+	Exception                    bool
 }
 
 func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +65,18 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 	if r.Method == http.MethodPost {
 		data.Score = values.Get("final_score")
 		data.Reason = values.Get("reason")
+		data.Exception = values.Get("mode") == "exception"
 		data.SubmissionKey = values.Get("submission_key")
 		score, parseErr := strconv.Atoi(data.Score)
 		if parseErr != nil {
 			parseErr = academic.ValidationError("Nilai Final harus berupa bilangan bulat 0–100.")
 		}
 		if parseErr == nil {
-			parseErr = a.options.Academics.FinalizeSemesterNormal(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
+			if data.Exception {
+				parseErr = a.options.Academics.FinalizeSemesterException(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
+			} else {
+				parseErr = a.options.Academics.FinalizeSemesterNormal(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
+			}
 		}
 		if parseErr != nil {
 			status, message := academicError(parseErr)
@@ -100,8 +106,11 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 		a.academicFailure(w, err)
 		return
 	}
-	if data.Preview.CanFinalize {
-		data.Score = data.Preview.Student.Recommendation
+	data.Exception = data.Preview.CanFinalizeException
+	if data.Preview.CanFinalize || data.Exception {
+		if data.Preview.CanFinalize {
+			data.Score = data.Preview.Student.Recommendation
+		}
 		data.SubmissionKey, err = newFinalSubmissionKey()
 		if err != nil {
 			a.failure(w, err)

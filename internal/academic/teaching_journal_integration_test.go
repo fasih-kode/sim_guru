@@ -29,7 +29,12 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err := db.QueryRow(`SELECT id FROM app.semesters WHERE active`).Scan(&priorSemester); err != nil && err != sql.ErrNoRows {
 		t.Fatal(err)
 	}
-	date := time.Now().In(time.FixedZone("WIB", 7*60*60)).Truncate(24 * time.Hour)
+	now := time.Now().In(time.FixedZone("WIB", 7*60*60))
+	// Truncate 24 jam mengikuti batas UTC, bukan pergantian tanggal WIB.
+	date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if now.Before(date.Add(2 * time.Minute)) {
+		t.Skip("fixture memerlukan dua menit pertama hari WIB berlalu")
+	}
 	// Database test dipakai berulang tanpa reset. Pilih occurrence sebelum
 	// cutover terlama yang sudah ada, tetap pada hari minggu yang sama agar
 	// fixture jadwal dapat digunakan tanpa bergantung pada tanggal run tertentu.
@@ -39,13 +44,25 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatal(err)
 	}
 	if oldestCutover.Valid {
-		cutoverDate, parseErr := time.Parse("2006-01-02", oldestCutover.String)
+		cutoverDate, parseErr := time.ParseInLocation("2006-01-02", oldestCutover.String, now.Location())
 		if parseErr != nil {
 			t.Fatal(parseErr)
 		}
 		for !historicalDate.Before(cutoverDate) {
 			historicalDate = historicalDate.AddDate(0, 0, -7)
 		}
+	}
+	// DB test dipakai ulang: tanggal negatif juga harus belum dipetakan oleh
+	// fixture lain karena resolver mendeteksi pemetaan per tanggal secara global.
+	for {
+		var used bool
+		if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM app.teaching_journal_historical_mappings WHERE meeting_date=$1::date)`, historicalDate.AddDate(0, 0, -1).Format("2006-01-02")).Scan(&used); err != nil {
+			t.Fatal(err)
+		}
+		if !used {
+			break
+		}
+		historicalDate = historicalDate.AddDate(0, 0, -7)
 	}
 	weekday := int(date.Weekday())
 	if weekday == 0 {
@@ -103,7 +120,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if _, err = db.Exec(`INSERT INTO app.user_roles(user_id,role_code) VALUES($1,'admin')`, teacher.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckIn, OccurredAt: date.Format("2006-01-02") + "T00:01", Reason: "Bukti presensi sintetis untuk integrasi jurnal", IdempotencyKey: testutil.Random(t)[:32]}); err != nil {
+	if _, err = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckIn, OccurredAt: date.Format("2006-01-02") + "T00:00", Reason: "Bukti presensi sintetis untuk integrasi jurnal", IdempotencyKey: testutil.Random(t)[:32]}); err != nil {
 		t.Fatal("cannot prepare eligible teacher attendance evidence", err)
 	}
 	if err = db.QueryRow(`INSERT INTO app.subjects(code,name) VALUES($1,$2) RETURNING id`, "J"+testutil.Random(t)[:10], "Mapel Jurnal").Scan(&subjectID); err != nil {
@@ -116,7 +133,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	if err = s.AssignTeacher(ctx, cur.ID, semester, classB.ID, subjectID, otherID, effective); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.SaveLessonDay(ctx, cur.ID, semester, weekday, []LessonPeriod{{Number: 1, StartsAt: "07:00", EndsAt: "07:40"}, {Number: 2, StartsAt: "07:40", EndsAt: "08:20"}}); err != nil {
+	if err = s.SaveLessonDay(ctx, cur.ID, semester, weekday, []LessonPeriod{{Number: 1, StartsAt: "00:00", EndsAt: "00:40"}, {Number: 2, StartsAt: "00:40", EndsAt: "01:20"}}); err != nil {
 		t.Fatal(err)
 	}
 	makeRevision := func(on time.Time) (int64, int64) {
@@ -602,11 +619,11 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 		t.Fatalf("historical occurrence did not retain the revision effective on its WIB date: revision=%d entry=%d want=%d/%d error=%v", occurrenceRevision, occurrenceEntry, baseRevision, baseEntry, err)
 	}
 	versionAfterPublish, err := s.TeachingJournalVersionDetail(ctx, teacher.ID, results[0].ID, 1)
-	if err != nil || len(versionAfterPublish.Periods) != 2 || versionAfterPublish.Periods[0].StartsAt != "07:00:00" {
+	if err != nil || len(versionAfterPublish.Periods) != 2 || versionAfterPublish.Periods[0].StartsAt != "00:00:00" {
 		t.Fatalf("publishing a new timetable revision changed a saved journal snapshot: %#v %v", versionAfterPublish, err)
 	}
 	finalSnapshotAfterPublish, err := s.TeachingJournalVersionDetail(ctx, teacher.ID, results[0].ID, 4)
-	if err != nil || len(finalSnapshotAfterPublish.Periods) != 2 || finalSnapshotAfterPublish.Periods[0].StartsAt != "07:00:00" {
+	if err != nil || len(finalSnapshotAfterPublish.Periods) != 2 || finalSnapshotAfterPublish.Periods[0].StartsAt != "00:00:00" {
 		t.Fatalf("publishing a new timetable revision changed the Final correction snapshot: %#v %v", finalSnapshotAfterPublish, err)
 	}
 	var nextRevisionStart string
@@ -702,7 +719,7 @@ func TestTeachingJournalCutoverLineageAndVersionTransactionsIntegration(t *testi
 	go func() {
 		defer wg.Done()
 		<-start
-		_, concurrentCheckOutErr = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckOut, OccurredAt: date.Format("2006-01-02") + "T00:02", Reason: "Checkout sintetis konkurensi", IdempotencyKey: concurrentCheckOutKey})
+		_, concurrentCheckOutErr = s.RecordTeacherAttendanceManual(ctx, teacher.ID, TeacherAttendanceManualInput{TeacherID: teacherID, Action: TeacherCheckOut, OccurredAt: date.Format("2006-01-02") + "T00:01", Reason: "Checkout sintetis konkurensi", IdempotencyKey: concurrentCheckOutKey})
 	}()
 	close(start)
 	wg.Wait()
