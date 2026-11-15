@@ -1,6 +1,8 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **CP10-15 (15 November 2026):** implementasi Final normal massal selesai dan menunggu review independen; belum UAT atau CLOSED. Migration aditif 00049 untuk identitas batch hanya diterapkan pada TEST (49/49); DEV/UAT terpasang 48/49. Regression terfokus dan full integration serial race PASS. Visual browser belum diuji. CP10-16 belum dimulai.
+> **CP10-15 final gate (15 November 2026):** review, UAT manual dan audit database PASS; backup DEV tervalidasi, migration 00049 membawa TEST/UAT/DEV ke 49/49 tanpa perubahan baris atau schema lama. Smoke test tanpa login PASS; pengujian terautentikasi DEV belum dilakukan. Suite integrasi serial race dan regresi terfokus PASS. CP10-15 FINAL GATE SIAP VERIFIKASI SUPERVISOR, belum CLOSED; CP10-16 belum dimulai.
+
+> **CP10-15 — catatan implementasi awal (15 November 2026):** implementasi Final normal massal selesai dan saat itu menunggu review independen; belum UAT atau CLOSED. Migration aditif 00049 saat itu hanya diterapkan pada TEST (49/49); DEV/UAT terpasang 48/49. Regression terfokus dan full integration serial race PASS. Visual browser saat itu belum diuji. CP10-16 belum dimulai.
 
 > **Status penutupan sebelumnya (15 November 2026):** CP10-01 sampai CP10-14 CLOSED sesuai supervisor; CP10-14 FINAL GATE PASS berdasarkan `44510d0490598a8c3bd7ea8690586fb1180c3c3e`. Saat penutupan, TEST, UAT dan DEV 48/48 serta CP10-15 belum dimulai.
 
