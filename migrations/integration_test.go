@@ -57,8 +57,16 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 48 {
+	if err != nil || current != target || target < 49 {
 		t.Fatal("unexpected migration version")
+	}
+	var batchSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_batches') IS NOT NULL
+		AND to_regclass('app.semester_final_batch_items') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_batches_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_batch_items_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.semester_final_batches'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (recorded_by, submission_key)%')`).Scan(&batchSchema); err != nil || !batchSchema {
+		t.Fatal("missing immutable Final batch tables or submission uniqueness")
 	}
 	var semesterFinalSchema bool
 	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_versions') IS NOT NULL

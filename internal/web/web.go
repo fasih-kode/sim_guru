@@ -153,6 +153,8 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /guru/nilai-asts-asas", a.require("guru_mapel", a.examInitialScores))
 	mux.HandleFunc("POST /guru/nilai-asts-asas", a.require("guru_mapel", a.examInitialScores))
 	mux.HandleFunc("GET /guru/rekomendasi-semester", a.require("guru_mapel", a.semesterRecommendations))
+	mux.HandleFunc("GET /guru/rekomendasi-semester/massal", a.require("guru_mapel", a.semesterFinalBatch))
+	mux.HandleFunc("POST /guru/rekomendasi-semester/massal", a.require("guru_mapel", a.semesterFinalBatch))
 	mux.HandleFunc("GET /guru/rekomendasi-semester/final", a.require("guru_mapel", a.semesterFinalization))
 	mux.HandleFunc("POST /guru/rekomendasi-semester/final", a.require("guru_mapel", a.semesterFinalization))
 	mux.HandleFunc("GET /guru/rekap-nilai-tp", a.require("guru_mapel", a.assessmentTPRecap))

@@ -1,8 +1,17 @@
 # Handover
 
+## CP10-15 — implementasi selesai, menunggu review independen (15 November 2026)
+
+Finalisasi normal massal mengacu FN-05 dan memilih siswa Siap Final secara eksplisit. Pratinjau membaca satu snapshot transaksi; konfirmasi menghitung ulang bukti setiap siswa di bawah kunci mutasi akademik bersama, lalu menyimpan seluruh Final individual atau membatalkan seluruh batch. Nilai Final massal sama dengan rekomendasi resmi; perubahan nilai tetap melalui Final individual. Migration aditif 00049 menyimpan identitas dan hash batch beserta tautan ke Final individual, dengan histori append-only dan perlindungan Down. Belum ada UAT; CP10-15 belum CLOSED dan CP10-16 belum dimulai.
+
+Perubahan meliputi service dan HTTP finalisasi massal, tampilan daftar/pratinjau, pengujian service/HTTP, serta migration `00049_semester_final_batches.sql`. Setiap Final memiliki snapshot dan kunci individual; batch mempunyai submission key dan hash payload sendiri. Replay identik diperiksa setelah otorisasi dan penugasan aktif, payload berbeda konflik, dan transaksi memakai kunci yang sama dengan Final individual.
+
+Pada TEST, regression race terfokus mencakup 32 siswa dengan 20 dipilih, histori Final lama, batas nol, multi-TP, replay, batch tumpang tindih dan kompetisi Final individual, otorisasi, CSRF serta konflik snapshot setelah koreksi. Go test, vet, make check/build, frontend build dan diff check lulus. Suite integrasi lengkap `go test -p 1 -count=1 -race -timeout 45m -tags=integration ./...` PASS pada source akhir; run sebelumnya terputus ketika cluster berhenti dan tidak dihitung sebagai PASS. Setelah cluster PostgreSQL proyek sempat berhenti, cluster dihidupkan dengan skrip resmi; preview DEV/UAT yang sudah tidak aktif tidak direstart. TEST terpasang 49/49, DEV dan UAT terpasang 48/49. Visual browser dan UAT belum dilakukan.
+
+
 ## CP10-14 — CLOSED (15 November 2026)
 
-Supervisor menetapkan **CP10-14 FINAL GATE PASS / CLOSED** pada 15 November 2026 berdasarkan final gate `44510d0490598a8c3bd7ea8690586fb1180c3c3e`. Kronologi, histori Final siswa 217 dan 226, serta batas pemeriksaan di bawah tetap berlaku. CP10-15 belum dimulai.
+Supervisor menetapkan **CP10-14 FINAL GATE PASS / CLOSED** pada 15 November 2026 berdasarkan final gate `44510d0490598a8c3bd7ea8690586fb1180c3c3e`. Kronologi, histori Final siswa 217 dan 226, serta batas pemeriksaan di bawah tetap berlaku. Saat keputusan ini dicatat, CP10-15 belum dimulai.
 
 ## CP10-14 — final gate (15 November 2026)
 

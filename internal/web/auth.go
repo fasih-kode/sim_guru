@@ -94,6 +94,7 @@ type view struct {
 	AssessmentTPRecap                   *assessmentTPRecapView
 	SemesterRecommendations             *semesterRecommendationView
 	SemesterFinalization                *semesterFinalView
+	SemesterFinalBatch                  *semesterFinalBatchView
 	ExamInitial                         *examInitialView
 	ExamOwnedScores                     *examOwnedScoresView
 	ExamCorrection                      *examCorrectionView
