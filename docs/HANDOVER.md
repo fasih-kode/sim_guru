@@ -1,5 +1,9 @@
 # Handover
 
+## CP10-14 — CLOSED (15 November 2026)
+
+Supervisor menetapkan **CP10-14 FINAL GATE PASS / CLOSED** pada 15 November 2026 berdasarkan final gate `44510d0490598a8c3bd7ea8690586fb1180c3c3e`. Kronologi, histori Final siswa 217 dan 226, serta batas pemeriksaan di bawah tetap berlaku. CP10-15 belum dimulai.
+
 ## CP10-14 — final gate (15 November 2026)
 
 Implementasi awal direview NEEDS FIX untuk snapshot multi-TP dan indikator; perbaikan `af8bdcb52ed4446ffca51f32fb8e4dbf49c9711b` mendapat review ulang PASS. Migration 00048 diterapkan pada UAT setelah backup dan fixture A–E disiapkan. UAT awal menemukan siswa 226 tercatat Final 80, bukan 81 dengan alasan, dan Final tambahan pada siswa 217 di konteks CP10-13-A. Forensik read-only menunjukkan hash request konsisten dengan payload yang diproses, tetapi tampilan browser dan sebab tindakan tidak dapat direkonstruksi. Kedua Final tersebut dipertahankan. UAT ulang B2 dan audit database PASS: siswa 231 rekomendasi 80, Final 81 versi 1 dengan alasan `siap final`; hash request cocok. Alasan tersebut memenuhi validasi nonkosong, tetapi kurang informatif secara akademik. Keenam Final UAT siswa 217/225/226/229/230/231 tetap ada dengan nilai 80/80/80/80/60/81. Audit B2 menunjukkan 6.259 baris pra-fixture pada 96 tabel dan 2.885 entri katalog schema tetap identik; tambahan fixture, satu Final B2, sesi dan audit login direkonsiliasi.
