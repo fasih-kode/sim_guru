@@ -1,5 +1,9 @@
 # Handover
 
+## CP10-15 — CLOSED (16 November 2026)
+
+Supervisor menetapkan CP10-15 CLOSED setelah final gate `496585bc35f257c288461a85d5306f61e90d02fe`. Kronologi UAT, audit, integritas historis dan keterbatasan di bawah tetap berlaku. CP10-16 belum dimulai pada saat penutupan ini dicatat.
+
 ## CP10-15 — FINAL GATE PASS, menunggu supervisor (15 November 2026)
 
 Supervisor mengizinkan final gate setelah review kode, UAT manual dan audit database PASS. Backup DEV `/home/fasih/.local/share/sim-guru/backups/cp10-15-dev-20261115-a4ZEXp/sim_guru_dev.dump`, direktori 0700/file 0600, `pg_restore --list` berhasil, SHA-256 `221c8cb3274daed3d186da68077a4041a2478ec45678dde3b644ed43a90fef6d`. Backup mencakup 96 tabel/3.938 baris; fingerprint `b5fe0033253315dfcda74dad8fc3250dbe20b75d7d2464cc363219a10e5e8f1b`. Sebanyak 2.886 entri katalog schema dicatat, fingerprint `e8234254dd432a53818eb50ff069bab8eb41234e6438285455aa9ee080943c30`.
