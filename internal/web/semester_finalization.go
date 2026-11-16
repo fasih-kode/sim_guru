@@ -128,7 +128,12 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 			page(status, message)
 			return
 		}
-		http.Redirect(w, r, data.URL+"&saved=1", http.StatusSeeOther)
+		if historical {
+			q := url.Values{"result": {values.Get("action")}, "submission": {data.SubmissionKey}}
+			http.Redirect(w, r, data.URL+"&"+q.Encode(), http.StatusSeeOther)
+		} else {
+			http.Redirect(w, r, data.URL+"&saved=1", http.StatusSeeOther)
+		}
 		return
 	}
 	data.Preview, err = loadPreview()
@@ -150,7 +155,23 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	if r.URL.Query().Get("saved") == "1" && data.Preview.Finalized {
+	if historical {
+		action, key := r.URL.Query().Get("result"), r.URL.Query().Get("submission")
+		found, resultErr := a.options.Academics.SemesterFinalReviewResult(r.Context(), actor, semesterID, classID, subjectID, studentID, action, key)
+		if resultErr != nil {
+			a.academicFailure(w, resultErr)
+			return
+		}
+		if found {
+			message := "Nilai Final versi baru berhasil disimpan."
+			if action == "retain" {
+				message = "Keputusan mempertahankan Nilai Final lama berhasil dicatat."
+			}
+			a.render(w, r, "page", http.StatusOK, view{Page: "semester-finalization", Title: "Pratinjau Final Nilai Semester", Message: message, SemesterFinalization: data})
+			return
+		}
+	}
+	if !historical && r.URL.Query().Get("saved") == "1" && data.Preview.Finalized {
 		a.render(w, r, "page", http.StatusOK, view{Page: "semester-finalization", Title: "Pratinjau Final Nilai Semester", Message: "Final Nilai Semester berhasil disimpan.", SemesterFinalization: data})
 		return
 	}

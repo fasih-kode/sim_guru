@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-17 — hotfix notifikasi hasil koreksi Final (16 November 2026)
+
+Supervisor menerima implementasi inti `da18d8380eeebf59485dcd56a11436a10b4673d5` dan meminta perbaikan sebelum UAT: tindakan koreksi/konfirmasi ulang dan tindakan mempertahankan sebelumnya sama-sama menampilkan pesan Final tersimpan. Redirect 303 kini membawa identitas tindakan dan kunci pengiriman; pembacaan server memeriksa kepemilikan Final serta bukti yang sesuai pada versi Final baru atau audit retention sebelum menampilkan pesan sukses yang berbeda. Parameter GET tanpa bukti, kunci Final awal, atau kunci untuk tindakan lain tidak menampilkan keberhasilan palsu. Jalur Final awal, aturan bisnis, histori dan migration 00051 tidak berubah.
+
+Regression HTTP terpilih dengan race pada TEST PASS: revisi 80→85 dan retention menghasilkan pesan masing-masing, retention tidak mengubah versi/nilai maupun menghapus Perlu Ditinjau, parameter palsu dan alasan kosong ditolak, snapshot basi 409, replay aman, bukan pemilik 403. Regression HTTP Final normal dan pengecualian, `go test -count=1 ./...`, `make check` termasuk `go vet`, `make build`, dan `git diff --check` PASS. Full integration suite tidak dijalankan; visual browser belum diulang. TEST 51/51, UAT/DEV terpasang 50/51; UAT baca-saja tetap 31 Final dan batch 20 item, kedua database scratch audit dipertahankan. Tidak ada UAT atau final gate CP10-17; menunggu review independen hotfix.
+
 ## CP10-17 — implementasi koreksi Final, menunggu review (16 November 2026)
 
 CP10-16 CLOSED; CP10-17 menerapkan koreksi dan konfirmasi ulang Final individual dengan alasan wajib, expected version, token snapshot, submission key dan request hash di bawah kunci mutasi akademik. Versi baru append-only dihitung berdasarkan bukti terkini: normal jika lengkap, pengecualian jika memenuhi syarat, dan tidak diterbitkan jika bukti Sumatif berbobot positif tidak tersedia. Guru dapat mencatat keputusan mempertahankan Final lama dengan alasan tanpa membuat versi baru atau menghapus penanda Perlu Ditinjau. Migration aditif 00051 menambah audit keputusan append-only beserta snapshot, hash, aktor, alasan dan kunci idempotensi; Down menolak penghapusan histori. Migration hanya diterapkan ke TEST.

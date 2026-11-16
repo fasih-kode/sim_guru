@@ -33,6 +33,36 @@ func semesterFinalOwned(ctx context.Context, tx *sql.Tx, teacher, semester, clas
 	return allowed, err
 }
 
+// SemesterFinalReviewResult memeriksa bukti tindakan milik guru untuk notifikasi.
+func (s *Store) SemesterFinalReviewResult(ctx context.Context, actor, semester, class, subject, student int64, action, key string) (bool, error) {
+	if !validSubmissionUUID(key) || (action != "revision" && action != "retain") {
+		return false, nil
+	}
+	tx, err := s.reader(ctx, actor, "guru_mapel")
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	teacher, err := learningObjectiveTeacherID(ctx, tx, actor)
+	if err != nil {
+		return false, err
+	}
+	owned, err := semesterFinalOwned(ctx, tx, teacher, semester, class, subject, student)
+	if err != nil {
+		return false, err
+	}
+	if !owned {
+		return false, ErrForbidden
+	}
+	var found bool
+	if action == "revision" {
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4 AND teacher_id=$5 AND recorded_by=$6 AND submission_key=$7::uuid AND version>1)`, semester, class, subject, student, teacher, actor, key).Scan(&found)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.semester_final_retentions r JOIN app.semester_final_versions v ON v.id=r.final_version_id WHERE v.semester_id=$1 AND v.class_id=$2 AND v.subject_id=$3 AND v.student_id=$4 AND v.teacher_id=$5 AND r.recorded_by=$6 AND r.submission_key=$7::uuid)`, semester, class, subject, student, teacher, actor, key).Scan(&found)
+	}
+	return found, err
+}
+
 func semesterFinalVersions(ctx context.Context, tx *sql.Tx, semester, class, subject, student int64) ([]SemesterFinalVersion, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT v.version,v.final_score::text,v.final_type,coalesce(v.recommendation_score::text,''),v.reason,u.display_name,to_char(v.recorded_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS'),v.snapshot FROM app.semester_final_versions v JOIN app.users u ON u.id=v.recorded_by WHERE v.semester_id=$1 AND v.class_id=$2 AND v.subject_id=$3 AND v.student_id=$4 ORDER BY v.version DESC`, semester, class, subject, student)
 	if err != nil {
