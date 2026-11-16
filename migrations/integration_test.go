@@ -57,8 +57,14 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 50 {
+	if err != nil || current != target || target < 51 {
 		t.Fatal("unexpected migration version")
+	}
+	var retentionSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_retentions') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.semester_final_retentions'::regclass AND tgname='semester_final_retentions_append_only' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.semester_final_retentions'::regclass AND contype='u')`).Scan(&retentionSchema); err != nil || !retentionSchema {
+		t.Fatal("missing immutable Final retention audit")
 	}
 	var exceptionSchema bool
 	if err = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='semester_final_versions' AND column_name='final_type' AND is_nullable='NO')

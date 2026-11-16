@@ -41,6 +41,7 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 		a.academicFailure(w, academic.ValidationError("Siswa tidak valid."))
 		return
 	}
+	historical := values.Get("history") == "1"
 	contexts, err := a.options.Academics.LearningObjectiveContexts(r.Context(), actor)
 	if err != nil {
 		a.academicFailure(w, err)
@@ -49,10 +50,26 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 	data := &semesterFinalView{}
 	data.URL = semesterFinalURL(semesterID, classID, subjectID, studentID)
 	data.ReturnURL = "/guru/rekomendasi-semester?context=" + url.QueryEscape(fmt.Sprintf("%d:%d:%d", semesterID, classID, subjectID))
-	for _, item := range contexts {
-		if item.SemesterID == semesterID && item.ClassID == classID && item.SubjectID == subjectID {
-			data.Selected = item
-			break
+	if historical {
+		data.URL += "&history=1"
+		data.ReturnURL = "/guru/rekomendasi-semester"
+		owned, loadErr := a.options.Academics.OwnedSemesterFinals(r.Context(), actor)
+		if loadErr != nil {
+			a.academicFailure(w, loadErr)
+			return
+		}
+		for _, item := range owned {
+			if item.SemesterID == semesterID && item.ClassID == classID && item.SubjectID == subjectID && item.StudentID == studentID {
+				data.Selected = academic.LearningObjectiveContext{SemesterID: item.SemesterID, ClassID: item.ClassID, SubjectID: item.SubjectID, SemesterName: item.SemesterName, ClassName: item.ClassName, SubjectName: item.SubjectName}
+				break
+			}
+		}
+	} else {
+		for _, item := range contexts {
+			if item.SemesterID == semesterID && item.ClassID == classID && item.SubjectID == subjectID {
+				data.Selected = item
+				break
+			}
 		}
 	}
 	if data.Selected.SemesterID == 0 {
@@ -61,6 +78,12 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 	}
 	page := func(status int, message string) {
 		a.render(w, r, "page", status, view{Page: "semester-finalization", Title: "Pratinjau Final Nilai Semester", Error: message, SemesterFinalization: data})
+	}
+	loadPreview := func() (academic.SemesterFinalPreview, error) {
+		if historical {
+			return a.options.Academics.SemesterFinalHistoricalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
+		}
+		return a.options.Academics.SemesterFinalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
 	}
 	if r.Method == http.MethodPost {
 		data.Score = values.Get("final_score")
@@ -72,7 +95,14 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 			parseErr = academic.ValidationError("Nilai Final harus berupa bilangan bulat 0–100.")
 		}
 		if parseErr == nil {
-			if data.Exception {
+			if historical {
+				version, versionErr := strconv.ParseInt(values.Get("expected_version"), 10, 64)
+				if versionErr != nil {
+					parseErr = academic.ValidationError("Versi Final tidak valid.")
+				} else {
+					parseErr = a.options.Academics.ReviewSemesterFinal(r.Context(), actor, semesterID, classID, subjectID, studentID, version, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey, values.Get("action"))
+				}
+			} else if data.Exception {
 				parseErr = a.options.Academics.FinalizeSemesterException(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
 			} else {
 				parseErr = a.options.Academics.FinalizeSemesterNormal(r.Context(), actor, semesterID, classID, subjectID, studentID, score, data.Reason, values.Get("snapshot_token"), data.SubmissionKey)
@@ -88,7 +118,7 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 				http.Error(w, message, status)
 				return
 			}
-			data.Preview, err = a.options.Academics.SemesterFinalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
+			data.Preview, err = loadPreview()
 			if err != nil {
 				code, denied := academicError(err)
 				http.Error(w, denied, code)
@@ -101,15 +131,18 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, data.URL+"&saved=1", http.StatusSeeOther)
 		return
 	}
-	data.Preview, err = a.options.Academics.SemesterFinalPreview(r.Context(), actor, semesterID, classID, subjectID, studentID)
+	data.Preview, err = loadPreview()
 	if err != nil {
 		a.academicFailure(w, err)
 		return
 	}
 	data.Exception = data.Preview.CanFinalizeException
-	if data.Preview.CanFinalize || data.Exception {
+	if data.Preview.CanFinalize || data.Exception || historical {
 		if data.Preview.CanFinalize {
 			data.Score = data.Preview.Student.Recommendation
+		}
+		if historical {
+			data.Score = data.Preview.FinalValue
 		}
 		data.SubmissionKey, err = newFinalSubmissionKey()
 		if err != nil {

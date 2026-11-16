@@ -61,6 +61,11 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 }
 
 func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool) (AssessmentTPRecap, error) {
+	return s.assessmentTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, includeEmptyRoster, 0)
+}
+
+// studentID membatasi pembacaan historis hanya pada pemilik Final yang sah.
+func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool, studentID int64) (AssessmentTPRecap, error) {
 	var err error
 	if err = s.authorize(ctx, tx, actor, "guru_mapel"); err != nil {
 		return AssessmentTPRecap{}, err
@@ -73,6 +78,12 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 	if err != nil {
 		return AssessmentTPRecap{}, err
 	}
+	if studentID > 0 {
+		allowed, err = semesterFinalOwned(ctx, tx, teacherID, semesterID, classID, subjectID, studentID)
+		if err != nil {
+			return AssessmentTPRecap{}, err
+		}
+	}
 	if !allowed {
 		return AssessmentTPRecap{}, ErrForbidden
 	}
@@ -84,9 +95,9 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 		FROM app.semesters sm
 		JOIN app.school_years y ON y.id=sm.school_year_id
 		JOIN app.classes c ON c.id=$2 AND c.school_year_id=sm.school_year_id
-		JOIN app.subjects s ON s.id=$3 AND s.active
+		JOIN app.subjects s ON s.id=$3 AND ($4::boolean OR s.active)
 		JOIN app.semester_calendars cal ON cal.semester_id=sm.id
-		WHERE sm.id=$1`, semesterID, classID, subjectID).Scan(
+		WHERE sm.id=$1`, semesterID, classID, subjectID, studentID > 0).Scan(
 		&schoolYearID, &out.Context.SemesterName, &out.Context.ClassName, &out.Context.SubjectName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AssessmentTPRecap{}, ErrNotFound
@@ -205,7 +216,7 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 			FROM candidates cand
 			JOIN app.student_placements p ON p.id=cand.placement_id
 			JOIN app.students st ON st.id=p.student_id
-			WHERE app.student_placement_class_at(cand.placement_id,cand.on_date)=$3
+			WHERE app.student_placement_class_at(cand.placement_id,cand.on_date)=$3 AND ($5::bigint=0 OR p.student_id=$5)
 		)
 		SELECT st.student_id, st.name, st.nis,
 		       lo.id, lo.definition,
@@ -245,7 +256,7 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 			WHERE r.initial_score_id=sc.id
 		) remedial ON true
 		ORDER BY st.name,st.student_id,lo.id,a.activity_date,a.id`,
-		semesterID, schoolYearID, classID, subjectID)
+		semesterID, schoolYearID, classID, subjectID, studentID)
 	if err != nil {
 		return AssessmentTPRecap{}, err
 	}

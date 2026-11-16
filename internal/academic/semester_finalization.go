@@ -30,6 +30,9 @@ type SemesterFinalPreview struct {
 	HistoricalStudent              SemesterRecommendationStudent
 	HistoricalWeights              AssessmentWeights
 	RecordedBy, RecordedAt, Reason string
+	History                        []SemesterFinalVersion
+	Retentions                     []SemesterFinalRetention
+	HistoricalAccess               bool
 }
 
 type semesterFinalSnapshot struct {
@@ -119,6 +122,15 @@ func mustJSON(v any) json.RawMessage {
 // SemesterFinalPreview membaca rekomendasi dan semua bukti dalam snapshot yang
 // konsisten; pembacaan ulang ini juga menandai Final lama yang dasarnya berubah.
 func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, classID, subjectID, studentID int64) (SemesterFinalPreview, error) {
+	return s.semesterFinalPreview(ctx, actor, semesterID, classID, subjectID, studentID, false)
+}
+
+// SemesterFinalHistoricalPreview hanya membaca siswa yang Final-nya dimiliki guru.
+func (s *Store) SemesterFinalHistoricalPreview(ctx context.Context, actor, semesterID, classID, subjectID, studentID int64) (SemesterFinalPreview, error) {
+	return s.semesterFinalPreview(ctx, actor, semesterID, classID, subjectID, studentID, true)
+}
+
+func (s *Store) semesterFinalPreview(ctx context.Context, actor, semesterID, classID, subjectID, studentID int64, historical bool) (SemesterFinalPreview, error) {
 	var out SemesterFinalPreview
 	if semesterID < 1 || classID < 1 || subjectID < 1 || studentID < 1 {
 		return out, ValidationError("Pilih konteks siswa yang valid.")
@@ -128,7 +140,12 @@ func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, cla
 		return out, err
 	}
 	defer tx.Rollback()
-	result, err := s.semesterRecommendationsTx(ctx, tx, actor, semesterID, classID, subjectID)
+	var result SemesterRecommendation
+	if historical {
+		result, err = s.semesterRecommendationsStudentTx(ctx, tx, actor, semesterID, classID, subjectID, studentID)
+	} else {
+		result, err = s.semesterRecommendationsTx(ctx, tx, actor, semesterID, classID, subjectID)
+	}
 	if err != nil {
 		return out, err
 	}
@@ -143,6 +160,7 @@ func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, cla
 		return out, ErrNotFound
 	}
 	out = SemesterFinalPreview{SemesterID: semesterID, ClassID: classID, SubjectID: subjectID, Student: *student, Weights: result.Weights}
+	out.HistoricalAccess = historical
 	_, hash, err := semesterFinalInputSnapshot(ctx, tx, semesterID, classID, subjectID, *student)
 	if err != nil {
 		return out, err
@@ -182,6 +200,16 @@ func (s *Store) SemesterFinalPreview(ctx context.Context, actor, semesterID, cla
 	}
 	out.CanFinalize = !out.Finalized && result.Weights.Configured && student.Status == "Siap Final" && student.Recommendation != ""
 	out.CanFinalizeException = !out.Finalized && student.ExceptionEligible
+	if historical {
+		out.History, err = semesterFinalVersions(ctx, tx, semesterID, classID, subjectID, studentID)
+		if err != nil {
+			return out, err
+		}
+		out.Retentions, err = semesterFinalRetentions(ctx, tx, semesterID, classID, subjectID, studentID)
+		if err != nil {
+			return out, err
+		}
+	}
 	return out, nil
 }
 

@@ -59,6 +59,7 @@ type semesterRecommendationView struct {
 	Selected    academic.LearningObjectiveContext
 	SelectedSet bool
 	Result      *academic.SemesterRecommendation
+	OwnedFinals []academic.OwnedSemesterFinal
 }
 
 func (a *application) semesterRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +75,11 @@ func (a *application) semesterRecommendations(w http.ResponseWriter, r *http.Req
 		return
 	}
 	data.Contexts = contexts
+	data.OwnedFinals, err = a.options.Academics.OwnedSemesterFinals(r.Context(), actor)
+	if err != nil {
+		a.academicFailure(w, err)
+		return
+	}
 	semesterID, classID, subjectID, selected, err := learningObjectiveSelection(r)
 	if err != nil {
 		code, msg := academicError(err)

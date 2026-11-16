@@ -9,6 +9,7 @@
   <button type="submit" class="button-secondary">Lihat Rekomendasi</button>
  </form>{{else}}<p class="mt-3 text-sm">Belum ada penugasan resmi yang berlaku.</p>{{end}}
 </section>
+{{if .SemesterRecommendations.OwnedFinals}}<section class="panel mb-5 max-w-5xl"><h2 class="text-lg font-semibold">Final Milik Saya</h2><p class="mt-2 text-sm text-gray-600">Riwayat Final yang Anda tetapkan tetap dapat ditinjau setelah penugasan berakhir.</p><div class="mt-3 divide-y divide-gray-200">{{range .SemesterRecommendations.OwnedFinals}}<div class="flex flex-wrap items-center justify-between gap-3 py-3"><div><p class="font-medium">{{.StudentName}}</p><p class="text-sm text-gray-600">{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</p></div><a class="button-secondary" href="/guru/rekomendasi-semester/final?context={{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}&amp;student_id={{.StudentID}}&amp;history=1">Tinjau Final</a></div>{{end}}</div></section>{{end}}
 {{if .SemesterRecommendations.SelectedSet}}
 <section class="panel max-w-5xl">
  <h2 class="text-lg font-semibold">{{.SemesterRecommendations.Selected.ClassName}} · {{.SemesterRecommendations.Selected.SubjectName}}</h2>

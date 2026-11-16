@@ -58,9 +58,22 @@ func (s *Store) SemesterRecommendations(ctx context.Context, actor, semesterID, 
 }
 
 func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64) (SemesterRecommendation, error) {
-	recap, err := s.assessmentTPRecap(ctx, tx, actor, semesterID, classID, subjectID, true)
+	return s.semesterRecommendationsStudentTx(ctx, tx, actor, semesterID, classID, subjectID, 0)
+}
+
+func (s *Store) semesterRecommendationsStudentTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID int64) (SemesterRecommendation, error) {
+	recap, err := s.assessmentTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, true, studentID)
 	if err != nil {
 		return SemesterRecommendation{}, err
+	}
+	// Pemilik historis tetap dapat mempertahankan Final ketika penempatan
+	// terbaru tidak lagi menyediakan roster yang dapat dihitung.
+	if studentID > 0 && len(recap.Students) == 0 {
+		var name, nis string
+		if err = tx.QueryRowContext(ctx, `SELECT name,coalesce(nis,'') FROM app.students WHERE id=$1`, studentID).Scan(&name, &nis); err != nil {
+			return SemesterRecommendation{}, err
+		}
+		recap.Students = append(recap.Students, AssessmentTPRecapStudent{ID: fmtID(studentID), Name: name, NIS: nis})
 	}
 	out := SemesterRecommendation{Context: recap.Context, UnknownPlacementCount: recap.UnknownPlacementCount, OutOfCalendarActivityCount: recap.OutOfCalendarActivityCount}
 	out.Weights.SemesterID = semesterID
@@ -80,8 +93,8 @@ func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor
  FROM app.exam_initial_scores e
  LEFT JOIN LATERAL (SELECT after_score FROM app.exam_score_corrections WHERE initial_score_id=e.id ORDER BY version DESC LIMIT 1) c ON true
  LEFT JOIN LATERAL (SELECT max(score) AS best FROM app.exam_score_remedials WHERE initial_score_id=e.id) r ON true
- WHERE e.semester_id=$1 AND e.subject_id=$2 AND EXISTS (SELECT 1 FROM app.student_placements p WHERE p.id=e.placement_id AND p.student_id=e.student_id AND p.starts_on IS NOT NULL AND p.starts_on<=e.exam_date AND app.student_placement_class_at(p.id,e.exam_date)=e.class_id)
- ORDER BY e.id`, semesterID, subjectID)
+ WHERE e.semester_id=$1 AND e.subject_id=$2 AND ($3::bigint=0 OR e.student_id=$3) AND EXISTS (SELECT 1 FROM app.student_placements p WHERE p.id=e.placement_id AND p.student_id=e.student_id AND p.starts_on IS NOT NULL AND p.starts_on<=e.exam_date AND app.student_placement_class_at(p.id,e.exam_date)=e.class_id)
+ ORDER BY e.id`, semesterID, subjectID, studentID)
 	if err != nil {
 		return out, err
 	}

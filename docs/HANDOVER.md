@@ -1,5 +1,15 @@
 # Handover
 
+## CP10-17 — implementasi koreksi Final, menunggu review (16 November 2026)
+
+CP10-16 CLOSED; CP10-17 menerapkan koreksi dan konfirmasi ulang Final individual dengan alasan wajib, expected version, token snapshot, submission key dan request hash di bawah kunci mutasi akademik. Versi baru append-only dihitung berdasarkan bukti terkini: normal jika lengkap, pengecualian jika memenuhi syarat, dan tidak diterbitkan jika bukti Sumatif berbobot positif tidak tersedia. Guru dapat mencatat keputusan mempertahankan Final lama dengan alasan tanpa membuat versi baru atau menghapus penanda Perlu Ditinjau. Migration aditif 00051 menambah audit keputusan append-only beserta snapshot, hash, aktor, alasan dan kunci idempotensi; Down menolak penghapusan histori. Migration hanya diterapkan ke TEST.
+
+Kepemilikan diperiksa server berdasarkan identitas guru aktif dan pemilik Final terbaru pada konteks serta siswa yang tepat; pemilik historis tetap dapat meninjau dan mengoreksi meskipun penugasan berakhir. Pembacaan historis dibatasi ke siswa pemilik, tidak memberikan akses pembuatan Final awal atau pengambilalihan pengampu baru. Halaman Final existing menampilkan perbandingan snapshot, histori setiap versi dan keputusan mempertahankan. Transfer hak antara guru asal dan tujuan pada kasus perpindahan siswa tidak diimplementasikan secara spekulatif dan tetap memerlukan mekanisme/keputusan tersendiri.
+
+Tes TEST terfokus dengan race PASS untuk koreksi 80→85, konfirmasi nilai sama, pemilik setelah pergantian pengampu, penolakan lintas pemilik dan akun nonaktif, konflik versi/snapshot, replay, konkurensi, perubahan sumber, transisi normal/pengecualian, nilai 0/100, histori immutable dan keputusan mempertahankan. Regression HTTP Final historis, normal, pengecualian, massal, CSRF dan konflik PASS; tes migration terfokus PASS. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build`, `git diff --check` PASS. Full integration suite tidak dijalankan sesuai larangan. Pemeriksaan browser desktop/ponsel belum dilakukan; UAT belum diizinkan.
+
+TEST 51/51; UAT dan DEV tetap terpasang 50/51 tanpa migration atau mutasi oleh pekerjaan ini. UAT tetap 31 Final dan batch CP10-15 20 item; dua scratch audit tetap ada. Preview DEV/UAT tidak dijalankan pada sesi implementasi. Status **CP10-17 IMPLEMENTASI SELESAI — MENUNGGU REVIEW INDEPENDEN**, belum UAT atau CLOSED; CP10-18 belum dimulai.
+
 ## CP10-16 — CLOSED (16 November 2026)
 
 Supervisor menetapkan CP10-16 **FINAL GATE PASS / CLOSED** berdasarkan commit final gate `409c26e4f259dad8606225f54294b56a91f0cbf1` dan keputusan pada Draft PR #1. Bukti final gate mencatat TEST/UAT/DEV 50/50, 31 Final UAT tetap utuh termasuk tiga Final pengecualian, dan batch CP10-15 tetap 20 item. Database scratch audit dipertahankan. Login DEV terautentikasi belum diuji; full integration suite tidak dijalankan ulang sesuai instruksi Product Owner. Kronologi implementasi, UAT delegasi, audit, hotfix, backup, migration dan final gate berikut tetap berlaku. CP10-17 belum dimulai.
