@@ -1,6 +1,8 @@
 # ROADMAP IMPLEMENTASI SIM-GURU v1.0
 
-> **CP10-16 (16 November 2026):** Final pengecualian individual selesai untuk review independen; migration 00050 hanya pada TEST 50/50, DEV/UAT terpasang 49/50. Regression terarah dan full integration serial race PASS setelah perbaikan fixture Jurnal Mengajar yang bergantung pada batas hari WIB. Visual browser dan UAT belum dilakukan; CP10-17 belum dimulai.
+> **CP10-16 final gate (16 November 2026):** review implementasi dan hotfix notifikasi PASS; UAT sintetis didelegasikan Product Owner dan audit database PASS. Backup DEV tervalidasi dan migration 00050 membawa TEST/UAT/DEV ke 50/50 tanpa mengubah data historis. UAT tetap 31 Final dan batch 20 item; smoke preview PASS, login DEV terautentikasi belum diuji. Regresi terfokus dan pemeriksaan build PASS; full integration tidak dijalankan ulang sesuai instruksi. **Siap verifikasi supervisor, belum CLOSED**; CP10-17 belum dimulai.
+
+> **CP10-16 catatan implementasi awal (16 November 2026):** Final pengecualian individual selesai untuk review independen; saat itu migration 00050 hanya pada TEST 50/50 dan DEV/UAT terpasang 49/50. Regression terarah dan full integration serial race PASS setelah perbaikan fixture Jurnal Mengajar yang bergantung pada batas hari WIB. Visual browser dan UAT belum dilakukan pada tahap tersebut.
 
 > **CP10-15 CLOSED (16 November 2026):** ditetapkan supervisor berdasarkan final gate `496585bc35f257c288461a85d5306f61e90d02fe`; seluruh bukti dan keterbatasan historis di bawah tetap berlaku. CP10-16 belum dimulai pada saat penutupan ini dicatat.
 
