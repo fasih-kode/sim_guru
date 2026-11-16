@@ -45,12 +45,12 @@
     <h3 class="mb-3 text-base font-semibold text-gray-900">TP yang sudah dibuat</h3>
     <div class="table-surface">
       <table class="app-table">
-        <thead><tr><th>No.</th><th>Tujuan Pembelajaran</th><th>Dibuat pada (WIB)</th></tr></thead>
+        <thead><tr><th>No.</th><th>Tujuan Pembelajaran</th><th>Dibuat pada (WIB)</th><th>Aksi</th></tr></thead>
         <tbody>
           {{range $i,$objective := .LearningObjectives.Objectives}}
-          <tr><td>{{rowNumber 1 $i}}</td><td class="whitespace-pre-wrap">{{$objective.Definition}}</td><td>{{$objective.CreatedAt}}</td></tr>
+          <tr><td>{{rowNumber 1 $i}}</td><td class="whitespace-pre-wrap">{{$objective.Definition}}</td><td>{{$objective.CreatedAt}}</td><td><div class="flex flex-wrap gap-2"><a class="button-secondary" href="/guru/tujuan-pembelajaran/{{$objective.ID}}/koreksi">Koreksi uraian</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/{{$objective.ID}}/riwayat">Riwayat</a></div></td></tr>
           {{else}}
-          <tr><td colspan="3" class="p-5 text-center text-gray-500">Belum ada TP untuk konteks ini.</td></tr>
+          <tr><td colspan="4" class="p-5 text-center text-gray-500">Belum ada TP untuk konteks ini.</td></tr>
           {{end}}
         </tbody>
       </table>

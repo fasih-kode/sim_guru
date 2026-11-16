@@ -84,6 +84,7 @@ type view struct {
 	LessonAttendance                    *lessonAttendanceView
 	TeachingJournal                     *teachingJournalView
 	LearningObjectives                  *learningObjectivesView
+	LearningObjectiveCorrection         *learningObjectiveCorrectionView
 	TPCriteria                          *tpCriteriaView
 	TPGuidance                          *academic.TPGuidance
 	AssessmentActivities                *assessmentActivitiesView
