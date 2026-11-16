@@ -71,6 +71,9 @@ func TestSemesterFinalExceptionHTTPIntegration(t *testing.T) {
 		t.Fatalf("aksi pengecualian tidak tampil: %d %s", list.Code, list.Body.String())
 	}
 	path := fmt.Sprintf("/guru/rekomendasi-semester/final?context=%s&student_id=%d", url.QueryEscape(cv), f.StudentA)
+	if fake := request("GET", path+"&saved=1", nil, nil, owner); fake.Code != http.StatusOK || strings.Contains(fake.Body.String(), "Final Nilai Semester berhasil disimpan.") || strings.Contains(fake.Body.String(), `app-notification--success`) {
+		t.Fatalf("saved=1 tanpa Final tidak boleh menampilkan sukses: %d %s", fake.Code, fake.Body.String())
+	}
 	page := request("GET", path, nil, nil, owner)
 	if page.Code != 200 || !strings.Contains(page.Body.String(), "Bukti Sumatif sah berbobot positif") || !strings.Contains(page.Body.String(), "Rekomendasi otomatis tidak tersedia") || !strings.Contains(page.Body.String(), "ASTS: 0,00") {
 		t.Fatalf("preview %d %s", page.Code, page.Body.String())
@@ -90,8 +93,8 @@ func TestSemesterFinalExceptionHTTPIntegration(t *testing.T) {
 		t.Fatalf("guru lain %d", w.Code)
 	}
 	form.Set("reason", " ")
-	if w := request("POST", path, form, page.Result().Cookies(), owner); w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("alasan kosong %d", w.Code)
+	if w := request("POST", path, form, page.Result().Cookies(), owner); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), `app-notification--error" data-notification role="alert"`) || strings.Contains(w.Body.String(), `app-notification--success`) {
+		t.Fatalf("alasan kosong harus menampilkan error: %d %s", w.Code, w.Body.String())
 	}
 	form.Set("reason", "Alasan uji")
 	form.Set("final_score", "0.5")
@@ -120,8 +123,12 @@ func TestSemesterFinalExceptionHTTPIntegration(t *testing.T) {
 	form.Set("gorilla.csrf.Token", get("gorilla.csrf.Token"))
 	form.Set("submission_key", get("submission_key"))
 	form.Set("snapshot_token", get("snapshot_token"))
-	if w := request("POST", path, form, page.Result().Cookies(), owner); w.Code != http.StatusSeeOther {
-		t.Fatalf("simpan %d %s", w.Code, w.Body.String())
+	saved := request("POST", path, form, page.Result().Cookies(), owner)
+	if saved.Code != http.StatusSeeOther {
+		t.Fatalf("simpan %d %s", saved.Code, saved.Body.String())
+	}
+	if result := request("GET", saved.Header().Get("Location"), nil, page.Result().Cookies(), owner); result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `app-notification--success`) || strings.Contains(result.Body.String(), `app-notification--error" data-notification role="alert"`) || !strings.Contains(result.Body.String(), "Final Nilai Semester berhasil disimpan.") {
+		t.Fatalf("notifikasi sukses pengecualian: %d %s", result.Code, result.Body.String())
 	}
 	page = request("GET", path, nil, nil, owner)
 	if page.Code != 200 || !strings.Contains(page.Body.String(), "Dengan Pengecualian") || !strings.Contains(page.Body.String(), "Riwayat dan snapshot") || !strings.Contains(page.Body.String(), "Alasan uji") {

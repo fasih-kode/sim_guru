@@ -117,8 +117,8 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	if r.URL.Query().Get("saved") == "1" {
-		page(http.StatusOK, "Final Nilai Semester berhasil disimpan.")
+	if r.URL.Query().Get("saved") == "1" && data.Preview.Finalized {
+		a.render(w, r, "page", http.StatusOK, view{Page: "semester-finalization", Title: "Pratinjau Final Nilai Semester", Message: "Final Nilai Semester berhasil disimpan.", SemesterFinalization: data})
 		return
 	}
 	page(http.StatusOK, "")

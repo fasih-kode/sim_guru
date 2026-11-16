@@ -153,8 +153,12 @@ func TestSemesterFinalizationHTTPPreviewCSRFAndOwnerAuthorizationIntegration(t *
 	}
 	cookies = page.Result().Cookies()
 	form = url.Values{"gorilla.csrf.Token": {token[1]}, "context": {ctxValue}, "student_id": {fmt.Sprint(f.StudentA)}, "snapshot_token": {snapshot[1]}, "submission_key": {key[1]}, "final_score": {"82"}, "reason": {""}}
-	if got := request(http.MethodPost, path, form, cookies, owner); got.Code != http.StatusSeeOther {
-		t.Fatalf("simpan Final: %d %s", got.Code, got.Body.String())
+	saved := request(http.MethodPost, path, form, cookies, owner)
+	if saved.Code != http.StatusSeeOther {
+		t.Fatalf("simpan Final: %d %s", saved.Code, saved.Body.String())
+	}
+	if got := request(http.MethodGet, saved.Header().Get("Location"), nil, cookies, owner); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `app-notification--success`) || strings.Contains(got.Body.String(), `app-notification--error" data-notification role="alert"`) || !strings.Contains(got.Body.String(), "Final Nilai Semester berhasil disimpan.") {
+		t.Fatalf("notifikasi sukses Final normal: %d %s", got.Code, got.Body.String())
 	}
 	if got := request(http.MethodPost, path, form, cookies, owner); got.Code != http.StatusSeeOther {
 		t.Fatalf("retry idempoten: %d %s", got.Code, got.Body.String())
