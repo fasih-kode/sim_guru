@@ -80,13 +80,10 @@ func (a *application) saveRoutineLearningObjectiveCorrection(w http.ResponseWrit
 }
 
 func (a *application) previewLearningObjectiveCorrection(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost && !parseForm(w, r) {
+	if r.Method != http.MethodPost || !parseForm(w, r) {
 		return
 	}
-	values := r.URL.Query()
-	if r.Method == http.MethodPost {
-		values = r.PostForm
-	}
+	values := r.PostForm
 	id, err := pathInt64(r, "id")
 	if err != nil {
 		a.academicFailure(w, academic.ValidationError("Tujuan Pembelajaran tidak valid."))
@@ -97,10 +94,13 @@ func (a *application) previewLearningObjectiveCorrection(w http.ResponseWriter, 
 	if pageErr != nil || page < 1 {
 		page = 1
 	}
+	if parseErr == nil && values.Has("page") && values.Get("snapshot_token") == "" {
+		parseErr = academic.ErrConflict
+	}
 	var preview academic.LearningObjectiveCorrectionPreview
 	if parseErr == nil {
 		preview, parseErr = a.options.Academics.PreviewLearningObjectiveCorrection(r.Context(), principal(r).ID, id, version,
-			values.Get("definition"), values.Get("change_type"), values.Get("reason"), page, values.Get("submission_key"))
+			values.Get("definition"), values.Get("change_type"), values.Get("reason"), page, values.Get("submission_key"), values.Get("snapshot_token"))
 	}
 	if parseErr != nil {
 		state, stateErr := a.options.Academics.LearningObjectiveEdit(r.Context(), principal(r).ID, id)

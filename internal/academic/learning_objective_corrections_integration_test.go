@@ -58,12 +58,27 @@ func TestLearningObjectiveCorrectionRoutineImpactHistoryAndFinalReviewIntegratio
 	if err = s.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "Sumatif TP CP10-18", "sumatif", "2020-01-10", []int64{objectiveID}); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "Formatif TP CP10-18", "formatif", "2020-01-11", []int64{objectiveID}); err != nil {
+		t.Fatal(err)
+	}
+	activityOnlyState, err := s.LearningObjectiveEdit(ctx, f.Teacher, objectiveID)
+	if err != nil || !activityOnlyState.HasActivities || activityOnlyState.HasScores || activityOnlyState.HasFinals || !activityOnlyState.RoutineAllowed {
+		t.Fatalf("relasi kegiatan tanpa nilai tidak mengunci koreksi rutin: %+v %v", activityOnlyState, err)
+	}
+	activityOnlyDefinition := "TP setelah kegiatan ditautkan tetapi belum bernilai"
+	if err = s.CorrectLearningObjectiveRoutine(ctx, f.Teacher, objectiveID, activityOnlyState.Version, activityOnlyDefinition, activityOnlyState.RoutineToken, "00000000-0000-4000-8000-000000001802"); err != nil {
+		t.Fatalf("koreksi rutin saat kegiatan belum bernilai: %v", err)
+	}
 	var activityID int64
-	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, f.Semester, f.Class, f.Subject).Scan(&activityID); err != nil {
+	if err = db.QueryRow(`SELECT id FROM app.assessment_activities WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND name='Sumatif TP CP10-18'`, f.Semester, f.Class, f.Subject).Scan(&activityID); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.SaveAssessmentActivityInitialScores(ctx, f.Teacher, activityID, []AssessmentScoreInput{{StudentID: f.StudentA, ObjectiveID: objectiveID, Value: "80"}, {StudentID: f.StudentB, ObjectiveID: objectiveID, Value: "80"}}); err != nil {
 		t.Fatal(err)
+	}
+	scoredState, err := s.LearningObjectiveEdit(ctx, f.Teacher, objectiveID)
+	if err != nil || scoredState.RoutineAllowed || !scoredState.HasScores {
+		t.Fatalf("setelah nilai, jalur rutin terkunci: %+v %v", scoredState, err)
 	}
 	if err = s.SaveExamInitialScores(ctx, f.Teacher, f.Semester, f.Class, f.Subject, []ExamInitialInput{
 		{StudentID: f.StudentA, Component: "asts", Date: "2020-01-10", Value: "70"}, {StudentID: f.StudentA, Component: "asas", Date: "2020-01-10", Value: "90"},
@@ -106,7 +121,7 @@ func TestLearningObjectiveCorrectionRoutineImpactHistoryAndFinalReviewIntegratio
 		t.Fatalf("dua Final awal: %d", len(originalFinals))
 	}
 	editState, err := s.LearningObjectiveEdit(ctx, f.Teacher, objectiveID)
-	if err != nil || editState.RoutineAllowed || !editState.HasFinals || editState.ScoredStudentCount != 2 || editState.FinalStudentCount != 2 {
+	if err != nil || editState.RoutineAllowed || !editState.HasFinals || editState.Version != 2 || editState.ScoredStudentCount != 2 || editState.FinalStudentCount != 2 {
 		t.Fatalf("status dampak setelah Final: %+v %v", editState, err)
 	}
 	if _, err = s.PreviewLearningObjectiveCorrection(ctx, f.Teacher, objectiveID, editState.Version, "Redaksi tanpa alasan", "redaksi", "", 1, "00000000-0000-4000-8000-000000001819"); err == nil {
@@ -120,7 +135,7 @@ func TestLearningObjectiveCorrectionRoutineImpactHistoryAndFinalReviewIntegratio
 		t.Fatal(err)
 	}
 	p1, err := s.PreviewLearningObjectiveCorrection(ctx, f.Teacher, objectiveID, editState.Version, "Definisi substansi CP10-18", "substansi", "Penyesuaian substansi sesuai kurikulum", 1, "00000000-0000-4000-8000-000000001820")
-	if err != nil || p1.State.ScoredStudentCount != 2 || p1.State.FinalStudentCount != 2 || p1.State.ActivityCount != 1 || len(p1.ImpactedFinals) != 2 {
+	if err != nil || p1.State.ScoredStudentCount != 2 || p1.State.FinalStudentCount != 2 || p1.State.ActivityCount != 2 || len(p1.ImpactedFinals) != 2 {
 		t.Fatalf("pratinjau dampak: %+v %v", p1, err)
 	}
 	pStale, err := s.PreviewLearningObjectiveCorrection(ctx, f.Teacher, objectiveID, editState.Version, "Definisi stale CP10-18", "redaksi", "Perubahan pratinjau kedua", 1, "00000000-0000-4000-8000-000000001821")
@@ -170,7 +185,7 @@ func TestLearningObjectiveCorrectionRoutineImpactHistoryAndFinalReviewIntegratio
 		t.Fatalf("pratinjau basi harus konflik: %v", err)
 	}
 	var revisionCount int
-	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objective_definition_revisions WHERE learning_objective_id=$1`, objectiveID).Scan(&revisionCount); err != nil || revisionCount != 2 {
+	if err = db.QueryRow(`SELECT count(*) FROM app.learning_objective_definition_revisions WHERE learning_objective_id=$1`, objectiveID).Scan(&revisionCount); err != nil || revisionCount != 3 {
 		t.Fatalf("histori tidak parsial/ganda: %d %v", revisionCount, err)
 	}
 	var updated string

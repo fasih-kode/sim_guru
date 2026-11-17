@@ -172,7 +172,9 @@ func readLearningObjectiveEditState(ctx context.Context, tx *sql.Tx, teacherID, 
 		out.Objective.SemesterID, out.Objective.ClassID, out.Objective.SubjectID).Scan(&out.FinalStudentCount); err != nil {
 		return err
 	}
-	out.RoutineAllowed = !out.HasActivities && !out.HasScores && !out.HasFinals
+	// Relasi kegiatan saja belum menjadi bukti nilai atau penguncian struktur.
+	// TP tanpa nilai tetap dapat dikoreksi rutin sampai Final pertama pada konteks.
+	out.RoutineAllowed = !out.HasScores && !out.HasFinals
 	snapshot, err := readLearningObjectiveCorrectionSnapshot(ctx, tx, *out)
 	if err != nil {
 		return err
@@ -187,11 +189,11 @@ func readLearningObjectiveEditState(ctx context.Context, tx *sql.Tx, teacherID, 
 
 // PreviewLearningObjectiveCorrection hanya membaca data; semua dampak dalam
 // token berasal dari snapshot database yang sama.
-func (s *Store) PreviewLearningObjectiveCorrection(ctx context.Context, actor, objectiveID, expectedVersion int64, definition, changeType, reason string, page int, submissionKey string) (LearningObjectiveCorrectionPreview, error) {
-	return s.learningObjectiveCorrectionPreview(ctx, actor, objectiveID, expectedVersion, definition, changeType, reason, page, submissionKey)
+func (s *Store) PreviewLearningObjectiveCorrection(ctx context.Context, actor, objectiveID, expectedVersion int64, definition, changeType, reason string, page int, submissionKey string, expectedSnapshotToken ...string) (LearningObjectiveCorrectionPreview, error) {
+	return s.learningObjectiveCorrectionPreview(ctx, actor, objectiveID, expectedVersion, definition, changeType, reason, page, submissionKey, expectedSnapshotToken...)
 }
 
-func (s *Store) learningObjectiveCorrectionPreview(ctx context.Context, actor, objectiveID, expectedVersion int64, definition, changeType, reason string, page int, submissionKey string) (LearningObjectiveCorrectionPreview, error) {
+func (s *Store) learningObjectiveCorrectionPreview(ctx context.Context, actor, objectiveID, expectedVersion int64, definition, changeType, reason string, page int, submissionKey string, expectedSnapshotToken ...string) (LearningObjectiveCorrectionPreview, error) {
 	var out LearningObjectiveCorrectionPreview
 	definition = strings.TrimSpace(definition)
 	reason = strings.TrimSpace(reason)
@@ -252,6 +254,9 @@ func (s *Store) learningObjectiveCorrectionPreview(ctx context.Context, actor, o
 	out.DefinitionBefore, out.DefinitionAfter = out.State.Objective.Definition, definition
 	out.ChangeType, out.Reason, out.ExpectedVersion = changeType, reason, expectedVersion
 	out.SnapshotToken, out.SubmissionKey = token, submissionKey
+	if len(expectedSnapshotToken) > 0 && expectedSnapshotToken[0] != "" && expectedSnapshotToken[0] != token {
+		return LearningObjectiveCorrectionPreview{}, ErrConflict
+	}
 	out.Page = page
 	out.PageCount = max(1, (out.State.FinalStudentCount+learningObjectiveImpactPageSize-1)/learningObjectiveImpactPageSize)
 	if page > 1 {
