@@ -140,6 +140,8 @@ func New(check Check, options Options) (http.Handler, error) {
 	mux.HandleFunc("GET /guru/tujuan-pembelajaran", a.require("guru_mapel", a.learningObjectives))
 	mux.HandleFunc("POST /guru/tujuan-pembelajaran", a.require("guru_mapel", a.learningObjectives))
 	mux.HandleFunc("POST /guru/tujuan-pembelajaran/salin", a.require("guru_mapel", a.copyLearningObjective))
+	mux.HandleFunc("GET /guru/tujuan-pembelajaran/historis", a.require("guru_mapel", a.historicalTPPreview))
+	mux.HandleFunc("POST /guru/tujuan-pembelajaran/historis", a.require("guru_mapel", a.historicalTPPreview))
 	mux.HandleFunc("GET /guru/tujuan-pembelajaran/{id}/koreksi", a.require("guru_mapel", a.learningObjectiveCorrection))
 	mux.HandleFunc("POST /guru/tujuan-pembelajaran/{id}/koreksi/rutin", a.require("guru_mapel", a.saveRoutineLearningObjectiveCorrection))
 	mux.HandleFunc("POST /guru/tujuan-pembelajaran/{id}/koreksi/pratinjau", a.require("guru_mapel", a.previewLearningObjectiveCorrection))
