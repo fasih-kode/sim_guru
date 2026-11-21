@@ -27,7 +27,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	}
 	defer tx.Rollback()
 	suffix := testutil.Random(t)[:10]
-	var year, sem, class, other, subject, user, teacher, activity int64
+	var year, sem, class, other, subject, user, teacher, activity, laterActivity int64
 	insertID := func(dest *int64, q string, args ...any) {
 		t.Helper()
 		if e := tx.QueryRow(q, args...).Scan(dest); e != nil {
@@ -54,6 +54,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	var objective int64
 	insertID(&objective, `INSERT INTO app.learning_objectives(school_year_id,semester_id,class_id,subject_id,definition,created_by) VALUES($1,$2,$3,$4,'TP awal',$5) RETURNING id`, year, sem, class, subject, user)
 	insertID(&activity, `INSERT INTO app.assessment_activities(school_year_id,semester_id,class_id,subject_id,teacher_id,name,activity_type,activity_date,created_by) VALUES($1,$2,$3,$4,$5,'Sumatif uji','sumatif','2020-02-01',$6) RETURNING id`, year, sem, class, subject, teacher, user)
+	insertID(&laterActivity, `INSERT INTO app.assessment_activities(school_year_id,semester_id,class_id,subject_id,teacher_id,name,activity_type,activity_date,created_by) VALUES($1,$2,$3,$4,$5,'Sumatif kemudian','sumatif','2020-04-01',$6) RETURNING id`, year, sem, class, subject, teacher, user)
 	exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, activity, objective, year, sem, class, subject)
 	var assignment, revision, entry, lesson, journal int64
 	if err = tx.QueryRow(`SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, sem, class, subject).Scan(&assignment); err != nil {
@@ -65,7 +66,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	// FK versi jurnal ditunda sampai commit; fixture selalu dibatalkan.
 	insertID(&journal, `INSERT INTO app.teaching_journals(logical_lesson_id,meeting_date,semester_id,revision_id,timetable_entry_id,assignment_id,class_id,subject_id,teacher_id,owner_user_id,class_snapshot,subject_snapshot,teacher_snapshot) VALUES($1,'2020-01-10',$2,$3,$4,$5,$6,$7,$8,$9,'Kelas','Mapel','Guru uji') RETURNING id`, lesson, sem, revision, entry, assignment, class, subject, teacher, user)
 	exec(`INSERT INTO app.teaching_journal_versions(journal_id,version_no,state,outcome,material,actor_id,request_key,request_hash) VALUES($1,1,'final','held','Materi fixture',$2,'00000000-0000-4000-8000-000000002058',decode(repeat('00',32),'hex'))`, journal, user)
-	var first, movedOut, late, unknown int64
+	var first, movedOut, late, lateMissing, unknown int64
 	for i := 0; i < 35; i++ {
 		var student, placement int64
 		insertID(&student, `INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2010-01-01','L') RETURNING id`, fmt.Sprintf("CP19 siswa %02d %s", i, suffix))
@@ -80,6 +81,9 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 		}
 		if i == 2 {
 			unknown = student
+		}
+		if i == 24 {
+			lateMissing = student
 		}
 		var starts any = "2020-01-01"
 		if i == 1 || i == 24 {
@@ -356,6 +360,12 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	if !foundUnknown || unknownRecap.Students[0].NHComplete {
 		t.Fatal("penempatan tidak pasti harus tampak dan NH tidak boleh lengkap")
 	}
+	// Simulasi checkpoint kegiatan terpisah: kegiatan baru yang sah terkait TP
+	// disiapkan hanya dalam transaksi TEST ini, tidak menautkan data aplikasi.
+	for _, id := range []int64{objective, historicalID} {
+		exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, laterActivity, id, year, sem, class, subject)
+		exec(`INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,p.id,'2020-04-01',0,$8 FROM app.student_placements p WHERE p.student_id=$7 AND p.school_year_id=$3`, laterActivity, id, year, sem, class, subject, late, user)
+	}
 	allRecap, recapErr := s.assessmentTPRecap(ctx, tx, user, sem, class, subject, true)
 	if recapErr != nil {
 		t.Fatal(recapErr)
@@ -363,15 +373,77 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	if allRecap.UnknownPlacementCount == 0 {
 		t.Fatal("penempatan tanpa tanggal harus diperingatkan")
 	}
+	var laterScored, laterMissing AssessmentTPRecapObjective
+	var lateStudent, missingStudent AssessmentTPRecapStudent
+	var lateFound, missingFound bool
 	for _, student := range allRecap.Students {
-		if student.ID == fmt.Sprint(late) {
+		switch student.ID {
+		case fmt.Sprint(late):
+			lateStudent = student
+			if !student.NHComplete || student.NH != "0,00" {
+				t.Fatalf("NH siswa masuk belakangan: %+v", student)
+			}
 			for _, item := range student.Objectives {
 				if item.ID == fmt.Sprint(historicalID) {
-					t.Fatal("siswa masuk setelah tanggal tidak wajib TP historis")
+					laterScored = item
+					lateFound = true
+				}
+			}
+		case fmt.Sprint(lateMissing):
+			missingStudent = student
+			if student.NHComplete {
+				t.Fatal("nilai kegiatan yang kosong tidak boleh lengkap")
+			}
+			for _, item := range student.Objectives {
+				if item.ID == fmt.Sprint(historicalID) {
+					laterMissing = item
+					missingFound = true
 				}
 			}
 		}
 	}
+	if !lateFound || !laterScored.Complete || laterScored.Average != "0,00" || laterScored.HistoricalApplicability != "bukan anggota" {
+		t.Fatalf("kegiatan baru untuk nonanggota: %+v", laterScored)
+	}
+	if !missingFound || laterMissing.Complete || laterMissing.RequiredCount != 1 || len(laterMissing.Missing) == 0 {
+		t.Fatalf("kegiatan baru belum bernilai: %+v", laterMissing)
+	}
+
+	// Dengan constraint saat ini starts_on NULL membuat kegiatan tidak masuk
+	// roster penilaian. Injeksi status ke bukti DB sah menguji kombinasi
+	// ketidakpastian historis + kegiatan mandiri tanpa melewati constraint DB.
+	// Verifikasi dampak pada NH dengan input kegiatan yang benar-benar dibaca
+	// dari PostgreSQL; hanya label keberlakuan historis disimulasikan.
+	lateStudent.Objectives = append([]AssessmentTPRecapObjective(nil), lateStudent.Objectives...)
+	lateStudent.NH, lateStudent.NHComplete, lateStudent.Missing = "", false, nil
+	for i := range lateStudent.Objectives {
+		if lateStudent.Objectives[i].ID == fmt.Sprint(historicalID) {
+			lateStudent.Objectives[i].HistoricalApplicability = "belum pasti"
+		}
+	}
+	if e := finishAssessmentTPStudent(&lateStudent, "", nil); e != nil || !lateStudent.NHComplete || lateStudent.NH != "0,00" {
+		t.Fatalf("NH dengan kegiatan sah dan sejarah belum pasti: %+v %v", lateStudent, e)
+	}
+	missingStudent.Objectives = append([]AssessmentTPRecapObjective(nil), missingStudent.Objectives...)
+	missingStudent.NH, missingStudent.NHComplete, missingStudent.Missing = "", false, nil
+	for i := range missingStudent.Objectives {
+		if missingStudent.Objectives[i].ID == fmt.Sprint(historicalID) {
+			missingStudent.Objectives[i].HistoricalApplicability = "belum pasti"
+		}
+	}
+	if e := finishAssessmentTPStudent(&missingStudent, "", nil); e != nil || missingStudent.NHComplete || len(missingStudent.Missing) == 0 {
+		t.Fatalf("NH dengan kegiatan kosong: %+v %v", missingStudent, e)
+	}
+	withoutActivity := AssessmentTPRecapStudent{Objectives: []AssessmentTPRecapObjective{{ID: fmt.Sprint(historicalID), HistoricalApplicability: "belum pasti"}}}
+	if e := finishAssessmentTPStudent(&withoutActivity, "", nil); e != nil || withoutActivity.NHComplete || len(withoutActivity.Missing) == 0 || len(withoutActivity.Objectives[0].Missing) == 0 {
+		t.Fatalf("tanpa kegiatan: %+v %v", withoutActivity, e)
+	}
+
+	var preservedFinals int
+	if err = tx.QueryRow(`SELECT count(*) FROM app.semester_final_versions WHERE semester_id=$1 AND student_id IN ($2,$3) AND version=1 AND final_score=80 AND snapshot='{}'::jsonb AND snapshot_sha256=$4`, sem, first, movedOut, hash[:]).Scan(&preservedFinals); err != nil || preservedFinals != 2 {
+		t.Fatalf("snapshot Final lama berubah: %d %v", preservedFinals, err)
+	}
+
 	// Audit tanpa TP tidak dapat dikomit: FK ditunda hanya untuk urutan atomik.
 	exec(`SAVEPOINT incomplete_guard`)
 	var nonexistentID int64

@@ -28,6 +28,7 @@
    {{else if .ExceptionEligible}}
     <a class="button-secondary mt-3 inline-flex" href="/guru/rekomendasi-semester/final?context={{$.SemesterRecommendations.Selected.SemesterID}}:{{$.SemesterRecommendations.Selected.ClassID}}:{{$.SemesterRecommendations.Selected.SubjectID}}&amp;student_id={{.ID}}">Tinjau Final dengan Pengecualian</a>
    {{end}}
+   {{range .Objectives}}{{if eq .HistoricalApplicability "belum pasti"}}<p class="mt-2 text-sm text-amber-800">Keberlakuan historis TP {{.Definition}} belum dapat diverifikasi; kegiatan lain dihitung menurut tanggal pelaksanaannya.</p>{{end}}{{end}}
    {{if .Missing}}<ul class="mt-2 list-disc pl-5 text-sm text-gray-600">{{range .Missing}}<li>{{.}}</li>{{end}}</ul>{{end}}
   </article>{{else}}<p class="p-3 text-sm text-gray-500">Belum ada siswa dengan penempatan yang dapat dipastikan.</p>{{end}}</div></form>
 </section>{{end}}

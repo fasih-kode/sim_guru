@@ -333,71 +333,79 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 		return AssessmentTPRecap{}, err
 	}
 	for i := range out.Students {
-		student := &out.Students[i]
-		// Sumber historis tidak menetapkan kewajiban pada nonanggota; kegiatan
-		// lain yang memang berlaku pada tanggalnya tetap dipertahankan.
-		filtered := student.Objectives[:0]
-		for _, objective := range student.Objectives {
-			if objective.HistoricalApplicability == "bukan anggota" && objective.RequiredCount == 0 {
-				continue
-			}
-			filtered = append(filtered, objective)
-		}
-		student.Objectives = filtered
-		values := make([]*big.Rat, 0, len(student.Objectives))
-		for j := range student.Objectives {
-			objective := &student.Objectives[j]
-			objective.Threshold = defaultThreshold
-			if objective.Threshold != "" {
-				objective.ThresholdSource = "Bawaan"
-			}
-			objectiveID, parseErr := strconv.ParseInt(objective.ID, 10, 64)
-			if parseErr != nil {
-				return AssessmentTPRecap{}, parseErr
-			}
-			if v, ok := criteria[objectiveID]; ok {
-				objective.Threshold = v
-				objective.ThresholdSource = "Pengecualian"
-			}
-			objective.Achievement = "Belum Lengkap"
-			if objective.HistoricalApplicability == "belum pasti" {
-				objective.Missing = append(objective.Missing, "Keberlakuan TP historis belum dapat diverifikasi.")
-				continue
-			}
-			if objective.RequiredCount == 0 {
-				objective.Missing = append(objective.Missing, "Belum ada kegiatan Sumatif yang menjadi kewajiban siswa pada TP ini.")
-				continue
-			}
-			if objective.ScoredCount != objective.RequiredCount {
-				continue
-			}
-			average, averageErr := exactAverage(objective.Activities)
-			if averageErr != nil {
-				return AssessmentTPRecap{}, averageErr
-			}
-			objective.Average = strings.ReplaceAll(average.FloatString(2), ".", ",")
-			objective.AverageExact = average.RatString()
-			objective.Complete = true
-			objective.Achievement = tpAchievement(average, true, objective.Threshold)
-			values = append(values, average)
-		}
-		if len(student.Objectives) > 0 && len(values) == len(student.Objectives) {
-			nh := new(big.Rat)
-			for _, value := range values {
-				nh.Add(nh, value)
-			}
-			nh.Quo(nh, new(big.Rat).SetInt64(int64(len(values))))
-			student.NH, student.NHComplete = strings.ReplaceAll(nh.FloatString(2), ".", ","), true
-		} else {
-			for _, objective := range student.Objectives {
-				if !objective.Complete {
-					student.Missing = append(student.Missing, objective.Definition)
-				}
-			}
-			sort.Strings(student.Missing)
+		if err := finishAssessmentTPStudent(&out.Students[i], defaultThreshold, criteria); err != nil {
+			return AssessmentTPRecap{}, err
 		}
 	}
 	return out, nil
+}
+
+// finishAssessmentTPStudent menjaga perhitungan NH untuk bukti yang berlaku.
+func finishAssessmentTPStudent(student *AssessmentTPRecapStudent, defaultThreshold string, criteria map[int64]string) error {
+	// Sumber historis tidak menetapkan kewajiban pada nonanggota; kegiatan
+	// lain yang memang berlaku pada tanggalnya tetap dipertahankan.
+	filtered := student.Objectives[:0]
+	for _, objective := range student.Objectives {
+		if objective.HistoricalApplicability == "bukan anggota" && objective.RequiredCount == 0 {
+			continue
+		}
+		filtered = append(filtered, objective)
+	}
+	student.Objectives = filtered
+	values := make([]*big.Rat, 0, len(student.Objectives))
+	for j := range student.Objectives {
+		objective := &student.Objectives[j]
+		objective.Threshold = defaultThreshold
+		if objective.Threshold != "" {
+			objective.ThresholdSource = "Bawaan"
+		}
+		objectiveID, parseErr := strconv.ParseInt(objective.ID, 10, 64)
+		if parseErr != nil {
+			return parseErr
+		}
+		if v, ok := criteria[objectiveID]; ok {
+			objective.Threshold, objective.ThresholdSource = v, "Pengecualian"
+		}
+		objective.Achievement = "Belum Lengkap"
+		// Fakta historis tetap belum pasti, tetapi tidak menghalangi kegiatan
+		// lain yang berlaku pada tanggal pelaksanaannya sendiri.
+		if objective.HistoricalApplicability == "belum pasti" && objective.RequiredCount == 0 {
+			objective.Missing = append(objective.Missing, "Keberlakuan TP historis belum dapat diverifikasi.")
+			continue
+		}
+		if objective.RequiredCount == 0 {
+			objective.Missing = append(objective.Missing, "Belum ada kegiatan Sumatif yang menjadi kewajiban siswa pada TP ini.")
+			continue
+		}
+		if objective.ScoredCount != objective.RequiredCount {
+			continue
+		}
+		average, averageErr := exactAverage(objective.Activities)
+		if averageErr != nil {
+			return averageErr
+		}
+		objective.Average = strings.ReplaceAll(average.FloatString(2), ".", ",")
+		objective.AverageExact = average.RatString()
+		objective.Complete = true
+		objective.Achievement = tpAchievement(average, true, objective.Threshold)
+		values = append(values, average)
+	}
+	if len(student.Objectives) > 0 && len(values) == len(student.Objectives) {
+		nh := new(big.Rat)
+		for _, value := range values {
+			nh.Add(nh, value)
+		}
+		nh.Quo(nh, new(big.Rat).SetInt64(int64(len(values))))
+		student.NH, student.NHComplete = strings.ReplaceAll(nh.FloatString(2), ".", ","), true
+	} else {
+		for _, objective := range student.Objectives {
+			if !objective.Complete {
+				student.Missing = append(student.Missing, objective.Definition)
+			}
+		}
+		sort.Strings(student.Missing)
+	}
+	return nil
 }
 
 // exactAverage menjaga presisi rata-rata TP sampai perhitungan NH selesai.
