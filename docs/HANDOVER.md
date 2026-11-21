@@ -1,6 +1,14 @@
 # Handover
 
-## CP10-18 — final gate bersyarat, siap verifikasi supervisor (18 November 2026)
+## CP10-18 — CLOSED (21 November 2026)
+
+Supervisor menetapkan **CP10-18 FINAL GATE PASS — CLOSED** pada review terbaru Draft PR #1 setelah verifikasi HEAD `6c77718a91c8c0dcd1a76a7fb632b9f79ed9d8e1`. Dasarnya: review kode independen PASS pada implementasi `bab05602b498f6e41bf2e74da7af2b25e1a87310`; laporan UAT dan audit CP10-18 diterima; Tahap A read-only merekonsiliasi revisi TP21/TP22 dan mempertahankan seluruh histori lama; Tahap B menerapkan migration 00052 hanya pada DEV setelah backup tervalidasi; Tahap C mengulang audit UAT read-only dan regresi terfokus. Dua commit setelah bukti UAT (`a57d31e93ee6a220ce7b4fb06e270d9fa1d3dbbb`) hanya mengubah HANDOVER dan roadmap; tidak mengubah source aplikasi atau migration.
+
+Batas evidensi yang diterima supervisor: supervisor memeriksa commit, diff, laporan forensik, serta narasi tes di GitHub, tetapi tidak menjalankan SQL/tes lokal atau mengakses backup dan screenshot privat. Karena itu hasil lokal dicatat sebagai dilaporkan Codex, bukan sebagai eksekusi independen supervisor. Login DEV terautentikasi belum diuji karena sesi/kredensial sah tidak tersedia; full integration suite tidak dijalankan sesuai instruksi. Screenshot browser direkam pada viewport yang disetel 1366×768 dan 390×844, sementara berkas tangkapan sedikit lebih kecil; tabel dampak pada ponsel menggunakan scroll horizontal internal. Keterbatasan navigasi `ERR_CACHE_MISS` pada tab lama setelah POST juga tetap dicatat sebagai isu UX, bukan kerusakan data.
+
+Backup, screenshot, manifest checksum, dan database scratch audit privat dipertahankan di lokasi yang dicatat pada bukti di bawah; tidak ada backup atau fixture yang dihapus. CP10-18 CLOSED hanya untuk checkpoint ini. PR #1 tetap OPEN/DRAFT/UNMERGED; keputusan ini bukan izin merge/deploy. CP10-19 belum dimulai dan memerlukan perencanaan/review supervisor tersendiri. Status DEV/UAT/TEST tetap 52/52, tanpa perubahan data dalam penutupan administratif ini.
+
+## CP10-18 — final gate bersyarat, siap verifikasi supervisor (18 November 2026; keputusan berikutnya: CLOSED 21 November)
 
 Tahap A lulus. Audit UAT dilakukan pada transaksi `REPEATABLE READ READ ONLY` dan diakhiri `ROLLBACK`. Backup pra-migration/pra-fixture `/home/fasih/.local/share/sim-guru/backups/cp10-18-uat-20261118-Kq36Sc/sim_guru_ci_test.dump` SHA-256 `38a25dd503d25c377179c272347f923179d8ba490d2c6005e2f44073feb116f9` kembali cocok dan `pg_restore --list` PASS. Histori UAT tetap 55 versi Final, satu retention, dan batch CP10-15 20 item. TP21 dan TP22 masing-masing tepat tiga revisi; semuanya oleh actor 411. Rincian waktu WIB serta hash berikut diverifikasi langsung pada tabel revisi:
 
