@@ -1,5 +1,13 @@
 # Handover
 
+## CP10-19 — FINAL GATE PASS / CLOSED (21 November 2026)
+
+Supervisor menetapkan CP10-19 CLOSED melalui [keputusan pada Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7061186850), berdasarkan review kode `3888e43ef32acc3d2e12381a98abb47a1c793932`, bukti UAT browser dan regresi service/HTTP terfokus, serta rekonsiliasi baca-saja yang didokumentasikan pada commit `36eb9054d3f480381badfe511f4ebfa5c6b5dfc7`. Supervisor meninjau bukti dan tes di GitHub; audit database, screenshot, dan pengujian lokal merupakan laporan Codex yang diterima, bukan pemeriksaan langsung supervisor.
+
+Batas yang diterima: baseline pra-UAT dibaca per tabel dan tidak atomik lintas 100 tabel; beberapa skenario dibuktikan regresi, bukan UAT browser; stale token HTTP alami lintas transaksi belum dibuktikan; provenance arsip manual tidak dapat diverifikasi otomatis. Screenshot mobile menunjukkan nama terbungkus sempit dan scroll horizontal internal untuk audit UX setelah Fase 10. Tiga sampel waktu bukan benchmark; hashing hingga 250 siswa belum diuji beban dan tes HTTP memiliki prasyarat fixture. Full integration suite tidak dijalankan. Seluruh histori, backup, screenshot, dan checksum dipertahankan sebagaimana tercatat pada kronologi di bawah.
+
+Penutupan ini hanya mencakup pratinjau baca-saja bukti dan potensi dampak; tidak menyetujui pembuatan TP historis, transkripsi nilai, perubahan relasi kegiatan atau Final. Bukan penutupan Fase 10, izin checkpoint berikutnya, merge, migration, atau deployment. PR #1 tetap OPEN/DRAFT/UNMERGED.
+
 ## CP10-19 — hotfix review, menunggu review ulang (21 November 2026)
 
 Review supervisor atas commit `8c9c452736f7fffc16b2dff7a6b6fde0c63e7818` menerima dasar implementasi secara prinsip dan meminta dua koreksi sebelum UAT. Pratinjau kini menampilkan total seluruh siswa serta jumlah kandidat anggota, bukan anggota dan belum dapat diverifikasi yang dihitung sebelum pagination; jumlah Final tetap terpisah dan klasifikasi tidak menetapkan kewajiban. Fixture 35 siswa pada empat halaman membuktikan total 35, kandidat 28, bukan anggota 5 dan belum dapat diverifikasi 2 pada seluruh halaman.
