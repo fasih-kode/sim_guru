@@ -113,6 +113,16 @@ func TestHistoricalTPPreviewHTTPReadOnlyIntegration(t *testing.T) {
 		t.Fatal("fingerprint pagination tidak ada")
 	}
 	values.Set("snapshot_token", snapshot[1])
+	values.Set("action", "confirm")
+	values.Set("submission_key", "00000000-0000-4000-8000-000000002055")
+	if denied := request("POST", values, nil, user); denied.Code != 403 {
+		t.Fatalf("konfirmasi tanpa CSRF: %d", denied.Code)
+	}
+	if invalid := request("POST", values, page.Result().Cookies(), user); invalid.Code != 422 {
+		t.Fatalf("konfirmasi tanpa pemeriksaan bukti: %d", invalid.Code)
+	}
+	values.Del("action")
+	values.Del("submission_key")
 	values.Set("page", "2")
 	second := request("POST", values, page.Result().Cookies(), user)
 	if second.Code != 200 || !strings.Contains(second.Body.String(), "Halaman 2 dari") || !strings.Contains(second.Body.String(), "TP historis é") {

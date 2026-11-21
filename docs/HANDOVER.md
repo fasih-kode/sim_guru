@@ -1,5 +1,15 @@
 # Handover
 
+## CP10-20 — implementasi untuk review independen (21 November 2026)
+
+Implementasi sesuai keputusan Product Owner pada [PR #1](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7061655892): konfirmasi TP historis menggunakan pratinjau dan token CP10-19, pemeriksaan sumber serta pernyataan guru yang memeriksa bagian dokumen, metode dan sumber hasil. Service memeriksa guru/penugasan, bukti, tanggal WIB, Final dan fingerprint dalam transaksi berkunci; menyimpan satu TP dan provenance append-only atomik, dengan submission key dan penolakan konflik. Tidak ada transkripsi nilai atau relasi kegiatan lama. Migration 00053 diterapkan hanya pada TEST 53/53; guard database tetap menolak TP rutin setelah Final, sementara jalur khusus mensyaratkan audit yang cocok dalam transaksi yang sama dan FK ditunda. DEV/UAT tidak dimigrasikan.
+
+Rekap TP membedakan anggota, bukan anggota dan penempatan belum pasti menurut tanggal sumber historis; kegiatan pada tanggal lain tetap diperiksa menurut penempatan masing-masing. Pembacaan Final historis milik guru tetap tersedia bila penempatan tidak pasti, tanpa menyatakan NH lengkap. Final dan snapshot tidak diubah; penanda Perlu Ditinjau tetap dihitung dinamis. Konfirmasi memiliki CSRF, POST/redirect/GET, dan hasil yang dibatasi pada pencatat berhak.
+
+Tes PostgreSQL terfokus dengan race pada TEST: pratinjau/konfirmasi, guard rutin, FK audit parsial, append-only, replay identik/berbeda dan konkurensi, token basi setelah perubahan bobot, sumber/aktor asing, siswa masuk belakangan dan pindah sebelum/sesudah tanggal, penempatan tak pasti, NH nol dan positif, serta snapshot Final dan ketiadaan nilai/relasi baru PASS. Tes HTTP terfokus dengan race untuk pratinjau, CSRF/422, penyimpanan 303, hasil pemilik, penolakan guru lain dan replay PASS. Regresi terpilih rekap TP, remedial ujian, kriteria, rekomendasi dan snapshot Final PASS. Tes unit `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check` PASS. Full integration suite tidak dijalankan.
+
+Batas: pemeriksaan visual browser belum dijalankan; UAT belum diizinkan dan belum dilakukan. Arsip manual bergantung pada pemeriksaan manusia yang dicatat, bukan verifikasi otomatis keaslian. Dua skenario UAT yang menunggu izin: A, penambahan satu TP dan audit melalui bukti sah serta peninjauan Final; B, relevansi siswa berpindah/masuk belakangan/penempatan ambigu pada NH nol dan positif. CP10-20 belum UAT/CLOSED dan menunggu review independen; tidak ada CP10-21, merge, atau deployment.
+
 ## CP10-19 — FINAL GATE PASS / CLOSED (21 November 2026)
 
 Supervisor menetapkan CP10-19 CLOSED melalui [keputusan pada Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7061186850), berdasarkan review kode `3888e43ef32acc3d2e12381a98abb47a1c793932`, bukti UAT browser dan regresi service/HTTP terfokus, serta rekonsiliasi baca-saja yang didokumentasikan pada commit `36eb9054d3f480381badfe511f4ebfa5c6b5dfc7`. Supervisor meninjau bukti dan tes di GitHub; audit database, screenshot, dan pengujian lokal merupakan laporan Codex yang diterima, bukan pemeriksaan langsung supervisor.

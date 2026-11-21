@@ -178,7 +178,7 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 			return "teaching-journal", "guru-mapel"
 		}
 		return "", ""
-	case path == "/guru/tujuan-pembelajaran" || path == "/guru/tujuan-pembelajaran/historis" || path == "/guru/kriteria-tp":
+	case path == "/guru/tujuan-pembelajaran" || path == "/guru/tujuan-pembelajaran/historis" || path == "/guru/tujuan-pembelajaran/historis/hasil" || path == "/guru/kriteria-tp":
 		if user != nil && user.HasRole("guru_mapel") {
 			return "learning-objectives", "guru-mapel"
 		}

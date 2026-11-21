@@ -35,6 +35,7 @@ type AssessmentTPRecapObjective struct {
 	Average, AverageExact                   string
 	Threshold, ThresholdSource, Achievement string
 	Complete                                bool
+	HistoricalApplicability                 string `json:",omitempty"`
 	Missing                                 []string
 }
 
@@ -217,9 +218,22 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 			JOIN app.student_placements p ON p.id=cand.placement_id
 			JOIN app.students st ON st.id=p.student_id
 			WHERE app.student_placement_class_at(cand.placement_id,cand.on_date)=$3 AND ($5::bigint=0 OR p.student_id=$5)
+			UNION
+			-- Pembacaan Final historis dibatasi kepemilikan di atas; Final lama
+			-- tetap dapat dibaca meskipun penempatannya tidak dapat dipastikan.
+			SELECT st.id,st.name,coalesce(st.nis,'') FROM app.students st
+			JOIN app.semester_final_versions f ON f.student_id=st.id
+			WHERE $5::bigint>0 AND st.id=$5 AND f.semester_id=$1 AND f.class_id=$3 AND f.subject_id=$4
+			  AND EXISTS (SELECT 1 FROM app.historical_learning_objective_insertions h WHERE h.semester_id=$1 AND h.class_id=$3 AND h.subject_id=$4)
 		)
 		SELECT st.student_id, st.name, st.nis,
 		       lo.id, lo.definition,
+		       CASE WHEN h.learning_objective_id IS NULL THEN ''
+		         WHEN EXISTS (SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$2 AND p.student_id=st.student_id AND p.starts_on IS NULL) THEN 'belum pasti'
+		         WHEN (SELECT count(*) FROM app.student_placements p WHERE p.school_year_id=$2 AND p.student_id=st.student_id AND p.starts_on IS NOT NULL AND p.starts_on<=h.assessment_date AND app.student_placement_class_at(p.id,h.assessment_date) IS NOT NULL)>1 THEN 'belum pasti'
+		         WHEN EXISTS (SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$2 AND p.student_id=st.student_id AND p.starts_on IS NOT NULL AND p.starts_on<=h.assessment_date AND app.student_placement_class_at(p.id,h.assessment_date)=$3) THEN 'anggota'
+		         WHEN EXISTS (SELECT 1 FROM app.student_placements p WHERE p.school_year_id=$2 AND p.student_id=st.student_id) THEN 'bukan anggota'
+		         ELSE 'belum pasti' END AS historical_applicability,
 		       a.id, a.name, a.activity_date::text,
 		       CASE WHEN a.id IS NULL THEN false ELSE a.activity_date<cal.starts_on OR a.activity_date>cal.ends_on END AS out_of_calendar,
 		       CASE WHEN a.id IS NULL THEN false ELSE EXISTS (
@@ -234,6 +248,7 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 		FROM class_students st
 		LEFT JOIN app.learning_objectives lo ON lo.school_year_id=$2 AND lo.semester_id=$1 AND lo.class_id=$3 AND lo.subject_id=$4
 		CROSS JOIN calendar cal
+		LEFT JOIN app.historical_learning_objective_insertions h ON h.learning_objective_id=lo.id
 		LEFT JOIN app.assessment_activity_objectives ao
 		  ON ao.learning_objective_id=lo.id
 		LEFT JOIN app.assessment_activities a
@@ -267,9 +282,10 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 		var objectiveID sql.NullInt64
 		var studentName, nis string
 		var definition sql.NullString
+		var historicalApplicability string
 		var activityID, activityName, activityDate, effective sql.NullString
 		var outOfCalendar, applicable bool
-		if err = rows.Scan(&studentID, &studentName, &nis, &objectiveID, &definition,
+		if err = rows.Scan(&studentID, &studentName, &nis, &objectiveID, &definition, &historicalApplicability,
 			&activityID, &activityName, &activityDate, &outOfCalendar, &applicable, &effective); err != nil {
 			return AssessmentTPRecap{}, err
 		}
@@ -288,7 +304,7 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 		}
 		objectiveIdx := len(student.Objectives) - 1
 		if objectiveIdx < 0 || student.Objectives[objectiveIdx].ID != fmtID(objectiveID.Int64) {
-			student.Objectives = append(student.Objectives, AssessmentTPRecapObjective{ID: fmtID(objectiveID.Int64), Definition: definition.String})
+			student.Objectives = append(student.Objectives, AssessmentTPRecapObjective{ID: fmtID(objectiveID.Int64), Definition: definition.String, HistoricalApplicability: historicalApplicability})
 			objectiveIdx = len(student.Objectives) - 1
 		}
 		objective := &student.Objectives[objectiveIdx]
@@ -318,6 +334,16 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 	}
 	for i := range out.Students {
 		student := &out.Students[i]
+		// Sumber historis tidak menetapkan kewajiban pada nonanggota; kegiatan
+		// lain yang memang berlaku pada tanggalnya tetap dipertahankan.
+		filtered := student.Objectives[:0]
+		for _, objective := range student.Objectives {
+			if objective.HistoricalApplicability == "bukan anggota" && objective.RequiredCount == 0 {
+				continue
+			}
+			filtered = append(filtered, objective)
+		}
+		student.Objectives = filtered
 		values := make([]*big.Rat, 0, len(student.Objectives))
 		for j := range student.Objectives {
 			objective := &student.Objectives[j]
@@ -334,6 +360,10 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 				objective.ThresholdSource = "Pengecualian"
 			}
 			objective.Achievement = "Belum Lengkap"
+			if objective.HistoricalApplicability == "belum pasti" {
+				objective.Missing = append(objective.Missing, "Keberlakuan TP historis belum dapat diverifikasi.")
+				continue
+			}
 			if objective.RequiredCount == 0 {
 				objective.Missing = append(objective.Missing, "Belum ada kegiatan Sumatif yang menjadi kewajiban siswa pada TP ini.")
 				continue

@@ -6,6 +6,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -62,7 +64,8 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	insertID(&lesson, `INSERT INTO app.logical_lessons(semester_id,created_by) VALUES($1,$2) RETURNING id`, sem, user)
 	// FK versi jurnal ditunda sampai commit; fixture selalu dibatalkan.
 	insertID(&journal, `INSERT INTO app.teaching_journals(logical_lesson_id,meeting_date,semester_id,revision_id,timetable_entry_id,assignment_id,class_id,subject_id,teacher_id,owner_user_id,class_snapshot,subject_snapshot,teacher_snapshot) VALUES($1,'2020-01-10',$2,$3,$4,$5,$6,$7,$8,$9,'Kelas','Mapel','Guru uji') RETURNING id`, lesson, sem, revision, entry, assignment, class, subject, teacher, user)
-	var first, movedOut int64
+	exec(`INSERT INTO app.teaching_journal_versions(journal_id,version_no,state,outcome,material,actor_id,request_key,request_hash) VALUES($1,1,'final','held','Materi fixture',$2,'00000000-0000-4000-8000-000000002058',decode(repeat('00',32),'hex'))`, journal, user)
+	var first, movedOut, late, unknown int64
 	for i := 0; i < 35; i++ {
 		var student, placement int64
 		insertID(&student, `INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2010-01-01','L') RETURNING id`, fmt.Sprintf("CP19 siswa %02d %s", i, suffix))
@@ -71,6 +74,12 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 		}
 		if i == 3 {
 			movedOut = student
+		}
+		if i == 1 {
+			late = student
+		}
+		if i == 2 {
+			unknown = student
 		}
 		var starts any = "2020-01-01"
 		if i == 1 || i == 24 {
@@ -216,4 +225,174 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	if after := fingerprint(); after != before {
 		t.Fatal("pratinjau mengubah data akademik atau Final")
 	}
+
+	// Jurnal aplikasi yang final/terlaksana dan Sumatif pemilik dapat dipakai
+	// melalui service tanpa meninggalkan data setelah savepoint dibatalkan.
+	exec(`SAVEPOINT app_source_guard`)
+	appToken, appTokenErr := hex.DecodeString(appPreview.SnapshotToken)
+	if appTokenErr != nil {
+		t.Fatal(appTokenErr)
+	}
+	appInput := HistoricalTPConfirmation{Preview: appReference, Verification: HistoricalTPVerification{LearningSection: "materi", AssessmentSection: "soal", Method: "diperiksa", ResultSource: "daftar nilai", Acknowledged: true}, SnapshotToken: appPreview.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002059"}
+	appPayload, appMarshalErr := json.Marshal(appInput)
+	if appMarshalErr != nil {
+		t.Fatal(appMarshalErr)
+	}
+	appHash := sha256.Sum256(appPayload)
+	if _, appErr := s.confirmHistoricalLearningObjectiveTx(ctx, tx, user, appInput, appToken, appHash); appErr != nil {
+		t.Fatalf("konfirmasi sumber aplikasi: %v", appErr)
+	}
+	exec(`ROLLBACK TO SAVEPOINT app_source_guard`)
+	exec(`SAVEPOINT not_held_guard`)
+	exec(`INSERT INTO app.teaching_journal_versions(journal_id,version_no,state,outcome,not_held_reason,actor_id,request_key,request_hash) VALUES($1,2,'final','not_held','Tidak terlaksana',$2,'00000000-0000-4000-8000-000000002060',decode(repeat('00',32),'hex'))`, journal, user)
+	exec(`UPDATE app.teaching_journals SET current_version_no=2 WHERE id=$1`, journal)
+	notHeldPreview, notHeldErr := s.previewHistoricalTPTx(ctx, tx, user, appReference, 1, "")
+	if notHeldErr != nil {
+		t.Fatal(notHeldErr)
+	}
+	notHeldToken, notHeldDecode := hex.DecodeString(notHeldPreview.SnapshotToken)
+	if notHeldDecode != nil {
+		t.Fatal(notHeldDecode)
+	}
+	appInput.SnapshotToken = notHeldPreview.SnapshotToken
+	if _, notHeldErr = s.confirmHistoricalLearningObjectiveTx(ctx, tx, user, appInput, notHeldToken, appHash); notHeldErr == nil {
+		t.Fatal("jurnal tidak terlaksana tidak membuktikan pembelajaran")
+	}
+	exec(`ROLLBACK TO SAVEPOINT not_held_guard`)
+
+	// Guard database tetap menolak jalur rutin; audit terikat transaksi memberi
+	// jalan khusus tanpa mematikan trigger dan seluruh fixture di-rollback.
+	exec(`SAVEPOINT routine_guard`)
+	_, err = tx.Exec(`INSERT INTO app.learning_objectives(school_year_id,semester_id,class_id,subject_id,definition,created_by) VALUES($1,$2,$3,$4,'TP rutin terlarang',$5)`, year, sem, class, subject, user)
+	if err == nil {
+		t.Fatal("TP rutin setelah Final tidak ditolak")
+	}
+	exec(`ROLLBACK TO SAVEPOINT routine_guard`)
+	in.Assessment.SourceID = fmt.Sprint(activity)
+	confirmation := HistoricalTPConfirmation{Preview: in, Verification: HistoricalTPVerification{LearningSection: "halaman 1", AssessmentSection: "halaman 2", Method: "pemeriksaan arsip", ResultSource: "daftar hasil", Acknowledged: true}, SnapshotToken: p.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002053"}
+	encoded, marshalErr := json.Marshal(confirmation)
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	requestHash := sha256.Sum256(encoded)
+	token, decodeErr := hex.DecodeString(confirmation.SnapshotToken)
+	if decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	historicalID, confirmErr := s.confirmHistoricalLearningObjectiveTx(ctx, tx, user, confirmation, token, requestHash)
+	if confirmErr != nil {
+		t.Fatalf("konfirmasi khusus: %v", confirmErr)
+	}
+	replayID, replayErr := s.confirmHistoricalLearningObjectiveTx(ctx, tx, user, confirmation, token, requestHash)
+	if replayErr != nil || replayID != historicalID {
+		t.Fatalf("replay: %d %v", replayID, replayErr)
+	}
+	changedHash := sha256.Sum256([]byte("permintaan berbeda"))
+	if _, conflict := s.confirmHistoricalLearningObjectiveTx(ctx, tx, user, confirmation, token, changedHash); !errors.Is(conflict, ErrConflict) {
+		t.Fatalf("replay berbeda: %v", conflict)
+	}
+	var auditCount int
+	if err = tx.QueryRow(`SELECT count(*) FROM app.historical_learning_objective_insertions WHERE learning_objective_id=$1`, historicalID).Scan(&auditCount); err != nil || auditCount != 1 {
+		t.Fatalf("audit khusus: %d %v", auditCount, err)
+	}
+	// Keberlakuan TP historis mengikuti penempatan pada tanggal sumber.
+	for _, tc := range []struct {
+		student int64
+		want    bool
+	}{{first, true}, {movedOut, false}} {
+		recap, recapErr := s.assessmentTPRecapForStudent(ctx, tx, user, sem, class, subject, true, tc.student)
+		if recapErr != nil {
+			t.Fatal(recapErr)
+		}
+		found := false
+		for _, student := range recap.Students {
+			for _, item := range student.Objectives {
+				if item.ID == fmt.Sprint(historicalID) {
+					found = true
+					if item.Complete {
+						t.Fatal("TP tanpa nilai tidak boleh lengkap")
+					}
+				}
+			}
+		}
+		if found != tc.want {
+			t.Fatalf("TP historis siswa %d: ditemukan=%v ingin=%v", tc.student, found, tc.want)
+		}
+	}
+	// Siswa yang pindah sesudah tanggal penilaian tetap kandidat TP historis.
+	var beforeMoveID int64
+	if err = tx.QueryRow(`SELECT nextval(pg_get_serial_sequence('app.learning_objectives','id'))`).Scan(&beforeMoveID); err != nil {
+		t.Fatal(err)
+	}
+	exec(`INSERT INTO app.historical_learning_objective_insertions(learning_objective_id,semester_id,class_id,subject_id,actor_id,teacher_id,assessment_date,reason,learning_evidence,assessment_evidence,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,'2020-01-10','fixture','{}','{}','{}','{}',$7,$7,'00000000-0000-4000-8000-000000002054')`, beforeMoveID, sem, class, subject, user, teacher, hash[:])
+	exec(`INSERT INTO app.learning_objectives(id,school_year_id,semester_id,class_id,subject_id,definition,created_by) OVERRIDING SYSTEM VALUE VALUES($1,$2,$3,$4,$5,'TP sebelum pindah',$6)`, beforeMoveID, year, sem, class, subject, user)
+	afterMoveRecap, moveErr := s.assessmentTPRecapForStudent(ctx, tx, user, sem, class, subject, true, movedOut)
+	if moveErr != nil {
+		t.Fatal(moveErr)
+	}
+	foundBeforeMove := false
+	for _, student := range afterMoveRecap.Students {
+		for _, item := range student.Objectives {
+			if item.ID == fmt.Sprint(beforeMoveID) && item.HistoricalApplicability == "anggota" {
+				foundBeforeMove = true
+			}
+		}
+	}
+	if !foundBeforeMove {
+		t.Fatal("siswa yang pindah setelah kegiatan harus tetap relevan")
+	}
+	// Final historis tetap dapat dibaca ketika tanggal mulai tidak diketahui.
+	exec(`INSERT INTO app.semester_final_versions(school_year_id,semester_id,class_id,subject_id,student_id,teacher_id,recorded_by,version,recommendation_score,final_score,snapshot,snapshot_sha256,submission_key,request_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,1,80,80,'{}',$8,'00000000-0000-4000-8000-000000001921',$8)`, year, sem, class, subject, unknown, teacher, user, hash[:])
+	unknownRecap, unknownErr := s.assessmentTPRecapForStudent(ctx, tx, user, sem, class, subject, true, unknown)
+	if unknownErr != nil || len(unknownRecap.Students) != 1 {
+		t.Fatalf("Final dengan penempatan tidak pasti: %+v %v", unknownRecap, unknownErr)
+	}
+	foundUnknown := false
+	for _, item := range unknownRecap.Students[0].Objectives {
+		if item.ID == fmt.Sprint(historicalID) {
+			foundUnknown = item.HistoricalApplicability == "belum pasti" && !item.Complete
+		}
+	}
+	if !foundUnknown || unknownRecap.Students[0].NHComplete {
+		t.Fatal("penempatan tidak pasti harus tampak dan NH tidak boleh lengkap")
+	}
+	allRecap, recapErr := s.assessmentTPRecap(ctx, tx, user, sem, class, subject, true)
+	if recapErr != nil {
+		t.Fatal(recapErr)
+	}
+	if allRecap.UnknownPlacementCount == 0 {
+		t.Fatal("penempatan tanpa tanggal harus diperingatkan")
+	}
+	for _, student := range allRecap.Students {
+		if student.ID == fmt.Sprint(late) {
+			for _, item := range student.Objectives {
+				if item.ID == fmt.Sprint(historicalID) {
+					t.Fatal("siswa masuk setelah tanggal tidak wajib TP historis")
+				}
+			}
+		}
+	}
+	// Audit tanpa TP tidak dapat dikomit: FK ditunda hanya untuk urutan atomik.
+	exec(`SAVEPOINT incomplete_guard`)
+	var nonexistentID int64
+	if err = tx.QueryRow(`SELECT nextval(pg_get_serial_sequence('app.learning_objectives','id'))`).Scan(&nonexistentID); err != nil {
+		t.Fatal(err)
+	}
+	exec(`INSERT INTO app.historical_learning_objective_insertions(learning_objective_id,semester_id,class_id,subject_id,actor_id,teacher_id,assessment_date,reason,learning_evidence,assessment_evidence,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,'2020-01-10','fixture','{}','{}','{}','{}',$7,$7,'00000000-0000-4000-8000-000000002057')`, nonexistentID, sem, class, subject, user, teacher, hash[:])
+	var fkName string
+	if err = tx.QueryRow(`SELECT conname FROM pg_constraint WHERE conrelid='app.historical_learning_objective_insertions'::regclass AND contype='f' AND condeferrable`).Scan(&fkName); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(fmt.Sprintf(`SET CONSTRAINTS %q IMMEDIATE`, fkName)); err == nil {
+		t.Fatal("audit parsial tanpa TP harus ditolak")
+	}
+	exec(`ROLLBACK TO SAVEPOINT incomplete_guard`)
+	if err = tx.QueryRow(`SELECT count(*) FROM app.historical_learning_objective_insertions WHERE learning_objective_id=$1`, nonexistentID).Scan(&auditCount); err != nil || auditCount != 0 {
+		t.Fatalf("audit parsial tertinggal: %d %v", auditCount, err)
+	}
+	exec(`SAVEPOINT append_only_guard`)
+	if _, err = tx.Exec(`UPDATE app.historical_learning_objective_insertions SET reason='ubah' WHERE learning_objective_id=$1`, historicalID); err == nil {
+		t.Fatal("audit harus append-only")
+	}
+	exec(`ROLLBACK TO SAVEPOINT append_only_guard`)
 }
