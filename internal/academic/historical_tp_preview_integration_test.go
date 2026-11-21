@@ -73,10 +73,10 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 			movedOut = student
 		}
 		var starts any = "2020-01-01"
-		if i == 1 {
+		if i == 1 || i == 24 {
 			starts = "2020-03-01"
 		}
-		if i == 2 {
+		if i == 2 || i == 12 {
 			starts = nil
 		}
 		initialClass := class
@@ -84,7 +84,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 			initialClass = other
 		}
 		insertID(&placement, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,$5) RETURNING id`, year, student, initialClass, user, starts)
-		if i == 3 {
+		if i == 3 || i == 33 {
 			exec(`INSERT INTO app.student_class_moves(placement_id,from_class_id,to_class_id,effective_date,reason,actor_id) VALUES($1,$2,$3,'2020-01-15','fixture',$4)`, placement, class, other, user)
 		}
 		if i == 4 {
@@ -118,12 +118,48 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	if p.FinalCount != 2 || p.PageCount != 4 || len(p.Students) != 10 || p.Weights.NH != 0 || p.LearningStatus != "Perlu Verifikasi Manual" || !strings.Contains(p.AssessmentStatus, "Metadata aplikasi cocok") {
 		t.Fatalf("hasil: %+v", p)
 	}
+	if p.StudentCount != 35 || p.MemberCount != 28 || p.NonMemberCount != 5 || p.UnknownCount != 2 {
+		t.Fatalf("jumlah seluruh halaman tidak cocok: total=%d anggota=%d bukan=%d belum=%d", p.StudentCount, p.MemberCount, p.NonMemberCount, p.UnknownCount)
+	}
 	appReference := in
 	appReference.Learning = HistoricalTPReference{Kind: "app", SourceID: fmt.Sprint(journal)}
 	appPreview, e := s.previewHistoricalTPTx(ctx, tx, user, appReference, 1, "")
 	if e != nil || !strings.Contains(appPreview.LearningStatus, "Metadata aplikasi cocok") {
 		t.Fatalf("jurnal aplikasi: %+v %v", appPreview, e)
 	}
+	for _, tc := range []struct {
+		name     string
+		input    HistoricalTPPreviewInput
+		learning bool
+	}{
+		{"tanggal jurnal bertentangan", func() HistoricalTPPreviewInput { v := appReference; v.Learning.Date = "2020-01-11"; return v }(), true},
+		{"guru jurnal bertentangan", func() HistoricalTPPreviewInput { v := appReference; v.Learning.Teacher = "Guru lain"; return v }(), true},
+		{"guru sumatif bertentangan", func() HistoricalTPPreviewInput { v := in; v.Assessment.Teacher = "Guru lain"; return v }(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := s.previewHistoricalTPTx(ctx, tx, user, tc.input, 1, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			status := got.AssessmentStatus
+			if tc.learning {
+				status = got.LearningStatus
+			}
+			if status != "Referensi tidak memadai" {
+				t.Fatalf("metadata bertentangan diterima: %q", status)
+			}
+		})
+	}
+	matching := appReference
+	matching.Learning.Date, matching.Learning.Teacher, matching.Assessment.Teacher = "2020-01-10", " guru uji ", "GURU UJI"
+	if got, err := s.previewHistoricalTPTx(ctx, tx, user, matching, 1, ""); err != nil || !strings.Contains(got.LearningStatus, "Metadata aplikasi cocok") || !strings.Contains(got.AssessmentStatus, "Metadata aplikasi cocok") {
+		t.Fatalf("metadata cocok: %+v %v", got, err)
+	}
+	exec(`UPDATE app.teachers SET name='Guru baru' WHERE id=$1`, teacher)
+	if _, err := s.previewHistoricalTPTx(ctx, tx, user, in, 2, p.SnapshotToken); !errors.Is(err, ErrConflict) {
+		t.Fatalf("perubahan metadata guru harus membatalkan snapshot: %v", err)
+	}
+	exec(`UPDATE app.teachers SET name='Guru uji' WHERE id=$1`, teacher)
 	mismatch := in
 	mismatch.AssessmentDate = "2020-02-02"
 	mismatchPreview, e := s.previewHistoricalTPTx(ctx, tx, user, mismatch, 1, "")
@@ -133,8 +169,14 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	if p.Students[0].Relevance != "Kandidat anggota kelas" || p.Students[1].Relevance != "Bukan anggota kelas pada tanggal penilaian" || p.Students[2].Relevance != "Belum dapat diverifikasi" || p.Students[3].Relevance != "Bukan anggota kelas pada tanggal penilaian" || p.Students[3].FinalVersion != 1 || p.Students[4].Relevance != "Bukan anggota kelas pada tanggal penilaian" {
 		t.Fatalf("klasifikasi: %+v", p.Students[:4])
 	}
-	if _, e = s.previewHistoricalTPTx(ctx, tx, user, in, 2, p.SnapshotToken); e != nil {
-		t.Fatalf("pagination: %v", e)
+	if second, err := s.previewHistoricalTPTx(ctx, tx, user, in, 2, p.SnapshotToken); err != nil || second.StudentCount != 35 || second.MemberCount != 28 || second.NonMemberCount != 5 || second.UnknownCount != 2 {
+		t.Fatalf("pagination dan jumlah seluruh siswa: %+v %v", second, err)
+	}
+	for page := 3; page <= 4; page++ {
+		otherPage, err := s.previewHistoricalTPTx(ctx, tx, user, in, page, p.SnapshotToken)
+		if err != nil || otherPage.StudentCount != 35 || otherPage.MemberCount != 28 || otherPage.NonMemberCount != 5 || otherPage.UnknownCount != 2 || otherPage.FinalCount != 2 {
+			t.Fatalf("ringkasan halaman %d: %+v %v", page, otherPage, err)
+		}
 	}
 	if _, e = s.previewHistoricalTPTx(ctx, tx, user, in, 1, p.SnapshotToken); e != nil {
 		t.Fatalf("pagination kembali: %v", e)

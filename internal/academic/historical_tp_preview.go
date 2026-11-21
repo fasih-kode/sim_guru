@@ -73,13 +73,14 @@ type HistoricalTPPreviewStudent struct {
 }
 
 type HistoricalTPPreview struct {
-	Input                                               HistoricalTPPreviewInput
-	Context                                             LearningObjectiveContext
-	LearningStatus, AssessmentStatus, DateNotice        string
-	Weights                                             AssessmentWeights
-	Students                                            []HistoricalTPPreviewStudent
-	FinalCount, Page, PageCount, PreviousPage, NextPage int
-	SnapshotToken                                       string
+	Input                                                   HistoricalTPPreviewInput
+	Context                                                 LearningObjectiveContext
+	LearningStatus, AssessmentStatus, DateNotice            string
+	Weights                                                 AssessmentWeights
+	Students                                                []HistoricalTPPreviewStudent
+	FinalCount, Page, PageCount, PreviousPage, NextPage     int
+	StudentCount, MemberCount, NonMemberCount, UnknownCount int
+	SnapshotToken                                           string
 }
 
 // PreviewHistoricalTP membaca seluruh data yang digunakan dalam satu snapshot.
@@ -203,6 +204,15 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 		if st.FinalVersion > 0 {
 			out.FinalCount++
 		}
+		out.StudentCount++
+		switch st.Relevance {
+		case "Kandidat anggota kelas":
+			out.MemberCount++
+		case "Bukan anggota kelas pada tanggal penilaian":
+			out.NonMemberCount++
+		default:
+			out.UnknownCount++
+		}
 		if v, ok := current[strconv.FormatInt(st.ID, 10)]; ok {
 			st.NH, st.Status, st.Recommendation = v.NH, v.Status, v.Recommendation
 		}
@@ -305,7 +315,18 @@ func historicalTPReferenceStatus(ctx context.Context, tx *sql.Tx, actor, teacher
 	if err != nil {
 		return "", "", err
 	}
-	if !learning && in.AssessmentDate != "" && date != in.AssessmentDate {
+	// Nama guru merupakan metadata yang ditampilkan dan harus ikut mengikat
+	// fingerprint ketika nama guru pada sumber aplikasi berubah.
+	metadata, err := json.Marshal(struct{ Row, Date, Teacher string }{raw, date, teacherName})
+	if err != nil {
+		return "", "", err
+	}
+	raw = string(metadata)
+	claimedDate := in.AssessmentDate
+	if learning {
+		claimedDate = ref.Date
+	}
+	if (claimedDate != "" && claimedDate != date) || (strings.TrimSpace(ref.Teacher) != "" && !strings.EqualFold(strings.TrimSpace(ref.Teacher), strings.TrimSpace(teacherName))) {
 		return "Referensi tidak memadai", raw, nil
 	}
 	return fmt.Sprintf("Metadata aplikasi cocok (ID %d, tanggal %s, guru %s); hubungan substansi TP dan sumber hasil belum diverifikasi.", id, date, teacherName), raw, nil

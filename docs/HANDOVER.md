@@ -1,5 +1,13 @@
 # Handover
 
+## CP10-19 — hotfix review, menunggu review ulang (21 November 2026)
+
+Review supervisor atas commit `8c9c452736f7fffc16b2dff7a6b6fde0c63e7818` menerima dasar implementasi secara prinsip dan meminta dua koreksi sebelum UAT. Pratinjau kini menampilkan total seluruh siswa serta jumlah kandidat anggota, bukan anggota dan belum dapat diverifikasi yang dihitung sebelum pagination; jumlah Final tetap terpisah dan klasifikasi tidak menetapkan kewajiban. Fixture 35 siswa pada empat halaman membuktikan total 35, kandidat 28, bukan anggota 5 dan belum dapat diverifikasi 2 pada seluruh halaman.
+
+Tanggal dan nama guru yang dinyatakan untuk jurnal aplikasi, serta tanggal dan nama guru kegiatan Sumatif aplikasi, dibandingkan dengan metadata sumber yang berwenang; kontradiksi menghasilkan `Referensi tidak memadai`. Nama guru yang ditampilkan ikut dalam fingerprint sehingga perubahan metadata membuat token pagination basi. Form menjelaskan bahwa identitas dokumen, lokasi arsip dan sumber hasil yang relevan hanya untuk arsip manual; pemeriksaan kepemilikan sumber tetap berlaku. Tidak ada perubahan migration, data DEV/UAT, Final, atau aturan perhitungan.
+
+`TestHistoricalTPPreviewRollbackIntegration` dan `TestHistoricalTPPreviewHTTPReadOnlyIntegration` PASS dengan race pada TEST, termasuk kategori lintas halaman, klaim metadata bertentangan, perubahan nama guru dan pemeriksaan hash data. Tes service menggunakan transaksi fixture yang di-rollback; tes HTTP membaca fixture sintetis TEST existing. `go test -count=1 ./...`, `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check` PASS. Full integration suite, pemeriksaan visual browser dan UAT tidak dijalankan. Ketergantungan tes HTTP pada fixture TEST existing dan biaya hashing per siswa tetap menjadi batas yang perlu diperiksa selama UAT terisolasi. CP10-19 belum UAT/CLOSED dan menunggu review supervisor.
+
 ## CP10-19 — implementasi pratinjau, menunggu review (21 November 2026)
 
 Implementasi terbatas pratinjau TP historis tersedia pada `/guru/tujuan-pembelajaran/historis`. GET hanya memuat form; POST ber-CSRF memanggil service dalam transaksi `REPEATABLE READ READ ONLY`. Service memeriksa akun/identitas guru aktif, role Guru Mapel dan penugasan semester/kelas/mapel yang berlaku, serta mensyaratkan sudah ada Final pada konteks. Tidak ada route penyimpanan TP, nilai, relasi atau Final baru. Guard struktur rutin dan aturan Final existing tidak diubah.
