@@ -1,0 +1,35 @@
+{{define "historical-assessment-link"}}
+{{$v := .HistoricalAssessmentLink}}{{$in := $v.Input}}
+<section class="panel max-w-5xl">
+ <h2 class="text-lg font-semibold">Koreksi relasi Sumatif historis</h2>
+ <p class="mt-2 text-sm text-gray-600">Hubungkan satu TP historis dengan satu kegiatan yang benar-benar menilainya setelah memeriksa dokumen. Nilai dan Final lama tidak diubah.</p>
+ <form method="post" action="/guru/tujuan-pembelajaran/relasi-historis" class="mt-5 space-y-4">{{.CSRF}}
+  <div><label for="link-context">Semester · kelas · mata pelajaran</label><select id="link-context" name="context" required><option value="">Pilih penugasan</option>{{range $v.Contexts}}<option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and (eq .SemesterID $in.SemesterID) (eq .ClassID $in.ClassID) (eq .SubjectID $in.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>{{end}}</select></div>
+  <button type="submit" name="action" value="context" class="button-secondary" formnovalidate>Muat pilihan</button>
+  {{if $v.Context}}
+  <div><label for="link-objective">TP historis</label><select id="link-objective" name="objective" required><option value="">Pilih TP</option>{{range $v.Objectives}}<option value="{{.ID}}" {{if eq .ID $in.ObjectiveID}}selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+  <div><label for="link-activity">Kegiatan Sumatif milik saya</label><select id="link-activity" name="activity" required><option value="">Pilih kegiatan</option>{{range $v.Activities}}<option value="{{.ID}}" {{if eq .ID $in.ActivityID}}selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+  <p class="text-sm text-gray-600">Metadata yang sesuai tidak membuktikan isi dokumen. Periksa bagian yang menunjukkan kegiatan menilai TP ini.</p>
+  <div><label for="link-document">Identitas dokumen sumber</label><input id="link-document" name="document" maxlength="500" value="{{$in.Document}}" required></div>
+  <div><label for="link-archive">Lokasi arsip</label><input id="link-archive" name="archive" maxlength="500" value="{{$in.Archive}}" required></div>
+  <div><label for="link-section">Bagian yang membuktikan hubungan kegiatan dan TP</label><textarea id="link-section" name="section" maxlength="500" required>{{$in.Section}}</textarea></div>
+  <div><label for="link-method">Metode pemeriksaan</label><input id="link-method" name="method" maxlength="500" value="{{$in.Method}}" required></div>
+  <div><label for="link-result">Referensi sumber hasil penilaian</label><input id="link-result" name="result_source" maxlength="500" value="{{$in.ResultSource}}" required></div>
+  <div><label for="link-date-reason">Penjelasan perbedaan tanggal, jika ada</label><textarea id="link-date-reason" name="date_explanation" maxlength="500">{{$in.DateExplanation}}</textarea></div>
+  <div><label for="link-date-proof">Referensi bukti perbedaan tanggal</label><input id="link-date-proof" name="date_evidence" maxlength="500" value="{{$in.DateEvidence}}"></div>
+  <div><label for="link-reason">Alasan koreksi</label><textarea id="link-reason" name="reason" maxlength="500" required>{{$in.Reason}}</textarea></div>
+  <label><input type="checkbox" name="verified" value="yes" {{if $in.Acknowledged}}checked{{end}} required> Saya telah memeriksa substansi sumber dan memahami dampaknya.</label>
+  <button type="submit" name="action" value="preview" class="button-primary">Tinjau dampak</button>
+  {{with $v.Preview}}
+  <div class="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4"><h3 class="font-semibold">Pratinjau dampak</h3>
+   <p>TP: {{.Objective}} · Kegiatan: {{.Activity}}</p><p>Tanggal sumber TP: {{.HistoricalDate}} · Tanggal kegiatan: {{.ActivityDate}}</p>
+   <p>{{.ImpactNotice}}</p><p>Siswa: {{.Impact.StudentCount}} · Kandidat anggota: {{.Impact.MemberCount}} · Bukan anggota: {{.Impact.NonMemberCount}} · Belum dapat diverifikasi: {{.Impact.UnknownCount}} · Final konteks: {{.Impact.FinalCount}}</p>
+   <p>Bobot saat ini: {{if .Impact.Weights.Configured}}NH {{.Impact.Weights.NH}}% · ASTS {{.Impact.Weights.ASTS}}% · ASAS {{.Impact.Weights.ASAS}}%{{else}}Belum diatur{{end}}. Rekomendasi sesudah koreksi belum dapat dihitung.</p>
+   <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Siswa</th><th>Penempatan</th><th>NH saat ini</th><th>Status saat ini</th><th>Potensi sesudah koreksi</th></tr></thead><tbody>{{range .Students}}<tr><td>{{.Current.Name}}</td><td>{{.Current.Relevance}}</td><td>{{.Current.NH}}</td><td>{{.Current.Status}}</td><td>{{.After}}</td></tr>{{end}}</tbody></table></div>
+   <input type="hidden" name="snapshot_token" value="{{.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$v.Submission}}">
+   <div class="flex flex-wrap gap-3">{{if gt .Impact.Page 1}}<button class="button-secondary" name="page" value="{{.Impact.PreviousPage}}">Sebelumnya</button>{{end}}<span>Halaman {{.Impact.Page}} / {{.Impact.PageCount}}</span>{{if lt .Impact.Page .Impact.PageCount}}<button class="button-secondary" name="page" value="{{.Impact.NextPage}}">Berikutnya</button>{{end}}</div>
+   <button type="submit" name="action" value="confirm" class="button-primary">Konfirmasi koreksi relasi</button>
+  </div>{{end}}{{end}}
+ </form>
+</section>{{end}}
+{{define "historical-assessment-link-result"}}<section class="panel"><h2 class="text-lg font-semibold">Koreksi relasi tersimpan</h2><p>Identitas audit: {{.HistoricalAssessmentLink.ResultID}}.</p>{{with .HistoricalAssessmentLink.Preview}}<p>TP: {{.Objective}} · Kegiatan: {{.Activity}}</p><p>Tanggal sumber TP: {{.HistoricalDate}} · Tanggal kegiatan: {{.ActivityDate}}</p>{{end}}<a class="button-secondary" href="/guru/tujuan-pembelajaran/relasi-historis">Kembali</a></section>{{end}}

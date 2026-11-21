@@ -56,6 +56,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	insertID(&activity, `INSERT INTO app.assessment_activities(school_year_id,semester_id,class_id,subject_id,teacher_id,name,activity_type,activity_date,created_by) VALUES($1,$2,$3,$4,$5,'Sumatif uji','sumatif','2020-02-01',$6) RETURNING id`, year, sem, class, subject, teacher, user)
 	insertID(&laterActivity, `INSERT INTO app.assessment_activities(school_year_id,semester_id,class_id,subject_id,teacher_id,name,activity_type,activity_date,created_by) VALUES($1,$2,$3,$4,$5,'Sumatif kemudian','sumatif','2020-04-01',$6) RETURNING id`, year, sem, class, subject, teacher, user)
 	exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, activity, objective, year, sem, class, subject)
+	exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, laterActivity, objective, year, sem, class, subject)
 	var assignment, revision, entry, lesson, journal int64
 	if err = tx.QueryRow(`SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3`, sem, class, subject).Scan(&assignment); err != nil {
 		t.Fatal(err)
@@ -362,8 +363,13 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	}
 	// Simulasi checkpoint kegiatan terpisah: kegiatan baru yang sah terkait TP
 	// disiapkan hanya dalam transaksi TEST ini, tidak menautkan data aplikasi.
+	var provenanceID int64
+	if err = tx.QueryRow(`SELECT id FROM app.historical_learning_objective_insertions WHERE learning_objective_id=$1`, historicalID).Scan(&provenanceID); err != nil {
+		t.Fatal(err)
+	}
+	exec(`INSERT INTO app.historical_assessment_objective_links(activity_id,learning_objective_id,provenance_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,historical_date,reason,evidence,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'2020-04-01','2020-02-01','fixture','{}','{}','{}',$10,$10,'00000000-0000-4000-8000-000000002120')`, laterActivity, historicalID, provenanceID, year, sem, class, subject, teacher, user, hash[:])
+	exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, laterActivity, historicalID, year, sem, class, subject)
 	for _, id := range []int64{objective, historicalID} {
-		exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, laterActivity, id, year, sem, class, subject)
 		exec(`INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,p.id,'2020-04-01',0,$8 FROM app.student_placements p WHERE p.student_id=$7 AND p.school_year_id=$3`, laterActivity, id, year, sem, class, subject, late, user)
 	}
 	allRecap, recapErr := s.assessmentTPRecap(ctx, tx, user, sem, class, subject, true)
