@@ -1,5 +1,11 @@
 # Handover
 
+## CP10-19 — keputusan bisnis FINAL, rancangan menunggu review (21 November 2026)
+
+Product Owner menyetujui empat keputusan K-1–K-4 mengenai bukti TP historis: sumber terlacak wajib membuktikan diajarkan dan dinilai; transkripsi nilai serta pengaitan TP baru ke kegiatan lama di luar CP10-19; relevansi siswa mengikuti tanggal pelaksanaan dan penempatan efektif, dengan ambiguitas belum dapat diverifikasi. Teks keputusan dan sumber persetujuan dicatat dalam [addendum](contracts/ADDENDUM_CP10-19_BUKTI_HISTORIS_2026-11-21.md), tanpa mengubah Kontrak Fase 10 Revisi 2 FINAL.
+
+Addendum juga memuat **usulan** mikro-checkpoint pratinjau baca-saja: pembedaan bukti aplikasi/manual, relevansi siswa, dampak struktural dan batas perhitungan numerik, termasuk NH berbobot 0%. Desain belum disetujui supervisor/Product Owner dan belum diimplementasikan. Pratinjau tidak membuat TP, relasi, nilai atau Final; aktivasi penambahan memerlukan desain dan persetujuan terpisah. Bukti manual yang lengkap tidak otomatis tervalidasi oleh sistem. Tidak ada perubahan kode, migration, database atau fixture pada sinkronisasi ini; full integration suite tidak dijalankan. CP10-18 tetap CLOSED; PR #1 tetap untuk review dan belum merge/deploy.
+
 ## CP10-18 — CLOSED (21 November 2026)
 
 Supervisor menetapkan **CP10-18 FINAL GATE PASS — CLOSED** pada review terbaru Draft PR #1 setelah verifikasi HEAD `6c77718a91c8c0dcd1a76a7fb632b9f79ed9d8e1`. Dasarnya: review kode independen PASS pada implementasi `bab05602b498f6e41bf2e74da7af2b25e1a87310`; laporan UAT dan audit CP10-18 diterima; Tahap A read-only merekonsiliasi revisi TP21/TP22 dan mempertahankan seluruh histori lama; Tahap B menerapkan migration 00052 hanya pada DEV setelah backup tervalidasi; Tahap C mengulang audit UAT read-only dan regresi terfokus. Dua commit setelah bukti UAT (`a57d31e93ee6a220ce7b4fb06e270d9fa1d3dbbb`) hanya mengubah HANDOVER dan roadmap; tidak mengubah source aplikasi atau migration.
