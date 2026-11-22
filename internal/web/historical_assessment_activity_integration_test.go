@@ -71,7 +71,7 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 		}
 		objectiveIDs = append(objectiveIDs, id)
 	}
-	for i := 0; i < 9; i++ {
+	for i := 0; i < 30; i++ {
 		var studentID int64
 		if err := db.QueryRow(`INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2012-01-01','L') RETURNING id`, fmt.Sprintf("Siswa CP22 HTTP %s %02d", testutil.Random(t)[:5], i)).Scan(&studentID); err != nil {
 			t.Fatal(err)
@@ -191,7 +191,7 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	pageTwo.Set("submission_key", submission)
 	pageTwo.Set("action", "preview")
 	pageTwoResponse := request(http.MethodPost, path, pageTwo, cookies, true)
-	if pageTwoResponse.Code != http.StatusOK || !strings.Contains(pageTwoResponse.Body.String(), "Halaman 2 dari 2") || !strings.Contains(pageTwoResponse.Body.String(), `name="source_identity"`) {
+	if pageTwoResponse.Code != http.StatusOK || !strings.Contains(pageTwoResponse.Body.String(), "Halaman 2 dari 4") || !strings.Contains(pageTwoResponse.Body.String(), `name="source_identity"`) {
 		t.Fatalf("pagination HTMX POST: %d", pageTwoResponse.Code)
 	}
 	if strings.Contains(pageTwoResponse.Header().Get("Location"), "source_identity") {
@@ -200,7 +200,7 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	pageOne := cloneHistoricalActivityValues(pageTwo)
 	pageOne.Set("page", "1")
 	pageOneResponse := request(http.MethodPost, path, pageOne, cookies, true)
-	if pageOneResponse.Code != http.StatusOK || !strings.Contains(pageOneResponse.Body.String(), "Halaman 1 dari 2") || !strings.Contains(pageOneResponse.Body.String(), "Semua kandidat siswa") || !strings.Contains(pageOneResponse.Body.String(), "12") {
+	if pageOneResponse.Code != http.StatusOK || !strings.Contains(pageOneResponse.Body.String(), "Halaman 1 dari 4") || !strings.Contains(pageOneResponse.Body.String(), "Semua kandidat siswa") || !strings.Contains(pageOneResponse.Body.String(), "33") {
 		t.Fatalf("pagination HTMX kembali: %d", pageOneResponse.Code)
 	}
 
@@ -273,26 +273,36 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	}
 	loadScores := url.Values{"gorilla.csrf.Token": {csrfToken}, "action": {"load"}, "activity_id": {fmt.Sprint(activityID)}}
 	loadedScores := request(http.MethodPost, historicalScorePath, loadScores, cookies, false)
-	if loadedScores.Code != http.StatusOK || !strings.Contains(loadedScores.Body.String(), "Siswa dan relevansi") || !strings.Contains(loadedScores.Body.String(), "entry_value") || !strings.Contains(loadedScores.Body.String(), "Halaman 1 dari 2") {
+	if loadedScores.Code != http.StatusOK || !strings.Contains(loadedScores.Body.String(), "Siswa dan relevansi") || !strings.Contains(loadedScores.Body.String(), "entry_value") || !strings.Contains(loadedScores.Body.String(), "Halaman 1 dari 4") {
 		t.Fatalf("muat lembar nilai historis: %d", loadedScores.Code)
 	}
 	pageTwoValues := url.Values{"gorilla.csrf.Token": {csrfToken}, "action": {"preview"}, "activity_id": {fmt.Sprint(activityID)}, "page_override": {"2"}, "source_fingerprint": {field(loadedScores.Body.String(), "source_fingerprint")}, "submission_key": {field(loadedScores.Body.String(), "submission_key")}}
 	pageTwoScores := request(http.MethodPost, historicalScorePath, pageTwoValues, cookies, true)
-	if pageTwoScores.Code != http.StatusOK || !strings.Contains(pageTwoScores.Body.String(), "Halaman 2 dari 2") {
+	if pageTwoScores.Code != http.StatusOK || !strings.Contains(pageTwoScores.Body.String(), "Halaman 2 dari 4") {
 		t.Fatalf("pagination nilai historis maju: %d", pageTwoScores.Code)
 	}
 	pageOneValues := cloneHistoricalActivityValues(pageTwoValues)
 	pageOneValues.Set("page_override", "1")
 	pageOneScores := request(http.MethodPost, historicalScorePath, pageOneValues, cookies, true)
-	if pageOneScores.Code != http.StatusOK || !strings.Contains(pageOneScores.Body.String(), "Halaman 1 dari 2") || !strings.Contains(pageOneScores.Body.String(), "Semua siswa teridentifikasi") {
+	if pageOneScores.Code != http.StatusOK || !strings.Contains(pageOneScores.Body.String(), "Halaman 1 dari 4") || !strings.Contains(pageOneScores.Body.String(), "Semua siswa teridentifikasi") {
 		t.Fatalf("pagination nilai historis mundur: %d", pageOneScores.Code)
 	}
 	scoreForm := url.Values{
 		"gorilla.csrf.Token": {csrfToken}, "action": {"preview"}, "activity_id": {fmt.Sprint(activityID)},
 		"reason": {"Transkripsi dari dokumen nilai sintetis"}, "verification": {"Nama siswa, TP, nilai, dan lokasi sumber dicocokkan"}, "acknowledged": {"yes"},
 		"entry_student_id": {fmt.Sprint(f.StudentA)}, "entry_objective_id": {fmt.Sprint(objectiveIDs[0])}, "entry_value": {"0"},
-		"entry_source_kind": {"arsip_manual"}, "entry_source_identity": {"Arsip Sumatif CP10-23 HTTP"}, "entry_source_locator": {"halaman 2, baris 4, siswa A, TP 1"},
+		"entry_source_kind": {"arsip_manual"}, "entry_source_identity": {"Arsip Sumatif CP10-23 HTTP"}, "entry_source_locator": {"halaman 2, baris 4, siswa A, TP 1"}, "entry_source_score": {"0"},
 		"entry_source_result": {"nilai 0 pada kolom TP 1"}, "entry_verification": {"nama dan nomor siswa cocok dengan daftar kelas"},
+	}
+	mismatchedSource := cloneHistoricalActivityValues(scoreForm)
+	mismatchedSource.Set("entry_source_score", "82,50")
+	if rejected := request(http.MethodPost, historicalScorePath, mismatchedSource, cookies, false); rejected.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("nilai sumber yang berbeda tidak ditolak: %d", rejected.Code)
+	}
+	applicationSource := cloneHistoricalActivityValues(scoreForm)
+	applicationSource.Set("entry_source_kind", "aplikasi")
+	if rejected := request(http.MethodPost, historicalScorePath, applicationSource, cookies, false); rejected.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("sumber aplikasi tanpa referensi terverifikasi tidak ditolak: %d", rejected.Code)
 	}
 	invalidScore := cloneHistoricalActivityValues(scoreForm)
 	invalidScore.Set("entry_value", "100.01")
@@ -301,11 +311,21 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	}
 	scoreForm.Set("source_fingerprint", field(loadedScores.Body.String(), "source_fingerprint"))
 	scorePreview := request(http.MethodPost, historicalScorePath, scoreForm, cookies, false)
-	if scorePreview.Code != http.StatusOK || !strings.Contains(scorePreview.Body.String(), "0") || !strings.Contains(scorePreview.Body.String(), "Konfirmasi pencatatan nilai") || !strings.Contains(scorePreview.Body.String(), "setelah nilai terpilih dicatat: Perlu Ditinjau") {
+	if scorePreview.Code != http.StatusOK || !strings.Contains(scorePreview.Body.String(), "Konfirmasi pencatatan nilai") || !strings.Contains(scorePreview.Body.String(), `name="entry_source_score"`) || !strings.Contains(scorePreview.Body.String(), `value="0"`) {
 		t.Fatalf("pratinjau nilai historis: %d %s", scorePreview.Code, scorePreview.Body.String())
 	}
 	if strings.Contains(scorePreview.Header().Get("Location"), "Arsip Sumatif") {
 		t.Fatal("identitas sumber nilai muncul dalam URL")
+	}
+	for _, page := range []string{"2", "1"} {
+		pagedScores := cloneHistoricalActivityValues(scoreForm)
+		pagedScores.Set("action", "preview")
+		pagedScores.Set("page_override", page)
+		pagedScores.Set("source_fingerprint", field(scorePreview.Body.String(), "source_fingerprint"))
+		pagedResponse := request(http.MethodPost, historicalScorePath, pagedScores, cookies, false)
+		if pagedResponse.Code != http.StatusOK || !strings.Contains(pagedResponse.Body.String(), `name="entry_source_score"`) || !strings.Contains(pagedResponse.Body.String(), `value="0"`) || !strings.Contains(pagedResponse.Body.String(), "Semua siswa teridentifikasi") {
+			t.Fatalf("pagination %s kehilangan bukti/nilai dari halaman pertama: %d", page, pagedResponse.Code)
+		}
 	}
 	scoreConfirm := cloneHistoricalActivityValues(scoreForm)
 	scoreConfirm.Set("action", "confirm")
@@ -340,6 +360,7 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	}
 	changedScorePayload := cloneHistoricalActivityValues(scoreConfirm)
 	changedScorePayload.Set("entry_value", "1")
+	changedScorePayload.Set("entry_source_score", "1")
 	if changed := request(http.MethodPost, historicalScorePath, changedScorePayload, cookies, false); changed.Code != http.StatusConflict {
 		t.Fatalf("replay payload berbeda: %d", changed.Code)
 	}

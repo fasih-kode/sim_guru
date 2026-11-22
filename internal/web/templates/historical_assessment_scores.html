@@ -4,7 +4,7 @@
   <div class="mb-4">
     <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Koreksi historis · nilai awal</span>
     <h2 class="mt-3 text-lg font-semibold text-gray-900">Pencatatan Nilai Sumatif Historis</h2>
-    <p class="mt-2 text-sm leading-6 text-gray-600">Gunakan alur ini untuk menyalin nilai awal yang benar-benar didukung dokumen Sumatif lama. Nilai tidak boleh diisi berdasarkan dugaan. Nilai kosong tetap kosong, nilai 0 sah, dan nilai TP lain tidak disalin.</p>
+    <p class="mt-2 text-sm leading-6 text-gray-600">Gunakan alur ini untuk mencatat nilai awal dari arsip Sumatif lama yang diperiksa guru. Nilai sumber terstruktur harus sama dengan nilai yang dicatat. Arsip manual tidak diautentikasi oleh sistem; keasliannya tidak diverifikasi otomatis. Nilai kosong tetap kosong, nilai 0 sah, dan nilai TP lain tidak disalin.</p>
   </div>
   <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
     <p class="font-semibold">Catatan Final historis</p>
@@ -50,7 +50,7 @@
     <input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}">
     <input type="hidden" name="submission_key" value="{{$d.Submission}}">
     {{range $d.HiddenEntries}}
-      <input type="hidden" name="entry_student_id" value="{{.StudentID}}"><input type="hidden" name="entry_objective_id" value="{{.ObjectiveID}}"><input type="hidden" name="entry_value" value="{{.Value}}"><input type="hidden" name="entry_source_kind" value="{{.SourceKind}}"><input type="hidden" name="entry_source_identity" value="{{.SourceIdentity}}"><input type="hidden" name="entry_source_locator" value="{{.SourceLocator}}"><input type="hidden" name="entry_source_result" value="{{.SourceResult}}"><input type="hidden" name="entry_verification" value="{{.Verification}}">
+      <input type="hidden" name="entry_student_id" value="{{.StudentID}}"><input type="hidden" name="entry_objective_id" value="{{.ObjectiveID}}"><input type="hidden" name="entry_value" value="{{.Value}}"><input type="hidden" name="entry_source_kind" value="{{.SourceKind}}"><input type="hidden" name="entry_source_identity" value="{{.SourceIdentity}}"><input type="hidden" name="entry_source_locator" value="{{.SourceLocator}}"><input type="hidden" name="entry_source_score" value="{{.SourceScore}}"><input type="hidden" name="entry_source_result" value="{{.SourceResult}}"><input type="hidden" name="entry_verification" value="{{.Verification}}">
     {{end}}
     <label>Alasan pencatatan
       <textarea name="reason" rows="2" maxlength="500" required>{{$p.Input.Reason}}</textarea>
@@ -60,9 +60,9 @@
     </label>
     <label class="flex items-start gap-3 font-normal"><input class="mt-1" type="checkbox" name="acknowledged" value="yes" {{if $p.Input.Acknowledged}}checked{{end}}><span>Saya telah mencocokkan nama siswa, TP, nilai, identitas sumber, dan lokasi spesifik pada dokumen. Saya memahami nilai kosong tidak disimpan dan nilai Final lama tidak berubah.</span></label>
     <div class="table-surface">
-      <table class="app-table min-w-[1280px]">
+      <table class="app-table min-w-[1440px]">
         <caption class="sr-only">Nilai Sumatif historis berdasarkan siswa dan TP</caption>
-        <thead><tr><th>Siswa dan relevansi</th><th>TP</th><th>Nilai awal</th><th>Jenis sumber</th><th>Identitas sumber</th><th>Lokasi spesifik</th><th>Hasil siswa/TP</th><th>Pemeriksaan</th><th>Keadaan Final/NH</th></tr></thead>
+        <thead><tr><th>Siswa dan relevansi</th><th>TP</th><th>Nilai awal</th><th>Jenis sumber</th><th>Identitas sumber</th><th>Lokasi spesifik</th><th>Nilai pada sumber</th><th>Hasil siswa/TP</th><th>Pemeriksaan</th><th>Keadaan Final/NH</th></tr></thead>
         <tbody>
           {{range $p.Students}}
             {{range .Cells}}
@@ -73,15 +73,16 @@
                 <input type="hidden" name="entry_student_id" value="{{.StudentID}}"><input type="hidden" name="entry_objective_id" value="{{.ObjectiveID}}">
                 {{if .AlreadyRecorded}}<span class="text-amber-800">Sudah tercatat</span><input type="hidden" name="entry_value" value="">{{else}}<input aria-label="Nilai {{.ObjectiveDefinition}}" name="entry_value" inputmode="decimal" placeholder="mis. 82,50" value="{{.Value}}">{{end}}
               </td>
-              <td><select aria-label="Jenis sumber" name="entry_source_kind"><option value="">Pilih</option><option value="arsip_manual" {{if eq .SourceKind "arsip_manual"}}selected{{end}}>Arsip manual</option><option value="aplikasi" {{if eq .SourceKind "aplikasi"}}selected{{end}}>Sumber aplikasi</option></select></td>
+              <td><select aria-label="Jenis sumber" name="entry_source_kind"><option value="">Pilih</option><option value="arsip_manual" {{if eq .SourceKind "arsip_manual"}}selected{{end}}>Arsip manual</option></select><span class="mt-1 block text-xs text-gray-500">Sumber aplikasi belum tersedia untuk verifikasi otomatis.</span></td>
               <td><input aria-label="Identitas sumber" name="entry_source_identity" value="{{.SourceIdentity}}" maxlength="500"></td>
               <td><input aria-label="Lokasi spesifik" name="entry_source_locator" value="{{.SourceLocator}}" maxlength="1000"></td>
+              <td><input aria-label="Nilai pada sumber" name="entry_source_score" inputmode="decimal" placeholder="mis. 82,50" value="{{.SourceScore}}"></td>
               <td><input aria-label="Hasil pada siswa dan TP" name="entry_source_result" value="{{.SourceResult}}" maxlength="500"></td>
               <td><input aria-label="Pemeriksaan sumber" name="entry_verification" value="{{.Verification}}" maxlength="1000"></td>
               <td><span>{{.Relevance}}</span>{{if .FinalVersion}}<div class="mt-1 text-xs text-amber-700">Final versi {{.FinalVersion}} · sebelum: {{if .BeforeNeedsReview}}Perlu Ditinjau{{else}}sesuai snapshot{{end}} · setelah nilai terpilih dicatat: {{if .AfterNeedsReview}}Perlu Ditinjau{{else}}status tidak berubah{{end}}.</div><div class="mt-1 text-xs text-gray-700">NH {{.BeforeNH}} · setelah pencatatan {{.AfterNH}} ({{.AfterStatus}}{{if .AfterRecommendation}}, rekomendasi {{.AfterRecommendation}}{{end}})</div>{{else}}<div class="mt-1 text-xs text-gray-500">NH {{.BeforeNH}} · setelah pencatatan {{.AfterNH}} · {{.AfterStatus}}{{if .AfterRecommendation}}, rekomendasi {{.AfterRecommendation}}{{end}}</div>{{end}}</td>
             </tr>
             {{end}}
-          {{else}}<tr><td colspan="9" class="p-5 text-center text-gray-500">Tidak ada siswa pada halaman ini.</td></tr>{{end}}
+          {{else}}<tr><td colspan="10" class="p-5 text-center text-gray-500">Tidak ada siswa pada halaman ini.</td></tr>{{end}}
         </tbody>
       </table>
     </div>
@@ -104,7 +105,7 @@
 <section class="panel max-w-4xl">
   <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-green-900"><h2 class="text-lg font-semibold">Nilai historis berhasil dicatat</h2><p class="mt-1">Batch {{$r.BatchID}} · Kegiatan {{$r.Activity.ID}} · Dicatat {{$r.RecordedAt}}. Final dan snapshot lama tidak diubah.</p></div>
   <div class="mt-5 rounded-lg border border-gray-200 p-4"><h3 class="font-semibold">{{$r.Activity.Name}}</h3><p class="mt-1 text-sm text-gray-600">{{$r.Activity.Date}} · {{$r.Activity.ClassName}} · {{$r.Activity.SubjectName}}</p></div>
-  <div class="table-surface mt-5"><table class="app-table"><thead><tr><th>Nama siswa</th><th>TP</th><th>Nilai awal tersimpan</th><th>Sumber</th><th>Lokasi</th></tr></thead><tbody>{{range $r.Entries}}<tr><td>{{.StudentName}}</td><td>{{.ObjectiveID}}</td><td>{{.Value}}</td><td>{{.SourceIdentity}}</td><td>{{.SourceLocator}}</td></tr>{{end}}</tbody></table></div>
+  <div class="table-surface mt-5"><table class="app-table"><thead><tr><th>Nama siswa</th><th>TP</th><th>Nilai awal tersimpan</th><th>Nilai pada sumber</th><th>Sumber</th><th>Lokasi</th></tr></thead><tbody>{{range $r.Entries}}<tr><td>{{.StudentName}}</td><td>{{.ObjectiveID}}</td><td>{{.Value}}</td><td>{{.SourceScore}}</td><td>{{.SourceIdentity}}</td><td>{{.SourceLocator}}</td></tr>{{end}}</tbody></table></div>
   <a class="button-secondary mt-5 inline-flex" href="/guru/kegiatan-penilaian">Kembali ke Kegiatan Penilaian</a>
 </section>
 {{end}}

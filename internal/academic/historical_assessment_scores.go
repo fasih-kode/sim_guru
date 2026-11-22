@@ -22,6 +22,7 @@ type HistoricalAssessmentScoreEntry struct {
 	SourceKind             string
 	SourceIdentity         string
 	SourceLocator          string
+	SourceScore            string
 	SourceResult           string
 	Verification           string
 }
@@ -41,13 +42,13 @@ type HistoricalAssessmentScoreActivityChoice struct {
 }
 
 type HistoricalAssessmentScoreCell struct {
-	StudentID, ObjectiveID, PlacementID                                          int64
-	FinalVersion                                                                 int64
-	BeforeNeedsReview, AfterNeedsReview                                          bool
-	StudentName, Relevance, ObjectiveDefinition                                  string
-	BeforeNH, AfterNH, AfterStatus, AfterRecommendation                          string
-	Value, SourceKind, SourceIdentity, SourceLocator, SourceResult, Verification string
-	AlreadyRecorded                                                              bool
+	StudentID, ObjectiveID, PlacementID                                                       int64
+	FinalVersion                                                                              int64
+	BeforeNeedsReview, AfterNeedsReview                                                       bool
+	StudentName, Relevance, ObjectiveDefinition                                               string
+	BeforeNH, AfterNH, AfterStatus, AfterRecommendation                                       string
+	Value, SourceKind, SourceIdentity, SourceLocator, SourceScore, SourceResult, Verification string
+	AlreadyRecorded                                                                           bool
 }
 
 type HistoricalAssessmentScoreStudent struct {
@@ -133,16 +134,20 @@ func validateHistoricalAssessmentScoreInput(in HistoricalAssessmentScoreInput, r
 		if !present {
 			return nil, ValidationError("Entri nilai historis tidak boleh kosong; hapus entri bila tidak dipilih.")
 		}
-		if entry.SourceKind != "arsip_manual" && entry.SourceKind != "aplikasi" {
-			return nil, ValidationError("Pilih sumber arsip manual atau sumber aplikasi.")
+		if entry.SourceKind != "arsip_manual" {
+			return nil, ValidationError("Sumber aplikasi belum tersedia untuk verifikasi otomatis; gunakan arsip manual yang diperiksa guru.")
 		}
 		for _, field := range []struct {
 			value string
 			max   int
-		}{{entry.SourceIdentity, 500}, {entry.SourceLocator, 1000}, {entry.SourceResult, 500}, {entry.Verification, 1000}} {
+		}{{entry.SourceIdentity, 500}, {entry.SourceLocator, 1000}, {entry.SourceScore, 32}, {entry.SourceResult, 500}, {entry.Verification, 1000}} {
 			if !valid(field.value, field.max) || strings.TrimSpace(field.value) == "" {
-				return nil, ValidationError("Setiap nilai memerlukan identitas sumber, lokasi spesifik, hasil per siswa/TP, dan pemeriksaan guru.")
+				return nil, ValidationError("Setiap nilai memerlukan identitas sumber, lokasi siswa–TP yang spesifik, nilai pada sumber, hasil per siswa/TP, dan pemeriksaan guru.")
 			}
+		}
+		sourceScore, sourcePresent, sourceErr := parseInitialScore(entry.SourceScore)
+		if sourceErr != nil || !sourcePresent || sourceScore != value {
+			return nil, ValidationError("Nilai pada sumber harus valid dan sama persis dengan nilai yang akan dicatat.")
 		}
 		loc := canonicalHistoricalActivitySourceIdentity(entry.SourceIdentity) + "\x00" + canonicalHistoricalActivitySourceIdentity(entry.SourceLocator)
 		if locators[loc] {
@@ -296,6 +301,16 @@ func (s *Store) previewHistoricalAssessmentScoresTx(ctx context.Context, tx *sql
 	if err != nil {
 		return out, err
 	}
+	var usedSources string
+	if err = tx.QueryRowContext(ctx, `SELECT coalesce(jsonb_agg(jsonb_build_object(
+		'identity',lower(regexp_replace(btrim(source_identity),'[[:space:]]+',' ','g')),
+		'locator',lower(regexp_replace(btrim(source_locator),'[[:space:]]+',' ','g')),
+		'student_id',student_id,'objective_id',learning_objective_id
+	) ORDER BY id),'[]'::jsonb)::text FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1`, in.ActivityID).Scan(&usedSources); err != nil {
+		return out, err
+	}
+	// Pemakaian lokator oleh batch lain juga bagian dari snapshot sumber.
+	sourceState += usedSources
 	out.Activity.ID = in.ActivityID
 	// Source date may not be in the future; validity is based on WIB.
 	var future bool
@@ -401,6 +416,19 @@ func (s *Store) previewHistoricalAssessmentScoresTx(ctx context.Context, tx *sql
 		if scoreExists {
 			return out, ErrConflict
 		}
+		entry := entryByKey[key]
+		var sourceUsed bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM app.historical_assessment_initial_score_audits
+			WHERE assessment_activity_id=$1
+			  AND lower(regexp_replace(btrim(source_identity),'[[:space:]]+',' ','g'))=lower(regexp_replace(btrim($2),'[[:space:]]+',' ','g'))
+			  AND lower(regexp_replace(btrim(source_locator),'[[:space:]]+',' ','g'))=lower(regexp_replace(btrim($3),'[[:space:]]+',' ','g'))
+		)`, in.ActivityID, entry.SourceIdentity, entry.SourceLocator).Scan(&sourceUsed); err != nil {
+			return out, err
+		}
+		if sourceUsed {
+			return out, ErrConflict
+		}
 	}
 	out.FinalCount = 0
 	for _, r := range all {
@@ -461,6 +489,7 @@ func (s *Store) previewHistoricalAssessmentScoresTx(ctx context.Context, tx *sql
 				cell.SourceKind = e.SourceKind
 				cell.SourceIdentity = e.SourceIdentity
 				cell.SourceLocator = e.SourceLocator
+				cell.SourceScore = e.SourceScore
 				cell.SourceResult = e.SourceResult
 				cell.Verification = e.Verification
 			}
@@ -555,6 +584,11 @@ func projectHistoricalScoreAfter(rec SemesterRecommendation, activityID, student
 	}
 	if student == nil {
 		return "", "Belum dapat diverifikasi", ""
+	}
+	// Siswa yang tidak dipilih harus mempertahankan proyeksi kanonis persis
+	// seperti sebelum batch; jangan menghitung ulang atau mengubah statusnya.
+	if len(selected) == 0 {
+		return student.NH, student.Status, student.Recommendation
 	}
 	complete = len(student.Objectives) > 0
 	for _, objective := range student.Objectives {
@@ -749,7 +783,8 @@ func (s *Store) ConfirmHistoricalAssessmentScores(ctx context.Context, actor int
 		if err != nil {
 			return 0, err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_result,verification) SELECT $1,a.id,a.school_year_id,a.semester_id,a.class_id,a.subject_id,a.teacher_id,$2,a.activity_date,$3,$4,$5,$6,$7,$8,$9,$10,$11 FROM app.assessment_activities a WHERE a.id=$12`, batchID, actor, entry.ObjectiveID, entry.StudentID, placement, value, entry.SourceKind, strings.TrimSpace(entry.SourceIdentity), strings.TrimSpace(entry.SourceLocator), strings.TrimSpace(entry.SourceResult), strings.TrimSpace(entry.Verification), req.Input.ActivityID)
+		// Validasi sebelum transaksi memastikan nilai sumber sama dengan catatan.
+		_, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_score,source_result,verification) SELECT $1,a.id,a.school_year_id,a.semester_id,a.class_id,a.subject_id,a.teacher_id,$2,a.activity_date,$3,$4,$5,$6,$7,$8,$9,$10::numeric,$11,$12 FROM app.assessment_activities a WHERE a.id=$13`, batchID, actor, entry.ObjectiveID, entry.StudentID, placement, value, entry.SourceKind, strings.TrimSpace(entry.SourceIdentity), strings.TrimSpace(entry.SourceLocator), value, strings.TrimSpace(entry.SourceResult), strings.TrimSpace(entry.Verification), req.Input.ActivityID)
 		if err != nil {
 			return 0, dbError(err)
 		}
@@ -790,14 +825,14 @@ func (s *Store) HistoricalAssessmentScoreResult(ctx context.Context, actor, batc
 	if err != nil {
 		return out, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT h.student_id,st.name,h.learning_objective_id,h.score::text,h.source_kind,h.source_identity,h.source_locator,h.source_result,h.verification FROM app.historical_assessment_initial_score_audits h JOIN app.students st ON st.id=h.student_id WHERE h.batch_id=$1 ORDER BY h.student_id,h.learning_objective_id`, batchID)
+	rows, err := tx.QueryContext(ctx, `SELECT h.student_id,st.name,h.learning_objective_id,h.score::text,h.source_kind,h.source_identity,h.source_locator,coalesce(h.source_score::text,''),h.source_result,h.verification FROM app.historical_assessment_initial_score_audits h JOIN app.students st ON st.id=h.student_id WHERE h.batch_id=$1 ORDER BY h.student_id,h.learning_objective_id`, batchID)
 	if err != nil {
 		return out, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var e HistoricalAssessmentScoreEntry
-		if err = rows.Scan(&e.StudentID, &e.StudentName, &e.ObjectiveID, &e.Value, &e.SourceKind, &e.SourceIdentity, &e.SourceLocator, &e.SourceResult, &e.Verification); err != nil {
+		if err = rows.Scan(&e.StudentID, &e.StudentName, &e.ObjectiveID, &e.Value, &e.SourceKind, &e.SourceIdentity, &e.SourceLocator, &e.SourceScore, &e.SourceResult, &e.Verification); err != nil {
 			return out, err
 		}
 		out.Entries = append(out.Entries, e)

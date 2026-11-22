@@ -113,9 +113,10 @@ func historicalAssessmentScoreInput(form url.Values) (academic.HistoricalAssessm
 	students, objectives := form["entry_student_id"], form["entry_objective_id"]
 	values, kinds := form["entry_value"], form["entry_source_kind"]
 	identities, locators := form["entry_source_identity"], form["entry_source_locator"]
+	sourceScores := form["entry_source_score"]
 	results, verifications := form["entry_source_result"], form["entry_verification"]
 	length := len(students)
-	for _, current := range []int{len(objectives), len(values), len(kinds), len(identities), len(locators), len(results), len(verifications)} {
+	for _, current := range []int{len(objectives), len(values), len(kinds), len(identities), len(locators), len(sourceScores), len(results), len(verifications)} {
 		if current != length {
 			return academic.HistoricalAssessmentScoreInput{}, academic.ValidationError("Daftar sel nilai tidak lengkap.")
 		}
@@ -126,7 +127,7 @@ func historicalAssessmentScoreInput(form url.Values) (academic.HistoricalAssessm
 		if e1 != nil || e2 != nil || studentID < 1 || objectiveID < 1 {
 			return academic.HistoricalAssessmentScoreInput{}, academic.ValidationError("Identitas siswa atau TP tidak valid.")
 		}
-		fields := []string{values[i], kinds[i], identities[i], locators[i], results[i], verifications[i]}
+		fields := []string{values[i], kinds[i], identities[i], locators[i], sourceScores[i], results[i], verifications[i]}
 		blank := true
 		for _, field := range fields {
 			if strings.TrimSpace(field) != "" {
@@ -138,7 +139,7 @@ func historicalAssessmentScoreInput(form url.Values) (academic.HistoricalAssessm
 			continue
 		}
 		in.Entries = append(in.Entries, academic.HistoricalAssessmentScoreEntry{
-			StudentID: studentID, ObjectiveID: objectiveID, Value: values[i], SourceKind: kinds[i], SourceIdentity: identities[i], SourceLocator: locators[i], SourceResult: results[i], Verification: verifications[i],
+			StudentID: studentID, ObjectiveID: objectiveID, Value: values[i], SourceKind: kinds[i], SourceIdentity: identities[i], SourceLocator: locators[i], SourceScore: sourceScores[i], SourceResult: results[i], Verification: verifications[i],
 		})
 	}
 	return in, nil

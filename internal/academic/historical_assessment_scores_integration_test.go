@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -120,7 +121,7 @@ func insertHistoricalScoreBatch(ctx context.Context, db *sql.DB, x historicalSco
 	if err = tx.QueryRowContext(ctx, `INSERT INTO app.historical_assessment_score_batches(assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,reason,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Pencatatan arsip tertinggal','Dokumen dicocokkan per siswa dan TP','{}',decode(repeat('11',32),'hex'),decode(repeat('22',32),'hex'),$9) RETURNING id`, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, key).Scan(&batch); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'arsip_manual','Dokumen sintetis CP10-23','halaman 2, baris 4, TP','hasil siswa pada TP','nilai dan identitas dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, objective, student, placement, auditedScore); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_score,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'arsip_manual','Dokumen sintetis CP10-23',$14,$13,'hasil siswa pada TP','nilai dan identitas dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, objective, student, placement, auditedScore, fmt.Sprintf("halaman 2, siswa %d, TP %d", student, objective)); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, activity, objective, x.year, x.f.Semester, x.f.Class, x.f.Subject, student, placement, date, score, x.f.Teacher); err != nil {
@@ -149,7 +150,7 @@ func insertHistoricalScoreMultiBatch(ctx context.Context, db *sql.DB, x historic
 		return err
 	}
 	for _, slot := range slots {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'arsip_manual','Dokumen sintetis CP10-23','halaman 3, baris 5, TP','hasil per siswa dan TP','nilai dan identitas dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, slot.objective, slot.student, slot.placement, slot.score); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_score,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'arsip_manual','Dokumen sintetis CP10-23',$14,$13,'hasil per siswa dan TP','nilai dan identitas dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, slot.objective, slot.student, slot.placement, slot.score, fmt.Sprintf("halaman 3, siswa %d, TP %d", slot.student, slot.objective)); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, activity, slot.objective, x.year, x.f.Semester, x.f.Class, x.f.Subject, slot.student, slot.placement, date, slot.score, x.f.Teacher); err != nil {
@@ -163,6 +164,12 @@ func TestHistoricalAssessmentScoreAuditDatabaseGuardsIntegration(t *testing.T) {
 	db := testutil.Database(t, "../../.env")
 	x := newHistoricalScoreDBFixture(t, db, "cp1023db")
 	ctx := context.Background()
+	if err := insertHistoricalScoreEvidenceAttempt(ctx, db, x, x.activity22, x.routineTP, x.f.StudentA, x.placementA, "00000000-0000-4000-8000-000000002319", "aplikasi", "75", "75"); err == nil {
+		t.Fatal("SQL langsung menerima sumber aplikasi yang belum dapat diverifikasi")
+	}
+	if err := insertHistoricalScoreEvidenceAttempt(ctx, db, x, x.activity22, x.routineTP, x.f.StudentA, x.placementA, "00000000-0000-4000-8000-000000002320", "arsip_manual", "75", "74.99"); err == nil {
+		t.Fatal("SQL langsung menerima nilai sumber yang berbeda dari transkripsi")
+	}
 	// Pasangan CP10-21 dan seluruh TP kegiatan CP10-22 tidak menerima SQL rutin.
 	for _, target := range []struct{ activity, objective int64 }{{x.activity21, x.historicalTP}, {x.activity22, x.routineTP}, {x.activity22, x.historicalTP}} {
 		_, err := db.ExecContext(ctx, `INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,$8,a.activity_date,75,$9 FROM app.assessment_activities a WHERE a.id=$1`, target.activity, target.objective, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.StudentA, x.placementA, x.f.Teacher)
@@ -252,6 +259,24 @@ func TestHistoricalAssessmentScoreAuditDatabaseGuardsIntegration(t *testing.T) {
 	}
 }
 
+func insertHistoricalScoreEvidenceAttempt(ctx context.Context, db *sql.DB, x historicalScoreDBFixture, activity, objective, student, placement int64, key, sourceKind, score, sourceScore string) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var date string
+	if err = tx.QueryRowContext(ctx, `SELECT activity_date::text FROM app.assessment_activities WHERE id=$1`, activity).Scan(&date); err != nil {
+		return err
+	}
+	var batch int64
+	if err = tx.QueryRowContext(ctx, `INSERT INTO app.historical_assessment_score_batches(assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,reason,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'uji bukti','guru mencocokkan','{}',decode(repeat('11',32),'hex'),decode(repeat('22',32),'hex'),$9) RETURNING id`, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, key).Scan(&batch); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_score,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Dokumen CP10-23','halaman 8, siswa A, TP 1',$15,'hasil dicocokkan','guru memeriksa')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, objective, student, placement, score, sourceKind, sourceScore)
+	return err
+}
+
 func insertHistoricalScoreAuditOnly(ctx context.Context, db *sql.DB, x historicalScoreDBFixture, activity, objective, student, placement int64, key string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -266,7 +291,7 @@ func insertHistoricalScoreAuditOnly(ctx context.Context, db *sql.DB, x historica
 	if err = tx.QueryRowContext(ctx, `INSERT INTO app.historical_assessment_score_batches(assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,reason,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Alasan audit test','Pemeriksaan sumber','{}',decode(repeat('11',32),'hex'),decode(repeat('22',32),'hex'),$9) RETURNING id`, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, key).Scan(&batch); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,75,'arsip_manual','arsip test','halaman 2, baris 3','nilai per TP','dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, objective, student, placement); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO app.historical_assessment_initial_score_audits(batch_id,assessment_activity_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,learning_objective_id,student_id,placement_id,score,source_kind,source_identity,source_locator,source_score,source_result,verification) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,75,'arsip_manual','arsip test','halaman 2, baris 3',75,'nilai per TP','dicocokkan')`, batch, activity, x.year, x.f.Semester, x.f.Class, x.f.Subject, x.f.TeacherID, x.f.Teacher, date, objective, student, placement); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -356,8 +381,8 @@ func TestHistoricalAssessmentScoreServiceIntegration(t *testing.T) {
 		Verification: "Nama, kegiatan, tanggal, dan baris nilai dicocokkan dengan sumber sintetis",
 		Acknowledged: true,
 		Entries: []HistoricalAssessmentScoreEntry{
-			{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "0", SourceKind: "arsip_manual", SourceIdentity: "Arsip Sumatif uji CP10-23", SourceLocator: "halaman 2, siswa A, butir TP rutin", SourceResult: "0 pada kolom TP rutin", Verification: "identitas siswa dan TP cocok"},
-			{StudentID: x.f.StudentB, ObjectiveID: x.historicalTP, Value: "82.50", SourceKind: "arsip_manual", SourceIdentity: "Arsip Sumatif uji CP10-23", SourceLocator: "halaman 2, siswa B, butir TP historis", SourceResult: "82,50 pada kolom TP historis", Verification: "identitas siswa dan TP cocok"},
+			{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "0", SourceKind: "arsip_manual", SourceIdentity: "Arsip Sumatif uji CP10-23", SourceLocator: "halaman 2, siswa A, butir TP rutin", SourceScore: "0", SourceResult: "0 pada kolom TP rutin", Verification: "identitas siswa dan TP cocok"},
+			{StudentID: x.f.StudentB, ObjectiveID: x.historicalTP, Value: "82.50", SourceKind: "arsip_manual", SourceIdentity: "Arsip Sumatif uji CP10-23", SourceLocator: "halaman 2, siswa B, butir TP historis", SourceScore: "82,50", SourceResult: "82,50 pada kolom TP historis", Verification: "identitas siswa dan TP cocok"},
 		},
 	}
 	preview, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, input, 1, "")
@@ -407,6 +432,7 @@ func TestHistoricalAssessmentScoreServiceIntegration(t *testing.T) {
 	changed := confirmation
 	changed.Input.Entries = append([]HistoricalAssessmentScoreEntry(nil), input.Entries...)
 	changed.Input.Entries[0].Value = "1"
+	changed.Input.Entries[0].SourceScore = "1"
 	if _, err = s.ConfirmHistoricalAssessmentScores(ctx, x.f.Teacher, changed); !errors.Is(err, ErrConflict) {
 		t.Fatalf("payload berbeda pada submission UUID sama: %v", err)
 	}
@@ -416,6 +442,9 @@ func TestHistoricalAssessmentScoreServiceIntegration(t *testing.T) {
 	result, err := s.HistoricalAssessmentScoreResult(ctx, x.f.Teacher, batchID)
 	if err != nil || len(result.Entries) != 2 {
 		t.Fatalf("hasil batch: entries=%d err=%v", len(result.Entries), err)
+	}
+	if result.Entries[0].SourceScore == "" || result.Entries[0].SourceScore != result.Entries[0].Value {
+		t.Fatalf("nilai pada arsip tidak terbaca atau berbeda dari nilai tersimpan: %+v", result.Entries[0])
 	}
 	if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_score_batches WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&scores, &batches, &details); err != nil {
 		t.Fatal(err)
@@ -447,8 +476,8 @@ func TestHistoricalAssessmentScoreProjectionPositiveNHIntegration(t *testing.T) 
 	in := HistoricalAssessmentScoreInput{
 		ActivityID: x.activity22, Reason: "Bukti Sumatif sintetis diperiksa", Verification: "Nilai dicocokkan per siswa dan TP", Acknowledged: true,
 		Entries: []HistoricalAssessmentScoreEntry{
-			{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "0", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 NH positif", SourceLocator: "halaman 3, siswa A, TP rutin", SourceResult: "0 untuk TP rutin", Verification: "identitas dan hasil cocok"},
-			{StudentID: x.f.StudentA, ObjectiveID: x.historicalTP, Value: "85", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 NH positif", SourceLocator: "halaman 3, siswa A, TP historis", SourceResult: "85 untuk TP historis", Verification: "identitas dan hasil cocok"},
+			{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "0", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 NH positif", SourceLocator: "halaman 3, siswa A, TP rutin", SourceScore: "0", SourceResult: "0 untuk TP rutin", Verification: "identitas dan hasil cocok"},
+			{StudentID: x.f.StudentA, ObjectiveID: x.historicalTP, Value: "85", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 NH positif", SourceLocator: "halaman 3, siswa A, TP historis", SourceScore: "85", SourceResult: "85 untuk TP historis", Verification: "identitas dan hasil cocok"},
 		},
 	}
 	p, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, in, 1, "")
@@ -476,7 +505,7 @@ func TestHistoricalAssessmentScoreConcurrentServiceReplayIntegration(t *testing.
 	ctx := context.Background()
 	s := &Store{DB: db}
 	in := HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Arsip Sumatif diperiksa", Verification: "Identitas siswa/TP diverifikasi", Acknowledged: true,
-		Entries: []HistoricalAssessmentScoreEntry{{StudentID: x.f.StudentB, ObjectiveID: x.routineTP, Value: "75", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 race", SourceLocator: "halaman 4, siswa B, TP rutin", SourceResult: "75 pada kolom TP rutin", Verification: "nama dan hasil cocok"}}}
+		Entries: []HistoricalAssessmentScoreEntry{{StudentID: x.f.StudentB, ObjectiveID: x.routineTP, Value: "75", SourceKind: "arsip_manual", SourceIdentity: "Arsip CP10-23 race", SourceLocator: "halaman 4, siswa B, TP rutin", SourceScore: "75", SourceResult: "75 pada kolom TP rutin", Verification: "nama dan hasil cocok"}}}
 	p, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, in, 1, "")
 	if err != nil {
 		t.Fatal(err)
@@ -502,6 +531,109 @@ func TestHistoricalAssessmentScoreConcurrentServiceReplayIntegration(t *testing.
 	var scores, batches, details int
 	if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_score_batches WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&scores, &batches, &details); err != nil || scores != 1 || batches != 1 || details != 1 {
 		t.Fatalf("replay serentak menggandakan data: score=%d batch=%d detail=%d err=%v", scores, batches, details, err)
+	}
+}
+
+func TestHistoricalAssessmentScoreProjectionLeavesUnselectedBelumDinilaiUntouchedIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	x := newHistoricalScoreDBFixture(t, db, "cp1023-unselected")
+	ctx := context.Background()
+	s := &Store{DB: db}
+	if _, err := db.ExecContext(ctx, `UPDATE app.semester_assessment_weights SET nh=100,asts=0,asas=0 WHERE semester_id=$1`, x.f.Semester); err != nil {
+		t.Fatal(err)
+	}
+	input := HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Satu nilai terpilih", Verification: "Sumber manual dicocokkan", Acknowledged: true,
+		Entries: []HistoricalAssessmentScoreEntry{{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "0", SourceKind: "arsip_manual", SourceIdentity: "Arsip proyeksi terpilih", SourceLocator: "halaman 2, siswa A, TP rutin", SourceScore: "0", SourceResult: "0 pada sel TP", Verification: "identitas dan angka dicocokkan"}}}
+	preview, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, input, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unselected *HistoricalAssessmentScoreStudent
+	for i := range preview.Students {
+		if preview.Students[i].ID == x.f.StudentB {
+			unselected = &preview.Students[i]
+		}
+	}
+	if unselected == nil || unselected.BeforeStatus != "Belum Dinilai" {
+		t.Fatalf("fixture siswa tidak terpilih harus semula Belum Dinilai: %+v", unselected)
+	}
+	if unselected.AfterNH != unselected.BeforeNH || unselected.AfterStatus != unselected.BeforeStatus || unselected.AfterRecommendation != unselected.BeforeRecommendation || unselected.AfterNeedsReview != unselected.BeforeNeedsReview {
+		t.Fatalf("proyeksi mengubah siswa yang tidak dipilih: %+v", unselected)
+	}
+	var scoreCount, auditCount int
+	if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&scoreCount, &auditCount); err != nil || scoreCount != 0 || auditCount != 0 {
+		t.Fatalf("pratinjau membuat mutasi: scores=%d audits=%d err=%v", scoreCount, auditCount, err)
+	}
+}
+
+func TestHistoricalAssessmentScoreSourceLocatorUniqueAcrossBatchesIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	x := newHistoricalScoreDBFixture(t, db, "cp23dupsrc")
+	ctx := context.Background()
+	s := &Store{DB: db}
+	first := HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Pencatatan nilai A", Verification: "Sumber dicocokkan", Acknowledged: true,
+		Entries: []HistoricalAssessmentScoreEntry{{StudentID: x.f.StudentA, ObjectiveID: x.routineTP, Value: "82,50", SourceKind: "arsip_manual", SourceIdentity: "Arsip Nilai CP23", SourceLocator: "halaman 4, siswa A, TP rutin", SourceScore: "82.50", SourceResult: "82,50 pada sel", Verification: "identitas dicocokkan"}}}
+	p1, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, first, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.ConfirmHistoricalAssessmentScores(ctx, x.f.Teacher, HistoricalAssessmentScoreConfirmation{Input: first, SnapshotToken: p1.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002341"})
+	if err != nil {
+		t.Fatalf("batch pertama: %v", err)
+	}
+	second := HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Pencatatan nilai B", Verification: "Sumber dicocokkan", Acknowledged: true,
+		Entries: []HistoricalAssessmentScoreEntry{{StudentID: x.f.StudentB, ObjectiveID: x.routineTP, Value: "75", SourceKind: "arsip_manual", SourceIdentity: "  arsip   nilai cp23 ", SourceLocator: " HALAMAN 4, siswa A, TP rutin ", SourceScore: "75", SourceResult: "75 pada sel", Verification: "identitas dicocokkan"}}}
+	if _, err = s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, second, 1, ""); !errors.Is(err, ErrConflict) {
+		t.Fatalf("lokator sumber ternormalisasi dipakai ulang lintas batch: %v", err)
+	}
+	var batches, scores, audits int
+	if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.historical_assessment_score_batches WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&batches, &scores, &audits); err != nil || batches != 1 || scores != 1 || audits != 1 {
+		t.Fatalf("penolakan duplikasi meninggalkan batch parsial: batches=%d scores=%d audits=%d err=%v", batches, scores, audits, err)
+	}
+}
+
+func TestHistoricalAssessmentScoreConcurrentSourceLocatorReuseRejectedIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	x := newHistoricalScoreDBFixture(t, db, "cp23racesrc")
+	ctx := context.Background()
+	s := &Store{DB: db}
+	makeInput := func(student int64, locator string) HistoricalAssessmentScoreInput {
+		return HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Pencatatan bukti", Verification: "Sumber dicocokkan", Acknowledged: true,
+			Entries: []HistoricalAssessmentScoreEntry{{StudentID: student, ObjectiveID: x.routineTP, Value: "75", SourceKind: "arsip_manual", SourceIdentity: "Arsip bersama", SourceLocator: locator, SourceScore: "75", SourceResult: "75 pada kolom TP", Verification: "nama siswa diverifikasi"}}}
+	}
+	inputs := []HistoricalAssessmentScoreInput{makeInput(x.f.StudentA, "halaman 5, siswa A, TP rutin"), makeInput(x.f.StudentB, " HALAMAN 5,   SISWA A, TP RUTIN ")}
+	requests := make([]HistoricalAssessmentScoreConfirmation, 2)
+	for i, input := range inputs {
+		p, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, input, 1, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		requests[i] = HistoricalAssessmentScoreConfirmation{Input: input, SnapshotToken: p.SnapshotToken, SubmissionKey: []string{"00000000-0000-4000-8000-000000002342", "00000000-0000-4000-8000-000000002343"}[i]}
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range requests {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, errs[i] = s.ConfirmHistoricalAssessmentScores(ctx, x.f.Teacher, requests[i])
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	successes := 0
+	for _, err := range errs {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, ErrConflict) {
+			t.Fatalf("konfirmasi bersamaan gagal dengan error tak terduga: %v", err)
+		}
+	}
+	var batches, scores, audits int
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.historical_assessment_score_batches WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&batches, &scores, &audits); err != nil || successes != 1 || batches != 1 || scores != 1 || audits != 1 {
+		t.Fatalf("replay sumber serentak tidak atomik: success=%d batches=%d scores=%d audits=%d err=%v", successes, batches, scores, audits, err)
 	}
 }
 

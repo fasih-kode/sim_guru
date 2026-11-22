@@ -22,8 +22,8 @@ func TestHistoricalAssessmentLinkGuardIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, err := provider.GetDBVersion(t.Context())
-	if err != nil || version != 59 {
-		t.Fatalf("TEST harus berada pada migration 59/59, aktual=%d err=%v", version, err)
+	if err != nil || version != 60 {
+		t.Fatalf("TEST harus berada pada migration 60/60, aktual=%d err=%v", version, err)
 	}
 	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{})
 	if err != nil {

@@ -57,7 +57,7 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target < 51 {
+	if err != nil || current != target || target < 60 {
 		t.Fatal("unexpected migration version")
 	}
 	var retentionSchema bool
@@ -142,6 +142,14 @@ func TestMigrationsIntegration(t *testing.T) {
 		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_score_batches'::regclass AND tgname='historical_score_batch_append_only' AND tgenabled='O')
 		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_initial_score_audits'::regclass AND tgname='historical_score_detail_append_only' AND tgenabled='O')`).Scan(&historicalScoreSchema); err != nil || !historicalScoreSchema {
 		t.Fatal("missing CP10-23 append-only score provenance, deferred integrity, idempotency, or guards")
+	}
+	var historicalScoreEvidenceSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='historical_assessment_initial_score_audits' AND column_name='source_score')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='historical_score_source_score_range_check' AND contype='c' AND convalidated)
+		AND EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='app' AND indexname='historical_score_source_locator_lookup_idx' AND indexdef LIKE 'CREATE INDEX%')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='historical_score_detail_insert' AND tgenabled='O')`).Scan(&historicalScoreEvidenceSchema); err != nil || !historicalScoreEvidenceSchema {
+		t.Fatal("missing structured source score, normalized locator uniqueness, or evidence guard")
 	}
 	var scoreCorrections bool
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_corrections') IS NOT NULL
