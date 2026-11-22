@@ -1,6 +1,14 @@
 # Handover
 
-## CP10-23 — HOTFIX REVIEW SELESAI, MENUNGGU REVIEW INDEPENDEN ULANG (22 November 2026)
+## CP10-23 — PROJECTION HOTFIX SELESAI, MENUNGGU REVIEW INDEPENDEN ULANG (22 November 2026)
+
+Review supervisor `6011881581` menemukan satu blocker tersisa pada status proyeksi setelah nilai masuk. Perbaikan menggunakan helper readiness `semesterRecommendationReadiness` yang kini dipakai bersama oleh rekomendasi kanonis dan proyeksi CP10-23, sehingga status tidak dihitung dengan aturan paralel.
+
+- Dengan NH 0% dan ASTS/ASAS kosong, nilai NH yang baru tersedia tidak dihitung sebagai bukti berbobot: status tetap **Belum Dinilai** dan tanpa rekomendasi. Jika ASTS sudah ada tetapi ASAS kosong, status **Belum Lengkap**, tanpa rekomendasi.
+- Bila NH belum lengkap tetapi ASTS/ASAS berbobot sudah lengkap, NH 0% tidak menghalangi status **Siap Final** dan rekomendasi. Pada NH positif, bukti Sumatif baru dengan kewajiban NH yang masih kurang menghasilkan **Belum Lengkap**, tanpa rekomendasi numerik.
+- Siswa yang tidak dipilih tetap mempertahankan NH, status, rekomendasi dan Perlu Ditinjau. Untuk siswa yang sudah Final, hasil proyeksi menggambarkan perhitungan aktif; tampilan status tersimpan tetap **Final**, FinalVersion/nilai/snapshot tidak berubah, dan penanda Perlu Ditinjau tetap terpisah.
+
+Tes unit dan integrasi PostgreSQL membandingkan status sebelum pencatatan, proyeksi, dan hasil perhitungan kanonis sesudah konfirmasi untuk NH 0% dan NH positif, serta memeriksa Final lama. Regression projection, rekomendasi/Final, seluruh tes Go non-integration, vet, `make check`, `make build`, `npm run build`, dan `git diff --check` PASS. Tidak ada migration baru; TEST tetap 60/60 dan DEV/UAT tidak disentuh. Full integration suite tidak dijalankan. CP10-23 belum UAT/CLOSED; CP10-24 belum dimulai.
 
 Supervisor review `6011553414` menemukan tiga isu: kecocokan nilai sumber per sel, proyeksi status siswa yang tidak dipilih, dan penggunaan ulang lokator bukti lintas batch. Perbaikan dibatasi pada tiga temuan tersebut; CP10-23 belum UAT/CLOSED dan CP10-24 belum dimulai.
 

@@ -635,9 +635,6 @@ func projectHistoricalScoreAfter(rec SemesterRecommendation, activityID, student
 	if nh != nil && len(student.Objectives) > 0 {
 		nh.Quo(nh, big.NewRat(int64(len(student.Objectives)), 1))
 	}
-	if w.NH > 0 && !complete {
-		return "", "Belum Lengkap", ""
-	}
 	if !w.Configured {
 		return "Belum dikonfigurasi", "Belum dapat ditentukan", ""
 	}
@@ -651,19 +648,25 @@ func projectHistoricalScoreAfter(rec SemesterRecommendation, activityID, student
 		asas = v
 		hasASAS = true
 	}
-	if w.ASTS > 0 && !hasASTS || w.ASAS > 0 && !hasASAS {
-		return "", "Belum Lengkap", ""
+	var shownNH string
+	if nh != nil && complete {
+		shownNH = strings.ReplaceAll(nh.FloatString(2), ".", ",")
 	}
-	if !scored && !hasASTS && !hasASAS {
-		return "0,00", "Belum Dinilai", ""
+	ready, hasEvidence := semesterRecommendationReadiness(
+		w,
+		complete, scored,
+		hasASTS, strings.TrimSpace(student.ASTS) != "",
+		hasASAS, strings.TrimSpace(student.ASAS) != "",
+	)
+	if !ready {
+		if !hasEvidence {
+			return shownNH, "Belum Dinilai", ""
+		}
+		return shownNH, "Belum Lengkap", ""
 	}
 	var recommendationNH *big.Rat
 	if w.NH > 0 {
 		recommendationNH = nh
-	}
-	var shownNH string
-	if nh != nil && complete {
-		shownNH = strings.ReplaceAll(nh.FloatString(2), ".", ",")
 	}
 	return shownNH, "Siap Final", semesterRound(recommendationNH, asts, asas, w)
 }

@@ -178,7 +178,12 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 			}
 		}
 		if out.Weights.Configured {
-			hasEvidence := (out.Weights.NH > 0 && scored) || (out.Weights.ASTS > 0 && asts.localCount > 0) || (out.Weights.ASAS > 0 && asas.localCount > 0)
+			ready, hasEvidence := semesterRecommendationReadiness(
+				out.Weights,
+				student.NHComplete, scored,
+				a != nil, asts.localCount > 0,
+				b != nil, asas.localCount > 0,
+			)
 			if out.Weights.NH > 0 && nh == nil {
 				if len(student.Objectives) == 0 {
 					item.Missing = append(item.Missing, "NH belum memiliki TP atau nilai Sumatif lengkap.")
@@ -197,7 +202,7 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 				item.Missing = append(item.Missing, examMissing("ASAS", asas))
 			}
 			switch {
-			case len(item.Missing) == 0:
+			case ready:
 				item.Status = "Siap Final"
 				item.Recommendation = semesterRound(nh, a, b, out.Weights)
 			case !hasEvidence:
@@ -229,6 +234,23 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 		out.Students = append(out.Students, item)
 	}
 	return out, nil
+}
+
+// semesterRecommendationReadiness adalah satu-satunya aturan kanonis untuk
+// membedakan kelengkapan komponen berbobot dari keberadaan bukti berbobot.
+// Komponen berbobot 0 tidak menghalangi Final dan tidak membuat siswa seolah
+// sudah dinilai.
+func semesterRecommendationReadiness(w AssessmentWeights, nhComplete, nhEvidence, astsComplete, astsEvidence, asasComplete, asasEvidence bool) (ready, hasEvidence bool) {
+	if !w.Configured {
+		return false, false
+	}
+	ready = (w.NH == 0 || nhComplete) &&
+		(w.ASTS == 0 || astsComplete) &&
+		(w.ASAS == 0 || asasComplete)
+	hasEvidence = (w.NH > 0 && nhEvidence) ||
+		(w.ASTS > 0 && astsEvidence) ||
+		(w.ASAS > 0 && asasEvidence)
+	return ready, hasEvidence
 }
 
 func examMissing(name string, e examEvidence) string {

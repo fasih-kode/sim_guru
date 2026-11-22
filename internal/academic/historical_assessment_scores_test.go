@@ -51,3 +51,53 @@ func TestHistoricalAssessmentScoreProjectionPreservesUnselectedStudent(t *testin
 		t.Fatalf("proyeksi siswa tanpa nilai terpilih berubah: NH=%q status=%q rekomendasi=%q student=%+v", nh, status, recommendation, student)
 	}
 }
+
+func TestHistoricalAssessmentScoreProjectionUsesCanonicalReadiness(t *testing.T) {
+	weightsZeroNH := AssessmentWeights{NH: 0, ASTS: 40, ASAS: 60, Configured: true}
+	weightsPositiveNH := AssessmentWeights{NH: 100, Configured: true}
+	activity := func(id string, scored bool, value string) AssessmentTPRecapActivity {
+		return AssessmentTPRecapActivity{ID: id, HasValue: scored, EffectiveValue: value}
+	}
+	tests := []struct {
+		name, asts, asas, wantNH, wantStatus, wantRecommendation string
+		weights                                                  AssessmentWeights
+		activities                                               []AssessmentTPRecapActivity
+		required, scored                                         int
+	}{
+		{
+			name:    "NH berbobot nol tanpa komponen ujian tetap Belum Dinilai",
+			weights: weightsZeroNH, required: 1, activities: []AssessmentTPRecapActivity{activity("99", false, "")},
+			wantNH: "75,00", wantStatus: "Belum Dinilai",
+		},
+		{
+			name: "ASTS ada dan ASAS kosong Belum Lengkap",
+			asts: "70,00", weights: weightsZeroNH, required: 1, activities: []AssessmentTPRecapActivity{activity("99", false, "")},
+			wantNH: "75,00", wantStatus: "Belum Lengkap",
+		},
+		{
+			name: "NH belum lengkap tidak menghalangi komponen ujian lengkap saat bobot nol",
+			asts: "70,00", asas: "90,00", weights: weightsZeroNH, required: 2,
+			activities: []AssessmentTPRecapActivity{activity("99", false, ""), activity("100", false, "")},
+			wantStatus: "Siap Final", wantRecommendation: "82",
+		},
+		{
+			name:    "NH positif dengan bukti baru tetapi masih tidak lengkap",
+			weights: weightsPositiveNH, required: 2, activities: []AssessmentTPRecapActivity{activity("99", false, ""), activity("100", false, "")},
+			wantStatus: "Belum Lengkap",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			student := SemesterRecommendationStudent{
+				ID: "42", ASTS: tt.asts, ASAS: tt.asas,
+				Objectives: []AssessmentTPRecapObjective{{ID: "7", RequiredCount: tt.required, ScoredCount: tt.scored, Activities: tt.activities}},
+			}
+			rec := SemesterRecommendation{Students: []SemesterRecommendationStudent{student}}
+			entries := map[[2]int64]HistoricalAssessmentScoreEntry{{42, 7}: {StudentID: 42, ObjectiveID: 7, Value: "75"}}
+			nh, status, recommendation := projectHistoricalScoreAfter(rec, 99, 42, entries, tt.weights)
+			if nh != tt.wantNH || status != tt.wantStatus || recommendation != tt.wantRecommendation {
+				t.Fatalf("proyeksi=%q/%q/%q, ingin %q/%q/%q", nh, status, recommendation, tt.wantNH, tt.wantStatus, tt.wantRecommendation)
+			}
+		})
+	}
+}

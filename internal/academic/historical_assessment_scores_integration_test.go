@@ -484,18 +484,173 @@ func TestHistoricalAssessmentScoreProjectionPositiveNHIntegration(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	before, err := s.SemesterRecommendations(ctx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var beforeA *SemesterRecommendationStudent
+	for i := range before.Students {
+		if before.Students[i].ID == fmt.Sprint(x.f.StudentA) {
+			beforeA = &before.Students[i]
+		}
+	}
 	var student *HistoricalAssessmentScoreStudent
 	for i := range p.Students {
 		if p.Students[i].ID == x.f.StudentA {
 			student = &p.Students[i]
 		}
 	}
-	if student == nil || p.Weights.NH != 100 || student.AfterStatus != "Belum Lengkap" || student.AfterRecommendation != "" {
+	if student == nil || beforeA == nil || !beforeA.Finalized || p.Weights.NH != 100 || student.BeforeStatus != beforeA.Status || student.AfterStatus != "Belum Lengkap" || student.AfterRecommendation != "" {
 		t.Fatalf("NH positif harus tetap belum lengkap saat bukti TP lain kosong: preview=%+v student=%+v", p, student)
 	}
 	var scores, audits int
 	if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, x.activity22).Scan(&scores, &audits); err != nil || scores != 0 || audits != 0 {
 		t.Fatalf("pratinjau menulis nilai/audit: scores=%d audits=%d err=%v", scores, audits, err)
+	}
+	batchID, err := s.ConfirmHistoricalAssessmentScores(ctx, x.f.Teacher, HistoricalAssessmentScoreConfirmation{Input: in, SnapshotToken: p.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002332"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeTx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeAfter, err := s.semesterRecommendationsStudentTx(ctx, activeTx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject, 0)
+	if err != nil {
+		activeTx.Rollback()
+		t.Fatal(err)
+	}
+	if err = activeTx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var activeA *SemesterRecommendationStudent
+	for i := range activeAfter.Students {
+		if activeAfter.Students[i].ID == fmt.Sprint(x.f.StudentA) {
+			activeA = &activeAfter.Students[i]
+		}
+	}
+	if activeA == nil || activeA.Status != student.AfterStatus || activeA.Recommendation != student.AfterRecommendation || activeA.NH != student.AfterNH {
+		t.Fatalf("status aktif kanonis sesudah konfirmasi harus cocok dengan proyeksi: preview=%+v actual=%+v", student, activeA)
+	}
+	finalView, err := s.SemesterRecommendations(ctx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var finalA *SemesterRecommendationStudent
+	for i := range finalView.Students {
+		if finalView.Students[i].ID == fmt.Sprint(x.f.StudentA) {
+			finalA = &finalView.Students[i]
+		}
+	}
+	if finalA == nil || finalA.Status != "Final" || !finalA.Finalized || finalA.FinalVersion != student.FinalVersion || finalA.FinalValue != beforeA.FinalValue || !finalA.NeedsReview {
+		t.Fatalf("Final historis tetap Final dan hanya ditandai untuk ditinjau: preview=%+v finalView=%+v", student, finalA)
+	}
+	var savedSnapshot string
+	if err = db.QueryRowContext(ctx, `SELECT snapshot::text FROM app.semester_final_versions WHERE semester_id=$1 AND student_id=$2`, x.f.Semester, x.f.StudentA).Scan(&savedSnapshot); err != nil || savedSnapshot != x.snapshot {
+		t.Fatalf("snapshot Final lama berubah setelah batch %d: err=%v", batchID, err)
+	}
+}
+
+func TestHistoricalAssessmentScoreProjectionZeroNHMatchesCanonicalIntegration(t *testing.T) {
+	db := testutil.Database(t, "../../.env")
+	x := newHistoricalScoreDBFixture(t, db, "cp1023nh0parity")
+	ctx := context.Background()
+	s := &Store{DB: db}
+	if _, err := db.ExecContext(ctx, `UPDATE app.semester_assessment_weights SET nh=0,asts=40,asas=60 WHERE semester_id=$1`, x.f.Semester); err != nil {
+		t.Fatal(err)
+	}
+	students := make([]int64, 3)
+	for i := range students {
+		name := fmt.Sprintf("fixture CP10-23 projection %d %s", i, testutil.Random(t)[:6])
+		if err := db.QueryRowContext(ctx, `INSERT INTO app.students(name,birth_date,gender) VALUES($1,'2010-01-01','L') RETURNING id`, name).Scan(&students[i]); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO app.student_placements(school_year_id,student_id,class_id,actor_id,starts_on) VALUES($1,$2,$3,$4,'2020-01-01')`, x.year, students[i], x.f.Class, x.f.Teacher); err != nil {
+			t.Fatal(err)
+		}
+		var placementID int64
+		if err := db.QueryRowContext(ctx, `SELECT id FROM app.student_placements WHERE student_id=$1 AND school_year_id=$2 ORDER BY id DESC LIMIT 1`, students[i], x.year).Scan(&placementID); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveAssessmentActivityInitialScores(ctx, x.f.Teacher, x.activity21, []AssessmentScoreInput{{StudentID: students[i], ObjectiveID: x.routineTP, Value: "80"}}); err != nil {
+			t.Fatal(err)
+		}
+		key := fmt.Sprintf("00000000-0000-4000-8000-%012d", 2400+i)
+		if err := insertHistoricalScoreBatch(ctx, db, x, x.activity21, x.historicalTP, students[i], placementID, "70", key, "70"); err != nil {
+			t.Fatalf("nilai historis baseline siswa %d: %v", i, err)
+		}
+	}
+	// Pada siswa B hanya ASTS tersedia; siswa C memiliki ASTS dan ASAS.
+	if err := s.SaveExamInitialScores(ctx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject, []ExamInitialInput{
+		{StudentID: students[1], Component: "asts", Date: "2020-01-10", Value: "70"},
+		{StudentID: students[2], Component: "asts", Date: "2020-01-10", Value: "70"},
+		{StudentID: students[2], Component: "asas", Date: "2020-01-10", Value: "90"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	input := HistoricalAssessmentScoreInput{ActivityID: x.activity22, Reason: "Sumber dibuktikan untuk pengujian proyeksi", Verification: "Nilai arsip dicocokkan per siswa dan TP", Acknowledged: true}
+	for i, studentID := range students {
+		for _, objectiveID := range []int64{x.routineTP, x.historicalTP} {
+			// Siswa C hanya mendapat nilai TP rutin dari batch ini sehingga NH
+			// tetap belum lengkap; bobot NH nol tidak boleh menghalangi Final.
+			if i == 2 && objectiveID == x.historicalTP {
+				continue
+			}
+			locator := fmt.Sprintf("halaman %d, siswa fixture %d, TP %d", i+5, i, objectiveID)
+			input.Entries = append(input.Entries, HistoricalAssessmentScoreEntry{
+				StudentID: studentID, ObjectiveID: objectiveID, Value: "75", SourceKind: "arsip_manual",
+				SourceIdentity: fmt.Sprintf("Arsip parity %d", i), SourceLocator: locator, SourceScore: "75",
+				SourceResult: "75 pada sel siswa/TP", Verification: "identitas dan angka dicocokkan",
+			})
+		}
+	}
+	before, err := s.SemesterRecommendations(ctx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.PreviewHistoricalAssessmentScores(ctx, x.f.Teacher, input, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wants := map[int64]struct{ nh, status, recommendation string }{
+		students[0]: {"75,00", "Belum Dinilai", ""},
+		students[1]: {"75,00", "Belum Lengkap", ""},
+		students[2]: {"", "Siap Final", "82"},
+	}
+	for studentID, want := range wants {
+		var beforeStatus string
+		for _, student := range before.Students {
+			if student.ID == fmt.Sprint(studentID) {
+				beforeStatus = student.Status
+			}
+		}
+		var projected *HistoricalAssessmentScoreStudent
+		for i := range preview.Students {
+			if preview.Students[i].ID == studentID {
+				projected = &preview.Students[i]
+			}
+		}
+		if projected == nil || projected.BeforeStatus != beforeStatus || projected.AfterNH != want.nh || projected.AfterStatus != want.status || projected.AfterRecommendation != want.recommendation {
+			t.Fatalf("ketidakcocokan status before/projection siswa %d: before=%q want=%+v projected=%+v", studentID, beforeStatus, want, projected)
+		}
+	}
+	if _, err = s.ConfirmHistoricalAssessmentScores(ctx, x.f.Teacher, HistoricalAssessmentScoreConfirmation{Input: input, SnapshotToken: preview.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002350"}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.SemesterRecommendations(ctx, x.f.Teacher, x.f.Semester, x.f.Class, x.f.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for studentID, want := range wants {
+		var actual *SemesterRecommendationStudent
+		for i := range after.Students {
+			if after.Students[i].ID == fmt.Sprint(studentID) {
+				actual = &after.Students[i]
+			}
+		}
+		if actual == nil || actual.NH != want.nh || actual.Status != want.status || actual.Recommendation != want.recommendation {
+			t.Fatalf("status kanonis sesudah konfirmasi siswa %d: %+v want=%+v", studentID, actual, want)
+		}
 	}
 }
 
