@@ -130,6 +130,19 @@ func TestMigrationsIntegration(t *testing.T) {
 		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_placements_id_student_year_unique' AND contype='u')`).Scan(&scoreSchema); err != nil || !scoreSchema {
 		t.Fatal("missing CP10-05 initial score table, uniqueness, or composite foreign keys")
 	}
+	var historicalScoreSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT
+		to_regclass('app.historical_assessment_score_batches') IS NOT NULL
+		AND to_regclass('app.historical_assessment_initial_score_audits') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_score_batches'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (actor_id, submission_key)%')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_initial_score_audits'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (assessment_activity_id, learning_objective_id, student_id)%')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_initial_score_audits'::regclass AND contype='f' AND condeferrable)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.assessment_activity_initial_scores'::regclass AND tgname='historical_initial_score_guard' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.assessment_activity_initial_scores'::regclass AND tgname='historical_initial_score_immutable' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_score_batches'::regclass AND tgname='historical_score_batch_append_only' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_initial_score_audits'::regclass AND tgname='historical_score_detail_append_only' AND tgenabled='O')`).Scan(&historicalScoreSchema); err != nil || !historicalScoreSchema {
+		t.Fatal("missing CP10-23 append-only score provenance, deferred integrity, idempotency, or guards")
+	}
 	var scoreCorrections bool
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_corrections') IS NOT NULL
 		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_score_corrections_version_unique' AND contype='u')

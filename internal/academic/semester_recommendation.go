@@ -62,7 +62,21 @@ func (s *Store) semesterRecommendationsTx(ctx context.Context, tx *sql.Tx, actor
 }
 
 func (s *Store) semesterRecommendationsStudentTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID int64) (SemesterRecommendation, error) {
-	recap, err := s.assessmentTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, true, studentID)
+	return s.semesterRecommendationsStudentModeTx(ctx, tx, actor, semesterID, classID, subjectID, studentID, 0)
+}
+
+func (s *Store) semesterRecommendationsHistoricalScoreStudentTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID, activityID int64) (SemesterRecommendation, error) {
+	return s.semesterRecommendationsStudentModeTx(ctx, tx, actor, semesterID, classID, subjectID, studentID, activityID)
+}
+
+func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID, historicalActivityID int64) (SemesterRecommendation, error) {
+	var recap AssessmentTPRecap
+	var err error
+	if historicalActivityID > 0 {
+		recap, err = s.assessmentTPRecapForHistoricalScore(ctx, tx, actor, semesterID, classID, subjectID, studentID, historicalActivityID)
+	} else {
+		recap, err = s.assessmentTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, true, studentID)
+	}
 	if err != nil {
 		return SemesterRecommendation{}, err
 	}

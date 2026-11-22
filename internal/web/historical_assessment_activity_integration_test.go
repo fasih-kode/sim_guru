@@ -260,6 +260,94 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	if locked.Code != http.StatusUnprocessableEntity || !strings.Contains(locked.Body.String(), "proses pencatatan historis tersendiri") {
 		t.Fatalf("POST nilai untuk pasangan historis: %d", locked.Code)
 	}
+
+	// CP10-23 memakai endpoint khusus; nilai 0 sah, ber-CSRF, dan tidak
+	// mengubah Final atau snapshot lama.
+	historicalScorePath := historicalAssessmentScoresPath
+	scoreLanding := request(http.MethodGet, historicalScorePath, nil, nil, false)
+	if scoreLanding.Code != http.StatusOK || !strings.Contains(scoreLanding.Body.String(), "Pencatatan Nilai Sumatif Historis") || !strings.Contains(scoreLanding.Body.String(), "Kegiatan Sumatif historis") {
+		t.Fatalf("GET pencatatan nilai historis: %d", scoreLanding.Code)
+	}
+	if deniedCSRF := request(http.MethodPost, historicalScorePath, url.Values{"action": {"load"}, "activity_id": {fmt.Sprint(activityID)}}, cookies, false); deniedCSRF.Code != http.StatusForbidden {
+		t.Fatalf("POST nilai historis tanpa token CSRF: %d", deniedCSRF.Code)
+	}
+	loadScores := url.Values{"gorilla.csrf.Token": {csrfToken}, "action": {"load"}, "activity_id": {fmt.Sprint(activityID)}}
+	loadedScores := request(http.MethodPost, historicalScorePath, loadScores, cookies, false)
+	if loadedScores.Code != http.StatusOK || !strings.Contains(loadedScores.Body.String(), "Siswa dan relevansi") || !strings.Contains(loadedScores.Body.String(), "entry_value") || !strings.Contains(loadedScores.Body.String(), "Halaman 1 dari 2") {
+		t.Fatalf("muat lembar nilai historis: %d", loadedScores.Code)
+	}
+	pageTwoValues := url.Values{"gorilla.csrf.Token": {csrfToken}, "action": {"preview"}, "activity_id": {fmt.Sprint(activityID)}, "page_override": {"2"}, "source_fingerprint": {field(loadedScores.Body.String(), "source_fingerprint")}, "submission_key": {field(loadedScores.Body.String(), "submission_key")}}
+	pageTwoScores := request(http.MethodPost, historicalScorePath, pageTwoValues, cookies, true)
+	if pageTwoScores.Code != http.StatusOK || !strings.Contains(pageTwoScores.Body.String(), "Halaman 2 dari 2") {
+		t.Fatalf("pagination nilai historis maju: %d", pageTwoScores.Code)
+	}
+	pageOneValues := cloneHistoricalActivityValues(pageTwoValues)
+	pageOneValues.Set("page_override", "1")
+	pageOneScores := request(http.MethodPost, historicalScorePath, pageOneValues, cookies, true)
+	if pageOneScores.Code != http.StatusOK || !strings.Contains(pageOneScores.Body.String(), "Halaman 1 dari 2") || !strings.Contains(pageOneScores.Body.String(), "Semua siswa teridentifikasi") {
+		t.Fatalf("pagination nilai historis mundur: %d", pageOneScores.Code)
+	}
+	scoreForm := url.Values{
+		"gorilla.csrf.Token": {csrfToken}, "action": {"preview"}, "activity_id": {fmt.Sprint(activityID)},
+		"reason": {"Transkripsi dari dokumen nilai sintetis"}, "verification": {"Nama siswa, TP, nilai, dan lokasi sumber dicocokkan"}, "acknowledged": {"yes"},
+		"entry_student_id": {fmt.Sprint(f.StudentA)}, "entry_objective_id": {fmt.Sprint(objectiveIDs[0])}, "entry_value": {"0"},
+		"entry_source_kind": {"arsip_manual"}, "entry_source_identity": {"Arsip Sumatif CP10-23 HTTP"}, "entry_source_locator": {"halaman 2, baris 4, siswa A, TP 1"},
+		"entry_source_result": {"nilai 0 pada kolom TP 1"}, "entry_verification": {"nama dan nomor siswa cocok dengan daftar kelas"},
+	}
+	invalidScore := cloneHistoricalActivityValues(scoreForm)
+	invalidScore.Set("entry_value", "100.01")
+	if invalid := request(http.MethodPost, historicalScorePath, invalidScore, cookies, false); invalid.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("nilai di luar rentang tidak ditolak: %d", invalid.Code)
+	}
+	scoreForm.Set("source_fingerprint", field(loadedScores.Body.String(), "source_fingerprint"))
+	scorePreview := request(http.MethodPost, historicalScorePath, scoreForm, cookies, false)
+	if scorePreview.Code != http.StatusOK || !strings.Contains(scorePreview.Body.String(), "0") || !strings.Contains(scorePreview.Body.String(), "Konfirmasi pencatatan nilai") || !strings.Contains(scorePreview.Body.String(), "setelah nilai terpilih dicatat: Perlu Ditinjau") {
+		t.Fatalf("pratinjau nilai historis: %d %s", scorePreview.Code, scorePreview.Body.String())
+	}
+	if strings.Contains(scorePreview.Header().Get("Location"), "Arsip Sumatif") {
+		t.Fatal("identitas sumber nilai muncul dalam URL")
+	}
+	scoreConfirm := cloneHistoricalActivityValues(scoreForm)
+	scoreConfirm.Set("action", "confirm")
+	scoreConfirm.Set("snapshot_token", field(scorePreview.Body.String(), "snapshot_token"))
+	scoreConfirm.Set("submission_key", field(scorePreview.Body.String(), "submission_key"))
+	exec(`UPDATE app.semester_calendars SET starts_on='2020-01-02' WHERE semester_id=$1`, f.Semester)
+	staleScore := request(http.MethodPost, historicalScorePath, scoreConfirm, cookies, false)
+	if staleScore.Code != http.StatusConflict {
+		t.Fatalf("snapshot nilai historis basi: %d", staleScore.Code)
+	}
+	var partialScores, partialBatches, partialAudits int
+	if err := db.QueryRow(`SELECT (SELECT count(*) FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_score_batches WHERE assessment_activity_id=$1),(SELECT count(*) FROM app.historical_assessment_initial_score_audits WHERE assessment_activity_id=$1)`, activityID).Scan(&partialScores, &partialBatches, &partialAudits); err != nil || partialScores != 0 || partialBatches != 0 || partialAudits != 0 {
+		t.Fatalf("konflik meninggalkan data parsial: scores=%d batches=%d audits=%d err=%v", partialScores, partialBatches, partialAudits, err)
+	}
+	refreshScore := cloneHistoricalActivityValues(scoreForm)
+	refreshScore.Set("action", "load")
+	refreshedScorePreview := request(http.MethodPost, historicalScorePath, refreshScore, cookies, false)
+	if refreshedScorePreview.Code != http.StatusOK {
+		t.Fatalf("refresh pratinjau setelah snapshot basi: %d", refreshedScorePreview.Code)
+	}
+	scoreConfirm.Set("snapshot_token", field(refreshedScorePreview.Body.String(), "snapshot_token"))
+	scoreSaved := request(http.MethodPost, historicalScorePath, scoreConfirm, cookies, false)
+	if scoreSaved.Code != http.StatusSeeOther || !strings.HasPrefix(scoreSaved.Header().Get("Location"), historicalAssessmentScoresPath+"/hasil?id=") {
+		t.Fatalf("konfirmasi nilai historis PRG: %d %s", scoreSaved.Code, scoreSaved.Body.String())
+	}
+	scoreResult := request(http.MethodGet, scoreSaved.Header().Get("Location"), nil, cookies, false)
+	if scoreResult.Code != http.StatusOK || !strings.Contains(scoreResult.Body.String(), "Nilai historis berhasil dicatat") || !strings.Contains(scoreResult.Body.String(), "0.00") || !strings.Contains(scoreResult.Body.String(), "Arsip Sumatif CP10-23 HTTP") {
+		t.Fatalf("hasil nilai historis: %d %s", scoreResult.Code, scoreResult.Body.String())
+	}
+	if replay := request(http.MethodPost, historicalScorePath, scoreConfirm, cookies, false); replay.Code != http.StatusSeeOther || replay.Header().Get("Location") != scoreSaved.Header().Get("Location") {
+		t.Fatalf("replay nilai historis: %d %s", replay.Code, replay.Header().Get("Location"))
+	}
+	changedScorePayload := cloneHistoricalActivityValues(scoreConfirm)
+	changedScorePayload.Set("entry_value", "1")
+	if changed := request(http.MethodPost, historicalScorePath, changedScorePayload, cookies, false); changed.Code != http.StatusConflict {
+		t.Fatalf("replay payload berbeda: %d", changed.Code)
+	}
+	user = auth.User{ID: f.Other, Active: true, Roles: []string{"guru_mapel"}}
+	if denied := request(http.MethodGet, scoreSaved.Header().Get("Location"), nil, cookies, false); denied.Code != http.StatusForbidden {
+		t.Fatalf("hasil nilai historis guru lain: %d", denied.Code)
+	}
+	user = auth.User{ID: f.Teacher, Active: true, Roles: []string{"guru_mapel"}}
 	if err := store.CreateAssessmentActivity(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "Formatif biasa setelah Final", "formatif", "2020-01-10", []int64{routineObjectiveID}); err != nil {
 		t.Fatalf("Formatif rutin sesudah Final tetap sah: %v", err)
 	}
@@ -293,8 +381,13 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	if err := db.QueryRow(`SELECT version,snapshot,snapshot_sha256 FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4`, f.Semester, f.Class, f.Subject, f.StudentA).Scan(&finalVersion, &finalSnapshot, &storedFinalHash); err != nil {
 		t.Fatal(err)
 	}
-	if auditCount != 1 || relationCount != 3 || scoreCount != 0 || finalCount != 1 || finalVersion != 1 || string(finalSnapshot) != "{}" || string(storedFinalHash) != string(finalHash[:]) {
+	if auditCount != 1 || relationCount != 3 || scoreCount != 1 || finalCount != 1 || finalVersion != 1 || string(finalSnapshot) != "{}" || string(storedFinalHash) != string(finalHash[:]) {
 		t.Fatalf("integritas pasca-HTTP: audit=%d relasi=%d nilai=%d final=%d versi=%d snapshot=%s hash=%x", auditCount, relationCount, scoreCount, finalCount, finalVersion, finalSnapshot, storedFinalHash)
+	}
+	var historicalScore string
+	var historicalAuditCount int
+	if err := db.QueryRow(`SELECT s.score::text,(SELECT count(*) FROM app.historical_assessment_initial_score_audits a WHERE a.assessment_activity_id=s.assessment_activity_id AND a.learning_objective_id=s.learning_objective_id AND a.student_id=s.student_id) FROM app.assessment_activity_initial_scores s WHERE s.assessment_activity_id=$1 AND s.learning_objective_id=$2 AND s.student_id=$3`, activityID, objectiveIDs[0], f.StudentA).Scan(&historicalScore, &historicalAuditCount); err != nil || historicalScore != "0.00" || historicalAuditCount != 1 {
+		t.Fatalf("nilai historis dan audit: value=%s audits=%d err=%v", historicalScore, historicalAuditCount, err)
 	}
 	var routineScore string
 	if err := db.QueryRow(`SELECT score::text FROM app.assessment_activity_initial_scores WHERE assessment_activity_id=$1 AND student_id=$2 AND learning_objective_id=$3`, routineActivityID, f.StudentA, routineObjectiveID).Scan(&routineScore); err != nil || routineScore != "0.00" {

@@ -67,6 +67,17 @@ func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semest
 
 // studentID membatasi pembacaan historis hanya pada pemilik Final yang sah.
 func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool, studentID int64) (AssessmentTPRecap, error) {
+	return s.assessmentTPRecapForStudentMode(ctx, tx, actor, semesterID, classID, subjectID, includeEmptyRoster, studentID, 0)
+}
+
+// assessmentTPRecapForHistoricalScore hanya dipakai pratinjau pencatatan
+// historis setelah pemilik sumber dan penugasan pada tanggal kegiatan telah
+// diverifikasi oleh service CP10-23.
+func (s *Store) assessmentTPRecapForHistoricalScore(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID, activityID int64) (AssessmentTPRecap, error) {
+	return s.assessmentTPRecapForStudentMode(ctx, tx, actor, semesterID, classID, subjectID, true, studentID, activityID)
+}
+
+func (s *Store) assessmentTPRecapForStudentMode(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool, studentID, historicalActivityID int64) (AssessmentTPRecap, error) {
 	var err error
 	if err = s.authorize(ctx, tx, actor, "guru_mapel"); err != nil {
 		return AssessmentTPRecap{}, err
@@ -75,11 +86,28 @@ func (s *Store) assessmentTPRecapForStudent(ctx context.Context, tx *sql.Tx, act
 	if err != nil {
 		return AssessmentTPRecap{}, err
 	}
-	allowed, err := learningObjectiveAssignment(ctx, tx, teacherID, semesterID, classID, subjectID)
-	if err != nil {
-		return AssessmentTPRecap{}, err
+	allowed := false
+	if historicalActivityID > 0 && studentID > 0 {
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM app.assessment_activities a
+			WHERE a.id=$1 AND a.semester_id=$2 AND a.class_id=$3 AND a.subject_id=$4
+			AND a.teacher_id=$5 AND a.activity_type='sumatif'
+			AND EXISTS(SELECT 1 FROM app.teaching_assignments ta WHERE ta.teacher_id=a.teacher_id
+				AND ta.semester_id=a.semester_id AND ta.class_id=a.class_id AND ta.subject_id=a.subject_id
+				AND ta.effective_from<=a.activity_date AND (ta.effective_until IS NULL OR ta.effective_until>a.activity_date))
+			AND (EXISTS(SELECT 1 FROM app.historical_assessment_activity_insertions h WHERE h.activity_id=a.id AND h.teacher_id=a.teacher_id)
+				OR EXISTS(SELECT 1 FROM app.historical_assessment_objective_links l WHERE l.activity_id=a.id AND l.teacher_id=a.teacher_id))
+		)`, historicalActivityID, semesterID, classID, subjectID, teacherID).Scan(&allowed)
+		if err != nil {
+			return AssessmentTPRecap{}, err
+		}
+	} else {
+		allowed, err = learningObjectiveAssignment(ctx, tx, teacherID, semesterID, classID, subjectID)
+		if err != nil {
+			return AssessmentTPRecap{}, err
+		}
 	}
-	if studentID > 0 {
+	if studentID > 0 && historicalActivityID == 0 {
 		allowed, err = semesterFinalOwned(ctx, tx, teacherID, semesterID, classID, subjectID, studentID)
 		if err != nil {
 			return AssessmentTPRecap{}, err

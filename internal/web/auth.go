@@ -88,6 +88,7 @@ type view struct {
 	HistoricalTPPreview                 *historicalTPPreviewView
 	HistoricalAssessmentLink            *historicalAssessmentLinkView
 	HistoricalAssessmentActivity        *historicalAssessmentActivityView
+	HistoricalAssessmentScores          *historicalAssessmentScoreView
 	TPCriteria                          *tpCriteriaView
 	TPGuidance                          *academic.TPGuidance
 	AssessmentActivities                *assessmentActivitiesView
