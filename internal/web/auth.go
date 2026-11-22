@@ -87,6 +87,7 @@ type view struct {
 	LearningObjectiveCorrection         *learningObjectiveCorrectionView
 	HistoricalTPPreview                 *historicalTPPreviewView
 	HistoricalAssessmentLink            *historicalAssessmentLinkView
+	HistoricalAssessmentActivity        *historicalAssessmentActivityView
 	TPCriteria                          *tpCriteriaView
 	TPGuidance                          *academic.TPGuidance
 	AssessmentActivities                *assessmentActivitiesView

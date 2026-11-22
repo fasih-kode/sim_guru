@@ -1,0 +1,136 @@
+{{define "historical-assessment-activity"}}
+{{$root := .}}{{$d := .HistoricalAssessmentActivity}}{{$in := $d.Input}}
+<section class="panel mb-5 max-w-5xl">
+  <div class="mb-4">
+    <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Koreksi struktur historis</span>
+    <h2 class="mt-3 text-lg font-semibold text-gray-900">Tambahkan Kegiatan Sumatif Historis</h2>
+    <p class="mt-2 text-sm leading-6 text-gray-600">Alur ini mencatat kegiatan dan TP yang telah dinilai menurut bukti yang diperiksa. Alur ini tidak mencatat nilai siswa, tidak menyalin nilai TP lain, dan tidak mengubah Final atau snapshot lama.</p>
+  </div>
+  <div class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+    <p class="font-semibold">Sebelum mengisi</p>
+    <p>Pastikan kegiatan memang berlangsung, sumber dapat ditelusuri, dan tanggal sesuai bukti. Konfirmasi akan mengunci metadata kegiatan sebagai catatan historis. Nilai untuk TP baru tetap kosong dan hanya dapat dicatat melalui proses nilai yang berwenang.</p>
+  </div>
+  <form id="historical-assessment-activity-form" method="post" action="/guru/kegiatan-penilaian/historis" class="space-y-5">
+    {{.CSRF}}
+    <div>
+      <label for="historical-context">Semester · kelas · mata pelajaran</label>
+      <select id="historical-context" name="context" required>
+        <option value="">Pilih penugasan aktif</option>
+        {{range $d.Contexts}}<option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and (eq .SemesterID $in.SemesterID) (eq .ClassID $in.ClassID) (eq .SubjectID $in.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>{{end}}
+      </select>
+      <p class="mt-1 text-xs text-gray-500">Pilihan mengikuti penugasan Guru Mapel yang sedang berlaku.</p>
+    </div>
+    <button class="button-secondary" type="submit" name="action" value="context" formnovalidate>Muat TP historis</button>
+    {{if $d.Context}}
+    <div class="rounded-lg border border-gray-200 p-4">
+      <h3 class="font-semibold text-gray-900">Identitas kegiatan</h3>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <label>Nama kegiatan Sumatif<input name="name" maxlength="200" value="{{$in.Name}}" required></label>
+        <label>Tanggal pelaksanaan<input type="date" name="activity_date" value="{{$in.ActivityDate}}" required></label>
+      </div>
+      {{if $d.Activities}}<p class="mt-2 text-xs text-gray-500">Kegiatan yang ada pada konteks ini ditampilkan saat memeriksa kemiripan. Jangan membuat salinan jika sumber menunjuk peristiwa yang sama.</p>{{end}}
+    </div>
+    <fieldset class="rounded-lg border border-gray-200 p-4">
+      <legend class="px-1 text-sm font-semibold text-gray-900">TP historis yang dinilai</legend>
+      <p class="mb-3 text-sm text-gray-500">Pilih semua TP yang benar-benar diukur dalam kegiatan. Pilihan ini belum menjadi nilai siswa.</p>
+      <div class="grid gap-2 sm:grid-cols-2">
+        {{range $d.Objectives}}
+        <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 font-normal">
+          <input class="mt-1" type="checkbox" name="objective_ids" value="{{.ID}}" {{if index $d.SelectedObjectiveIDs .ID}}checked{{end}}>
+          <span class="text-sm text-gray-800">{{.Label}}</span>
+        </label>
+        {{else}}<p class="text-sm text-amber-800">Belum ada TP berprovenance historis yang dapat dipilih pada konteks ini.</p>{{end}}
+      </div>
+    </fieldset>
+    <fieldset class="space-y-4 rounded-lg border border-gray-200 p-4">
+      <legend class="px-1 text-sm font-semibold text-gray-900">Sumber dan pemeriksaan bukti</legend>
+      <p class="text-sm text-gray-600">Metadata hanya membantu penelusuran. Isi dokumen dan hubungan TP–kegiatan tetap harus diperiksa guru.</p>
+      <div class="grid gap-4 md:grid-cols-2">
+        <label>Identitas sumber/peristiwa<input name="source_identity" maxlength="500" value="{{$in.SourceIdentity}}" required></label>
+        <label>Dokumen pembelajaran atau Sumatif<input name="source_document" maxlength="500" value="{{$in.SourceDocument}}" required></label>
+        <label>Lokasi arsip atau referensi aplikasi<input name="source_archive" maxlength="500" value="{{$in.SourceArchive}}" required></label>
+        <label>Guru penanggung jawab pada sumber<input name="source_teacher" maxlength="200" value="{{$in.SourceTeacher}}" required></label>
+        <label class="md:col-span-2">Bagian dokumen yang menunjukkan TP dinilai<textarea name="source_section" rows="3" maxlength="500" required>{{$in.SourceSection}}</textarea></label>
+        <label>Referensi hasil penilaian<input name="result_source" maxlength="500" value="{{$in.ResultSource}}" required></label>
+        <label>Metode pemeriksaan substansi<input name="method" maxlength="500" value="{{$in.Method}}" required></label>
+        <label class="md:col-span-2">Alasan pencatatan koreksi historis<textarea name="reason" rows="3" maxlength="500" required>{{$in.Reason}}</textarea></label>
+      </div>
+      <label class="flex items-start gap-3 font-normal"><input class="mt-1" type="checkbox" name="acknowledged" value="yes" {{if $in.Acknowledged}}checked{{end}} required><span>Saya telah memeriksa substansi sumber dan memastikan identitas kegiatan, tanggal, kelas, mapel, guru penanggung jawab, serta sumber hasil penilaian dapat ditelusuri.</span></label>
+    </fieldset>
+    <details class="rounded-lg border border-gray-200 p-4">
+      <summary class="cursor-pointer text-sm font-medium text-gray-800">Tanggal di luar kalender atau sumber yang mirip</summary>
+      <div class="mt-4 space-y-4">
+        <label>Alasan tanggal kegiatan berada di luar kalender semester<textarea name="outside_calendar_reason" rows="2" maxlength="500">{{$in.OutsideCalendarReason}}</textarea></label>
+        <label class="flex items-start gap-3 font-normal"><input class="mt-1" type="checkbox" name="duplicate_checked" value="yes" {{if $in.DuplicateChecked}}checked{{end}}><span>Saya telah memeriksa kegiatan dengan nama/tanggal yang mirip.</span></label>
+        <label>Penjelasan mengapa ini merupakan peristiwa berbeda<textarea name="duplicate_explanation" rows="2" maxlength="500">{{$in.DuplicateExplanation}}</textarea></label>
+      </div>
+    </details>
+    <button class="button-primary" type="submit" name="action" value="preview">Tinjau dampak</button>
+  </form>
+</section>
+{{with $d.Preview}}{{template "historical-assessment-activity-preview" $root}}{{end}}
+{{end}}
+{{end}}
+
+{{define "historical-assessment-activity-preview"}}
+{{$d := .HistoricalAssessmentActivity}}{{$p := $d.Preview}}
+<section id="historical-preview-result" class="panel max-w-5xl" aria-live="polite">
+  {{if $p}}
+  <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+    <h2 class="font-semibold">Tinjau dampak sebelum konfirmasi</h2>
+    <p class="mt-1">Kegiatan Sumatif baru akan menautkan {{len $p.Objectives}} TP. Ini perubahan struktur historis; nilai siswa belum dicatat.</p>
+    <p class="mt-1">{{$p.ImpactNotice}}</p>
+    {{if $p.OutsideCalendar}}<p class="mt-1">Tanggal kegiatan berada di luar rentang kalender semester; alasan tercatat: {{$p.Input.OutsideCalendarReason}}</p>{{end}}
+  </div>
+  {{if $p.SimilarActivities}}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900"><h3 class="font-semibold">Periksa kemungkinan duplikasi</h3><ul class="mt-2 list-disc pl-5">{{range $p.SimilarActivities}}<li>{{.Name}} · {{.Date}} · ID {{.ID}}</li>{{end}}</ul><p class="mt-2">Konfirmasi hanya boleh dilanjutkan setelah sumber dan alasan perbedaan benar-benar diperiksa.</p></div>{{end}}
+  <div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-lg border border-gray-200 p-3"><span class="text-xs text-gray-500">Semua kandidat siswa</span><strong class="mt-1 block text-xl">{{$p.StudentCount}}</strong></div>
+    <div class="rounded-lg border border-gray-200 p-3"><span class="text-xs text-gray-500">Kandidat anggota</span><strong class="mt-1 block text-xl">{{$p.MemberCount}}</strong></div>
+    <div class="rounded-lg border border-gray-200 p-3"><span class="text-xs text-gray-500">Bukan anggota</span><strong class="mt-1 block text-xl">{{$p.NonMemberCount}}</strong></div>
+    <div class="rounded-lg border border-gray-200 p-3"><span class="text-xs text-gray-500">Belum dapat diverifikasi</span><strong class="mt-1 block text-xl">{{$p.UnknownCount}}</strong></div>
+  </div>
+  <div class="mb-4 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-700"><span>Final konteks: <strong>{{$p.FinalCount}}</strong></span><span>Bobot: {{if $p.Weights.Configured}}NH {{$p.Weights.NH}}% · ASTS {{$p.Weights.ASTS}}% · ASAS {{$p.Weights.ASAS}}%{{else}}belum diatur{{end}}</span><span>Rekomendasi setelah kegiatan: belum dapat dipastikan sebelum nilai dicatat.</span></div>
+  <div class="table-surface">
+    <table class="app-table min-w-[900px]">
+      <caption class="sr-only">Kandidat siswa dan potensi dampak struktur</caption>
+      <thead><tr><th>Siswa</th><th>Relevansi tanggal</th><th>NH saat ini</th><th>ASTS / ASAS</th><th>Status dan rekomendasi</th><th>Potensi dampak</th></tr></thead>
+      <tbody>{{range $p.Students}}<tr><td class="font-medium">{{.Name}}</td><td>{{.Relevance}}</td><td>{{.NH}}</td><td>{{.ASTS}} / {{.ASAS}}</td><td>{{.Status}}{{if .Recommendation}} · {{.Recommendation}}{{end}}{{if .FinalVersion}}<div class="text-xs text-amber-700">Final versi {{.FinalVersion}} · nilai {{.FinalValue}}</div>{{end}}</td><td>{{.After}}</td></tr>{{else}}<tr><td colspan="6" class="p-5 text-center text-gray-500">Tidak ada siswa yang dapat ditampilkan.</td></tr>{{end}}</tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-xs text-gray-500">Klasifikasi ini hanya simulasi relevansi berdasarkan penempatan pada tanggal kegiatan, bukan penetapan kewajiban penilaian.</p>
+  <form id="historical-assessment-activity-pagination" method="post" action="/guru/kegiatan-penilaian/historis" class="mt-4 flex flex-wrap items-center gap-3">
+    {{$.CSRF}}<input type="hidden" name="action" value="preview"><input type="hidden" name="context" value="{{printf "%d:%d:%d" $p.Input.SemesterID $p.Input.ClassID $p.Input.SubjectID}}">
+    {{range $p.Input.ObjectiveIDs}}<input type="hidden" name="objective_ids" value="{{.}}">{{end}}
+    <input type="hidden" name="name" value="{{$p.Input.Name}}"><input type="hidden" name="activity_date" value="{{$p.Input.ActivityDate}}"><input type="hidden" name="reason" value="{{$p.Input.Reason}}">
+    <input type="hidden" name="source_identity" value="{{$p.Input.SourceIdentity}}"><input type="hidden" name="source_document" value="{{$p.Input.SourceDocument}}"><input type="hidden" name="source_archive" value="{{$p.Input.SourceArchive}}"><input type="hidden" name="source_teacher" value="{{$p.Input.SourceTeacher}}"><input type="hidden" name="source_section" value="{{$p.Input.SourceSection}}"><input type="hidden" name="result_source" value="{{$p.Input.ResultSource}}"><input type="hidden" name="method" value="{{$p.Input.Method}}"><input type="hidden" name="outside_calendar_reason" value="{{$p.Input.OutsideCalendarReason}}"><input type="hidden" name="duplicate_explanation" value="{{$p.Input.DuplicateExplanation}}">
+    {{if $p.Input.Acknowledged}}<input type="hidden" name="acknowledged" value="yes">{{end}}{{if $p.Input.DuplicateChecked}}<input type="hidden" name="duplicate_checked" value="yes">{{end}}
+    <input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$d.Submission}}">
+    {{if gt $p.Page 1}}<button type="submit" name="page" value="{{$p.PreviousPage}}" hx-post="/guru/kegiatan-penilaian/historis" hx-include="#historical-assessment-activity-pagination" hx-target="#historical-preview-result" hx-swap="outerHTML" hx-vals='{"page":"{{$p.PreviousPage}}"}' class="button-secondary">Sebelumnya</button>{{end}}
+    <span class="text-sm text-gray-600">Halaman {{$p.Page}} dari {{$p.PageCount}}</span>
+    {{if lt $p.Page $p.PageCount}}<button type="submit" name="page" value="{{$p.NextPage}}" hx-post="/guru/kegiatan-penilaian/historis" hx-include="#historical-assessment-activity-pagination" hx-target="#historical-preview-result" hx-swap="outerHTML" hx-vals='{"page":"{{$p.NextPage}}"}' class="button-secondary">Berikutnya</button>{{end}}
+  </form>
+  <form method="post" action="/guru/kegiatan-penilaian/historis" class="mt-5 border-t border-gray-200 pt-5">{{$.CSRF}}
+    {{/* Token serta identitas submission disimpan dalam POST, bukan URL. */}}
+    <input type="hidden" name="context" value="{{printf "%d:%d:%d" $p.Input.SemesterID $p.Input.ClassID $p.Input.SubjectID}}">
+    {{range $p.Input.ObjectiveIDs}}<input type="hidden" name="objective_ids" value="{{.}}">{{end}}
+    <input type="hidden" name="name" value="{{$p.Input.Name}}"><input type="hidden" name="activity_date" value="{{$p.Input.ActivityDate}}">
+    <input type="hidden" name="reason" value="{{$p.Input.Reason}}"><input type="hidden" name="source_identity" value="{{$p.Input.SourceIdentity}}"><input type="hidden" name="source_document" value="{{$p.Input.SourceDocument}}"><input type="hidden" name="source_archive" value="{{$p.Input.SourceArchive}}"><input type="hidden" name="source_teacher" value="{{$p.Input.SourceTeacher}}"><input type="hidden" name="source_section" value="{{$p.Input.SourceSection}}"><input type="hidden" name="result_source" value="{{$p.Input.ResultSource}}"><input type="hidden" name="method" value="{{$p.Input.Method}}"><input type="hidden" name="outside_calendar_reason" value="{{$p.Input.OutsideCalendarReason}}"><input type="hidden" name="duplicate_explanation" value="{{$p.Input.DuplicateExplanation}}">
+    {{if $p.Input.Acknowledged}}<input type="hidden" name="acknowledged" value="yes">{{end}}{{if $p.Input.DuplicateChecked}}<input type="hidden" name="duplicate_checked" value="yes">{{end}}
+    <input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$d.Submission}}">
+    <p class="mb-3 text-sm text-gray-600">Dengan konfirmasi, Anda mencatat kegiatan dan relasi TP sebagai koreksi historis. Tidak ada nilai atau Final yang dibuat maupun diperbarui.</p>
+    <button type="submit" name="action" value="confirm" class="button-primary">Konfirmasi kegiatan historis</button>
+  </form>
+  {{else}}<p class="text-sm text-gray-500">Isi identitas kegiatan dan bukti, lalu pilih Tinjau dampak.</p>{{end}}
+</section>
+{{end}}
+
+{{define "historical-assessment-activity-result"}}
+{{$d := .HistoricalAssessmentActivity}}{{$r := $d.Result}}
+<section class="panel max-w-4xl">
+  <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-green-900"><h2 class="text-lg font-semibold">Kegiatan historis berhasil dicatat</h2><p class="mt-1">Audit {{ $r.AuditID }} · Kegiatan {{ $r.ActivityID }}. Tidak ada nilai siswa yang dibuat dan Final lama tidak diubah.</p></div>
+  <dl class="mt-5 grid gap-4 sm:grid-cols-2"><div><dt class="text-sm text-gray-500">Kegiatan</dt><dd class="font-medium">{{$r.Preview.Input.Name}}</dd></div><div><dt class="text-sm text-gray-500">Tanggal</dt><dd class="font-medium">{{$r.Preview.Input.ActivityDate}}</dd></div><div><dt class="text-sm text-gray-500">Jumlah siswa terdampak untuk ditinjau</dt><dd class="font-medium">{{$r.Preview.StudentCount}}</dd></div><div><dt class="text-sm text-gray-500">Final konteks</dt><dd class="font-medium">{{$r.Preview.FinalCount}}</dd></div></dl>
+  <ul class="mt-4 list-disc pl-5">{{range $r.Preview.Objectives}}<li>{{.Definition}}</li>{{end}}</ul>
+  <p class="mt-4 text-sm text-gray-600">{{$r.Preview.ImpactNotice}}</p>
+  <a class="button-secondary mt-5 inline-flex" href="/guru/kegiatan-penilaian">Kembali ke Kegiatan Penilaian</a>
+</section>
+{{end}}

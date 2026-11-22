@@ -18,12 +18,13 @@ type AssessmentScoreInput struct {
 }
 
 type AssessmentScoreCell struct {
-	ObjectiveID    int64
-	InitialScoreID int64
-	Value          string
-	Recorded       bool
-	CanCorrect     bool
-	CanRemediate   bool
+	ObjectiveID      int64
+	InitialScoreID   int64
+	Value            string
+	Recorded         bool
+	CanCorrect       bool
+	CanRemediate     bool
+	HistoricalLocked bool
 }
 
 type AssessmentScoreStudent struct {
@@ -112,7 +113,9 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		return AssessmentScoreSheet{}, err
 	}
 	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,s.name,coalesce(s.nis,''),lo.id,sc.id,
-		CASE WHEN sc.id IS NULL THEN NULL ELSE greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))::text END,sc.recorded_by
+		CASE WHEN sc.id IS NULL THEN NULL ELSE greatest(coalesce(latest.after_score,sc.score),coalesce(remedial.best_score,coalesce(latest.after_score,sc.score)))::text END,sc.recorded_by,
+		(EXISTS (SELECT 1 FROM app.historical_assessment_objective_links h WHERE h.activity_id=ao.activity_id AND h.learning_objective_id=ao.learning_objective_id)
+		 OR EXISTS (SELECT 1 FROM app.historical_assessment_activity_objectives hdo JOIN app.historical_assessment_activity_insertions ha ON ha.id=hdo.audit_id WHERE ha.activity_id=ao.activity_id AND hdo.learning_objective_id=ao.learning_objective_id))
 		FROM app.student_placements p JOIN app.students s ON s.id=p.student_id
 		CROSS JOIN app.assessment_activity_objectives ao
 		JOIN app.learning_objectives lo ON lo.id=ao.learning_objective_id
@@ -135,7 +138,8 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		var name, nis string
 		var scoreID, recordedBy sql.NullInt64
 		var score sql.NullString
-		if err = rows.Scan(&studentID, &name, &nis, &objectiveID, &scoreID, &score, &recordedBy); err != nil {
+		var historicalLocked bool
+		if err = rows.Scan(&studentID, &name, &nis, &objectiveID, &scoreID, &score, &recordedBy, &historicalLocked); err != nil {
 			return AssessmentScoreSheet{}, err
 		}
 		idx, ok := byStudent[studentID]
@@ -144,7 +148,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 			byStudent[studentID] = idx
 			out.Students = append(out.Students, AssessmentScoreStudent{ID: studentID, Name: name, NIS: nis})
 		}
-		cell := AssessmentScoreCell{ObjectiveID: objectiveID}
+		cell := AssessmentScoreCell{ObjectiveID: objectiveID, HistoricalLocked: historicalLocked}
 		if scoreID.Valid {
 			cell.InitialScoreID = scoreID.Int64
 			cell.CanCorrect = out.Activity.TeacherID == teacherID && recordedBy.Valid && recordedBy.Int64 == actor
@@ -152,7 +156,7 @@ func (s *Store) AssessmentActivityScoreSheet(ctx context.Context, actor, activit
 		}
 		if score.Valid {
 			cell.Value, cell.Recorded = score.String, true
-		} else if out.CanRecord {
+		} else if out.CanRecord && !historicalLocked {
 			out.HasBlankScores = true
 		}
 		out.Students[idx].Scores = append(out.Students[idx].Scores, cell)
@@ -244,6 +248,22 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 	}
 	if len(matched) != len(objectives) {
 		return ErrForbidden
+	}
+	// Relasi historis memerlukan jalur pencatatan nilai tersendiri; nilai TP lain
+	// pada kegiatan yang sama tetap dapat dicatat melalui jalur rutin.
+	var historicalLink bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM app.historical_assessment_objective_links
+		WHERE activity_id=$1 AND learning_objective_id=ANY($2::bigint[])
+	) OR EXISTS (
+		SELECT 1 FROM app.historical_assessment_activity_objectives d
+		JOIN app.historical_assessment_activity_insertions h ON h.id=d.audit_id
+		WHERE h.activity_id=$1 AND d.learning_objective_id=ANY($2::bigint[])
+	)`, activityID, objectives).Scan(&historicalLink); err != nil {
+		return err
+	}
+	if historicalLink {
+		return ValidationError("Nilai untuk relasi TP pada kegiatan historis memerlukan proses pencatatan historis tersendiri.")
 	}
 	placements := make(map[int64]int64, len(students))
 	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,p.id

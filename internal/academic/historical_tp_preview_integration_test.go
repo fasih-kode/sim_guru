@@ -369,9 +369,12 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 	}
 	exec(`INSERT INTO app.historical_assessment_objective_links(activity_id,learning_objective_id,provenance_id,school_year_id,semester_id,class_id,subject_id,teacher_id,actor_id,activity_date,historical_date,reason,evidence,verification,impact_snapshot,preview_sha256,request_sha256,submission_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'2020-04-01','2020-02-01','fixture','{}','{}','{}',$10,$10,'00000000-0000-4000-8000-000000002120')`, laterActivity, historicalID, provenanceID, year, sem, class, subject, teacher, user, hash[:])
 	exec(`INSERT INTO app.assessment_activity_objectives(activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id) VALUES($1,$2,$3,$4,$5,$6)`, laterActivity, historicalID, year, sem, class, subject)
-	for _, id := range []int64{objective, historicalID} {
-		exec(`INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,p.id,'2020-04-01',0,$8 FROM app.student_placements p WHERE p.student_id=$7 AND p.school_year_id=$3`, laterActivity, id, year, sem, class, subject, late, user)
+	exec(`INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,p.id,'2020-04-01',0,$8 FROM app.student_placements p WHERE p.student_id=$7 AND p.school_year_id=$3`, laterActivity, objective, year, sem, class, subject, late, user)
+	exec(`SAVEPOINT historical_score_guard`)
+	if _, err = tx.Exec(`INSERT INTO app.assessment_activity_initial_scores(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by) SELECT $1,$2,$3,$4,$5,$6,$7,p.id,'2020-04-01',0,$8 FROM app.student_placements p WHERE p.student_id=$7 AND p.school_year_id=$3`, laterActivity, historicalID, year, sem, class, subject, late, user); err == nil {
+		t.Fatal("input nilai rutin untuk pasangan TP historis CP10-21 diterima")
 	}
+	exec(`ROLLBACK TO SAVEPOINT historical_score_guard`)
 	allRecap, recapErr := s.assessmentTPRecap(ctx, tx, user, sem, class, subject, true)
 	if recapErr != nil {
 		t.Fatal(recapErr)
@@ -386,7 +389,7 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 		switch student.ID {
 		case fmt.Sprint(late):
 			lateStudent = student
-			if !student.NHComplete || student.NH != "0,00" {
+			if student.NHComplete {
 				t.Fatalf("NH siswa masuk belakangan: %+v", student)
 			}
 			for _, item := range student.Objectives {
@@ -408,23 +411,24 @@ func TestHistoricalTPPreviewRollbackIntegration(t *testing.T) {
 			}
 		}
 	}
-	if !lateFound || !laterScored.Complete || laterScored.Average != "0,00" || laterScored.HistoricalApplicability != "bukan anggota" {
-		t.Fatalf("kegiatan baru untuk nonanggota: %+v", laterScored)
+	if !lateFound || laterScored.Complete || laterScored.HistoricalApplicability != "bukan anggota" {
+		t.Fatalf("pasangan TP historis tetap belum bernilai untuk nonanggota: %+v", laterScored)
 	}
 	if !missingFound || laterMissing.Complete || laterMissing.RequiredCount != 1 || len(laterMissing.Missing) == 0 {
 		t.Fatalf("kegiatan baru belum bernilai: %+v", laterMissing)
 	}
 
-	// Dengan constraint saat ini starts_on NULL membuat kegiatan tidak masuk
-	// roster penilaian. Injeksi status ke bukti DB sah menguji kombinasi
-	// ketidakpastian historis + kegiatan mandiri tanpa melewati constraint DB.
-	// Verifikasi dampak pada NH dengan input kegiatan yang benar-benar dibaca
-	// dari PostgreSQL; hanya label keberlakuan historis disimulasikan.
+	// Nilai pada pasangan CP10-21 di atas memang harus ditolak. Uji kalkulasi
+	// terpisah ini memodelkan kegiatan baru yang sah (bukan pasangan historis
+	// lama) untuk memastikan fakta TP historis yang belum pasti tidak menutupi
+	// bukti kegiatan baru yang memang berlaku.
 	lateStudent.Objectives = append([]AssessmentTPRecapObjective(nil), lateStudent.Objectives...)
 	lateStudent.NH, lateStudent.NHComplete, lateStudent.Missing = "", false, nil
 	for i := range lateStudent.Objectives {
 		if lateStudent.Objectives[i].ID == fmt.Sprint(historicalID) {
 			lateStudent.Objectives[i].HistoricalApplicability = "belum pasti"
+			lateStudent.Objectives[i].Activities = []AssessmentTPRecapActivity{{ID: "kegiatan-baru", Name: "Sumatif baru sah", Date: "2020-04-02", EffectiveValue: "0,00", HasValue: true}}
+			lateStudent.Objectives[i].RequiredCount, lateStudent.Objectives[i].ScoredCount = 1, 1
 		}
 	}
 	if e := finishAssessmentTPStudent(&lateStudent, "", nil); e != nil || !lateStudent.NHComplete || lateStudent.NH != "0,00" {
