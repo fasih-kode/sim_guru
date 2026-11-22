@@ -342,12 +342,19 @@ func TestHistoricalAssessmentLinkServiceIntegration(t *testing.T) {
 
 	// CP10-22 service: kegiatan historis dapat disimpan tanpa membuat nilai,
 	// dengan semua TP dipilih dan duplikat nama/tanggal ditinjau secara eksplisit.
+	var sourceTeacherName, otherTeacherName string
+	if err = db.QueryRow(`SELECT name FROM app.teachers WHERE id=$1`, f.TeacherID).Scan(&sourceTeacherName); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT name FROM app.teachers WHERE id=$1`, f.OtherID).Scan(&otherTeacherName); err != nil {
+		t.Fatal(err)
+	}
 	activityInput := HistoricalAssessmentActivityInput{
 		SemesterID: f.Semester, ClassID: f.Class, SubjectID: f.Subject,
 		ObjectiveIDs: []int64{initial, tp}, Name: "Sumatif lama", ActivityDate: "2020-01-11",
 		Reason: "Kegiatan arsip terlewat saat pencatatan", SourceIdentity: "arsip-sumatif-cp22-" + testutil.Random(t)[:8],
 		SourceDocument: "Daftar Sumatif semester 1", SourceArchive: "Arsip akademik lemari A",
-		SourceTeacher: "Guru pemilik kegiatan", SourceSection: "Halaman dan butir penilaian TP",
+		SourceTeacher: sourceTeacherName, SourceSection: "Halaman dan butir penilaian TP",
 		ResultSource: "Lembar hasil bertanda", Method: "Mencocokkan dokumen sumber",
 		DuplicateChecked: true, DuplicateExplanation: "Nama dan tanggal sama; identitas dokumen sumber berbeda.", Acknowledged: true,
 	}
@@ -368,6 +375,22 @@ func TestHistoricalAssessmentLinkServiceIntegration(t *testing.T) {
 	}
 	if activityPreview.FinalCount != 1 || len(activityPreview.Objectives) != 2 || activityPreview.NumericImpactKnown || activityPreview.StudentCount < 12 || activityPreview.PageCount < 2 || len(activityPreview.Students) != 10 {
 		t.Fatalf("ringkasan pratinjau: %+v", activityPreview)
+	}
+	choices, _, choicesErr := s.HistoricalAssessmentActivityChoices(ctx, f.Teacher, f.Semester, f.Class, f.Subject)
+	if choicesErr != nil {
+		t.Fatal("pilihan TP CP10-22:", choicesErr)
+	}
+	choiceIDs := make(map[int64]bool, len(choices))
+	for _, choice := range choices {
+		choiceIDs[choice.ID] = true
+	}
+	if !choiceIDs[initial] || !choiceIDs[tp] {
+		t.Fatalf("pilihan CP10-22 harus memuat TP rutin dan historis: %v", choiceIDs)
+	}
+	wrongTeacher := activityInput
+	wrongTeacher.SourceTeacher = otherTeacherName
+	if _, wrongErr := s.PreviewHistoricalAssessmentActivity(ctx, f.Teacher, wrongTeacher, 1, ""); wrongErr == nil {
+		t.Fatal("nama guru sumber yang terkait identitas lain diterima")
 	}
 	secondPage, pageErr := s.PreviewHistoricalAssessmentActivity(ctx, f.Teacher, activityInput, 2, activityPreview.SnapshotToken)
 	if pageErr != nil || secondPage.StudentCount != activityPreview.StudentCount || secondPage.MemberCount != activityPreview.MemberCount || secondPage.SnapshotToken != activityPreview.SnapshotToken || len(secondPage.Students) == 0 {
@@ -399,6 +422,67 @@ func TestHistoricalAssessmentLinkServiceIntegration(t *testing.T) {
 		t.Fatal("tanggal masa depan diterima")
 	}
 	activityReq := HistoricalAssessmentActivityConfirmation{Input: activityInput, SnapshotToken: activityPreview.SnapshotToken, SubmissionKey: "00000000-0000-4000-8000-000000002401"}
+	// Metadata identitas sumber, assignment dan kalender diikat ke token penuh,
+	// meskipun perubahan tidak menghilangkan akses atau mengubah kategori tanggal.
+	var activitiesBeforeStale, linkedObjectivesBefore int
+	if err = db.QueryRow(`SELECT count(*) FROM app.assessment_activities WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND name=$4 AND teacher_id=$5`, f.Semester, f.Class, f.Subject, activityInput.Name, f.TeacherID).Scan(&activitiesBeforeStale); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(DISTINCT ao.learning_objective_id) FROM app.assessment_activities a LEFT JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3 AND a.name=$4 AND a.teacher_id=$5`, f.Semester, f.Class, f.Subject, activityInput.Name, f.TeacherID).Scan(&linkedObjectivesBefore); err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name, mutate, restore string
+	}{
+		{"metadata guru", `UPDATE app.teachers SET name=name||' berubah' WHERE id=$1`, `UPDATE app.teachers SET name=$2 WHERE id=$1`},
+		{"assignment", `UPDATE app.teaching_assignments SET effective_until='2027-01-01' WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4`, `UPDATE app.teaching_assignments SET effective_until=NULL WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4`},
+		{"kalender", `UPDATE app.semester_calendars SET ends_on='2020-12-30' WHERE semester_id=$1`, `UPDATE app.semester_calendars SET ends_on='2020-12-31' WHERE semester_id=$1`},
+	} {
+		preview, previewErr := s.PreviewHistoricalAssessmentActivity(ctx, f.Teacher, activityInput, 1, "")
+		if previewErr != nil {
+			t.Fatalf("pratinjau sebelum perubahan %s: %v", scenario.name, previewErr)
+		}
+		staleReq := activityReq
+		staleReq.SnapshotToken = preview.SnapshotToken
+		switch scenario.name {
+		case "metadata guru":
+			exec(scenario.mutate, f.TeacherID)
+		case "assignment":
+			exec(scenario.mutate, f.Semester, f.Class, f.Subject, f.TeacherID)
+			if _, stillAllowedErr := s.PreviewHistoricalAssessmentActivity(ctx, f.Teacher, activityInput, 1, ""); stillAllowedErr != nil {
+				t.Fatalf("assignment berubah tetapi hak akses masih sah: %v", stillAllowedErr)
+			}
+		case "kalender":
+			exec(scenario.mutate, f.Semester)
+			calendarPreview, calendarErr := s.PreviewHistoricalAssessmentActivity(ctx, f.Teacher, activityInput, 1, "")
+			if calendarErr != nil || calendarPreview.OutsideCalendar {
+				t.Fatalf("tanggal harus tetap di dalam kalender setelah perubahan metadata: %+v %v", calendarPreview, calendarErr)
+			}
+		}
+		if _, _, staleErr := s.ConfirmHistoricalAssessmentActivity(ctx, f.Teacher, staleReq); !errors.Is(staleErr, ErrConflict) {
+			t.Fatalf("perubahan %s harus membuat token konflik: %v", scenario.name, staleErr)
+		}
+		switch scenario.name {
+		case "metadata guru":
+			exec(scenario.restore, f.TeacherID, sourceTeacherName)
+		case "assignment":
+			exec(scenario.restore, f.Semester, f.Class, f.Subject, f.TeacherID)
+		case "kalender":
+			exec(scenario.restore, f.Semester)
+		}
+		var partial, activitiesAfterStale, linkedObjectives int
+		if err = db.QueryRow(`SELECT count(*) FROM app.historical_assessment_activity_insertions WHERE source_identity=$1`, canonicalHistoricalActivitySourceIdentity(activityInput.SourceIdentity)).Scan(&partial); err != nil || partial != 0 {
+			t.Fatalf("penolakan %s meninggalkan audit parsial: %d %v", scenario.name, partial, err)
+		}
+		if err = db.QueryRow(`SELECT count(DISTINCT a.id),count(DISTINCT ao.learning_objective_id) FROM app.assessment_activities a LEFT JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3 AND a.name=$4 AND a.teacher_id=$5`, f.Semester, f.Class, f.Subject, activityInput.Name, f.TeacherID).Scan(&activitiesAfterStale, &linkedObjectives); err != nil {
+			t.Fatal(err)
+		}
+		if activitiesAfterStale != activitiesBeforeStale || linkedObjectives != linkedObjectivesBefore {
+			var rows string
+			_ = db.QueryRow(`SELECT coalesce(string_agg(a.id::text||':'||a.name||':'||a.activity_date::text,',' ORDER BY a.id),'') FROM app.assessment_activities a WHERE a.semester_id=$1 AND a.class_id=$2 AND a.subject_id=$3 AND a.name=$4 AND a.teacher_id=$5`, f.Semester, f.Class, f.Subject, activityInput.Name, f.TeacherID).Scan(&rows)
+			t.Fatalf("penolakan %s meninggalkan kegiatan/relasi parsial: activity=%d/%d relasi=%d/%d data=%s", scenario.name, activitiesAfterStale, activitiesBeforeStale, linkedObjectives, linkedObjectivesBefore, rows)
+		}
+	}
 	// Perubahan bobot setelah pratinjau membuat token basi.
 	exec(`UPDATE app.semester_assessment_weights SET nh=50,asts=25,asas=25 WHERE semester_id=$1`, f.Semester)
 	if _, _, staleErr := s.ConfirmHistoricalAssessmentActivity(ctx, f.Teacher, activityReq); !errors.Is(staleErr, ErrConflict) {

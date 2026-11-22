@@ -121,6 +121,59 @@ func canonicalHistoricalActivitySourceIdentity(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
 }
 
+func canonicalHistoricalTeacherName(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+// HistoricalAssessmentActivityChoices menampilkan semua TP pada konteks
+// penugasan guru yang berwenang; pilihan CP10-21 tetap memakai layanannya sendiri.
+func (s *Store) HistoricalAssessmentActivityChoices(ctx context.Context, actor, semester, class, subject int64) ([]HistoricalAssessmentLinkChoice, []HistoricalAssessmentLinkChoice, error) {
+	tx, err := s.reader(ctx, actor, "guru_mapel")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+	teacher, err := learningObjectiveTeacherID(ctx, tx, actor)
+	if err != nil {
+		return nil, nil, err
+	}
+	allowed, err := learningObjectiveAssignment(ctx, tx, teacher, semester, class, subject)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !allowed {
+		return nil, nil, ErrForbidden
+	}
+	read := func(query string, args ...any) ([]HistoricalAssessmentLinkChoice, error) {
+		rows, queryErr := tx.QueryContext(ctx, query, args...)
+		if queryErr != nil {
+			return nil, queryErr
+		}
+		defer rows.Close()
+		var choices []HistoricalAssessmentLinkChoice
+		for rows.Next() {
+			var choice HistoricalAssessmentLinkChoice
+			if queryErr = rows.Scan(&choice.ID, &choice.Label); queryErr != nil {
+				return nil, queryErr
+			}
+			choices = append(choices, choice)
+		}
+		return choices, rows.Err()
+	}
+	objectives, err := read(`SELECT o.id,o.definition FROM app.learning_objectives o
+		JOIN app.semesters sm ON sm.id=o.semester_id AND sm.school_year_id=o.school_year_id
+		JOIN app.classes c ON c.id=o.class_id AND c.school_year_id=sm.school_year_id
+		JOIN app.subjects s ON s.id=o.subject_id AND s.active
+		WHERE o.semester_id=$1 AND o.class_id=$2 AND o.subject_id=$3 ORDER BY o.id`, semester, class, subject)
+	if err != nil {
+		return nil, nil, err
+	}
+	activities, err := read(`SELECT id,name||' · '||activity_date::text FROM app.assessment_activities
+		WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4 AND activity_type='sumatif'
+		ORDER BY activity_date,id`, semester, class, subject, teacher)
+	return objectives, activities, err
+}
+
 // PreviewHistoricalAssessmentActivity menghitung konteks dan dampak secara baca-saja.
 func (s *Store) PreviewHistoricalAssessmentActivity(ctx context.Context, actor int64, in HistoricalAssessmentActivityInput, page int, expected string) (HistoricalAssessmentActivityPreview, error) {
 	if err := validateHistoricalAssessmentActivityInput(in); err != nil {
@@ -169,6 +222,21 @@ func (s *Store) previewHistoricalAssessmentActivityTx(ctx context.Context, tx *s
 	if future {
 		return out, ValidationError("Tanggal kegiatan historis tidak boleh di masa depan.")
 	}
+	var teacherName string
+	if err = tx.QueryRowContext(ctx, `SELECT t.name FROM app.teachers t JOIN app.users u ON u.id=t.user_id WHERE t.id=$1 AND t.active AND u.active`, teacher).Scan(&teacherName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, ErrForbidden
+		}
+		return out, err
+	}
+	if canonicalHistoricalTeacherName(in.SourceTeacher) != canonicalHistoricalTeacherName(teacherName) {
+		// Pada saat konfirmasi, perbedaan ini berarti metadata yang terikat pada
+		// pratinjau berubah; pada pratinjau baru, sumber berbeda harus ditolak.
+		if expected != "" {
+			return out, ErrConflict
+		}
+		return out, ValidationError("Nama guru penanggung jawab pada sumber harus sesuai identitas guru pada penugasan kegiatan.")
+	}
 	out.Input, out.TeacherID = in, teacher
 	var calendarExists bool
 	err = tx.QueryRowContext(ctx, `SELECT sm.school_year_id,y.name||' · Semester '||sm.number::text,c.grade::text||c.name,s.name,EXISTS(SELECT 1 FROM app.semester_final_versions f WHERE f.semester_id=sm.id AND f.class_id=c.id AND f.subject_id=s.id),
@@ -190,6 +258,25 @@ func (s *Store) previewHistoricalAssessmentActivityTx(ctx context.Context, tx *s
 	}
 	if out.OutsideCalendar && strings.TrimSpace(in.OutsideCalendarReason) == "" {
 		return out, ValidationError("Tanggal di luar kalender memerlukan alasan historis khusus.")
+	}
+	// Metadata otoritas dan tanggal disertakan utuh, bukan hanya status izin
+	// atau kategori kalender, agar perubahan yang masih menyisakan izin tetap
+	// membatalkan pratinjau lama.
+	var teacherMetadata, assignmentMetadata, calendarMetadata string
+	if err = tx.QueryRowContext(ctx, `SELECT jsonb_build_object(
+		'teacher',jsonb_build_object('id',t.id,'user_id',t.user_id,'name',t.name,'active',t.active,'version',t.version),
+		'user',jsonb_build_object('id',u.id,'username',u.username,'display_name',u.display_name,'active',u.active,'version',u.version)
+		)::text
+		FROM app.teachers t JOIN app.users u ON u.id=t.user_id WHERE t.id=$1`, teacher).Scan(&teacherMetadata); err != nil {
+		return out, err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]'::jsonb)::text
+		FROM app.teaching_assignments a WHERE a.teacher_id=$1 AND a.semester_id=$2 AND a.class_id=$3 AND a.subject_id=$4`, teacher, in.SemesterID, in.ClassID, in.SubjectID).Scan(&assignmentMetadata); err != nil {
+		return out, err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.semester_id),'[]'::jsonb)::text
+		FROM app.semester_calendars c WHERE c.semester_id=$1`, in.SemesterID).Scan(&calendarMetadata); err != nil {
+		return out, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT id,definition FROM app.learning_objectives WHERE id=ANY($1::bigint[]) AND school_year_id=$2 AND semester_id=$3 AND class_id=$4 AND subject_id=$5 ORDER BY id`, in.ObjectiveIDs, out.YearID, in.SemesterID, in.ClassID, in.SubjectID)
 	if err != nil {
@@ -360,19 +447,22 @@ func (s *Store) previewHistoricalAssessmentActivityTx(ctx context.Context, tx *s
 	input.ObjectiveIDs = append([]int64(nil), in.ObjectiveIDs...)
 	sort.Slice(input.ObjectiveIDs, func(i, j int) bool { return input.ObjectiveIDs[i] < input.ObjectiveIDs[j] })
 	source := struct {
-		Input      HistoricalAssessmentActivityInput
-		Context    LearningObjectiveContext
-		Weights    AssessmentWeights
-		Students   []HistoricalAssessmentActivityStudent
-		Objectives []HistoricalAssessmentActivityObjective
-		Recap      AssessmentTPRecap
-		Finals     []struct {
+		Input              HistoricalAssessmentActivityInput
+		Context            LearningObjectiveContext
+		Weights            AssessmentWeights
+		Students           []HistoricalAssessmentActivityStudent
+		Objectives         []HistoricalAssessmentActivityObjective
+		Recap              AssessmentTPRecap
+		TeacherMetadata    string
+		AssignmentMetadata string
+		CalendarMetadata   string
+		Finals             []struct {
 			StudentID    int64  `json:"student_id"`
 			Version      int64  `json:"version"`
 			SnapshotHash string `json:"snapshot_hash"`
 			Snapshot     string `json:"snapshot"`
 		}
-	}{Input: input, Context: out.Context, Weights: out.Weights, Students: all, Objectives: out.Objectives}
+	}{Input: input, Context: out.Context, Weights: out.Weights, Students: all, Objectives: out.Objectives, TeacherMetadata: teacherMetadata, AssignmentMetadata: assignmentMetadata, CalendarMetadata: calendarMetadata}
 	source.Recap, err = s.assessmentTPRecap(ctx, tx, actor, in.SemesterID, in.ClassID, in.SubjectID, true)
 	if err != nil {
 		return out, err

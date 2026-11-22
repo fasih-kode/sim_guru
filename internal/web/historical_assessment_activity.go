@@ -42,7 +42,7 @@ func (a *application) historicalAssessmentActivity(w http.ResponseWriter, r *htt
 		data.Input = historicalAssessmentActivityInput(form, semester, class, subject)
 		data.selectObjectives()
 		if parseErr == nil && form.Get("action") != "" {
-			data.Objectives, data.Activities, parseErr = a.options.Academics.HistoricalAssessmentLinkChoices(r.Context(), actor, semester, class, subject)
+			data.Objectives, data.Activities, parseErr = a.options.Academics.HistoricalAssessmentActivityChoices(r.Context(), actor, semester, class, subject)
 		}
 		if parseErr == nil {
 			switch form.Get("action") {
@@ -93,7 +93,7 @@ func (a *application) historicalAssessmentActivity(w http.ResponseWriter, r *htt
 			}
 			if strings.TrimSpace(data.Context) != "" && len(data.Objectives) == 0 {
 				if semester > 0 && class > 0 && subject > 0 {
-					data.Objectives, data.Activities, _ = a.options.Academics.HistoricalAssessmentLinkChoices(r.Context(), actor, semester, class, subject)
+					data.Objectives, data.Activities, _ = a.options.Academics.HistoricalAssessmentActivityChoices(r.Context(), actor, semester, class, subject)
 				}
 			}
 			a.render(w, r, "page", status, view{Page: "historical-assessment-activity", Title: "Kegiatan Sumatif historis", Error: message, HistoricalAssessmentActivity: data})

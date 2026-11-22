@@ -39,7 +39,7 @@
           <input class="mt-1" type="checkbox" name="objective_ids" value="{{.ID}}" {{if index $d.SelectedObjectiveIDs .ID}}checked{{end}}>
           <span class="text-sm text-gray-800">{{.Label}}</span>
         </label>
-        {{else}}<p class="text-sm text-amber-800">Belum ada TP berprovenance historis yang dapat dipilih pada konteks ini.</p>{{end}}
+        {{else}}<p class="text-sm text-amber-800">Belum ada TP pada konteks ini yang dapat dipilih.</p>{{end}}
       </div>
     </fieldset>
     <fieldset class="space-y-4 rounded-lg border border-gray-200 p-4">
@@ -49,7 +49,7 @@
         <label>Identitas sumber/peristiwa<input name="source_identity" maxlength="500" value="{{$in.SourceIdentity}}" required></label>
         <label>Dokumen pembelajaran atau Sumatif<input name="source_document" maxlength="500" value="{{$in.SourceDocument}}" required></label>
         <label>Lokasi arsip atau referensi aplikasi<input name="source_archive" maxlength="500" value="{{$in.SourceArchive}}" required></label>
-        <label>Guru penanggung jawab pada sumber<input name="source_teacher" maxlength="200" value="{{$in.SourceTeacher}}" required></label>
+        <label>Guru penanggung jawab pada sumber<input name="source_teacher" maxlength="200" value="{{$in.SourceTeacher}}" required><span class="mt-1 block text-xs text-gray-500">Nama harus sesuai identitas Guru Mapel dengan penugasan aktif dan penugasan pada tanggal kegiatan.</span></label>
         <label class="md:col-span-2">Bagian dokumen yang menunjukkan TP dinilai<textarea name="source_section" rows="3" maxlength="500" required>{{$in.SourceSection}}</textarea></label>
         <label>Referensi hasil penilaian<input name="result_source" maxlength="500" value="{{$in.ResultSource}}" required></label>
         <label>Metode pemeriksaan substansi<input name="method" maxlength="500" value="{{$in.Method}}" required></label>

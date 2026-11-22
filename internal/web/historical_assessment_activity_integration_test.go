@@ -152,13 +152,25 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	if choices.Code != http.StatusOK || !strings.Contains(choices.Body.String(), "TP historis HTTP 1") || !strings.Contains(choices.Body.String(), "TP historis HTTP 2") {
 		t.Fatalf("pilihan konteks/TP: %d", choices.Code)
 	}
+	if !strings.Contains(choices.Body.String(), "TP rutin untuk uji kompatibilitas") {
+		t.Fatal("pilihan TP CP10-22 tidak memuat TP rutin yang sah")
+	}
+	var sourceTeacherName string
+	if err := db.QueryRow(`SELECT name FROM app.teachers WHERE id=$1`, f.TeacherID).Scan(&sourceTeacherName); err != nil {
+		t.Fatal(err)
+	}
 	form := url.Values{
 		"gorilla.csrf.Token": {csrfToken}, "action": {"preview"}, "context": {fmt.Sprintf("%d:%d:%d", f.Semester, f.Class, f.Subject)},
-		"objective_ids": {fmt.Sprint(objectiveIDs[0]), fmt.Sprint(objectiveIDs[1])}, "name": {"Kegiatan CP22 HTTP sintetis"}, "activity_date": {"2020-01-10"},
+		"objective_ids": {fmt.Sprint(routineObjectiveID), fmt.Sprint(objectiveIDs[0]), fmt.Sprint(objectiveIDs[1])}, "name": {"Kegiatan CP22 HTTP sintetis"}, "activity_date": {"2020-01-10"},
 		"reason": {"Pencatatan kegiatan berdasarkan dokumen fixture sintetis."}, "source_identity": {"source-event-cp22-http-" + testutil.Random(t)[:8]},
-		"source_document": {"Dokumen Sumatif sintetis"}, "source_archive": {"arsip fixture TEST"}, "source_teacher": {"Guru fixture"},
+		"source_document": {"Dokumen Sumatif sintetis"}, "source_archive": {"arsip fixture TEST"}, "source_teacher": {sourceTeacherName},
 		"source_section": {"Bagian kompetensi A dan B yang menunjukkan dua TP dinilai."}, "result_source": {"Lembar hasil fixture"},
 		"method": {"Mencocokkan kegiatan dan hasil dengan TP"}, "acknowledged": {"yes"},
+	}
+	wrongTeacherSource := cloneHistoricalActivityValues(form)
+	wrongTeacherSource.Set("source_teacher", "Guru lain yang tidak memiliki penugasan")
+	if mismatch := request(http.MethodPost, path, wrongTeacherSource, cookies, false); mismatch.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("metadata guru sumber yang berbeda harus ditolak: %d", mismatch.Code)
 	}
 	preview := request(http.MethodPost, path, form, cookies, false)
 	if preview.Code != http.StatusOK || !strings.Contains(preview.Body.String(), "Tinjau dampak sebelum konfirmasi") || !strings.Contains(preview.Body.String(), "Semua kandidat siswa") || !strings.Contains(preview.Body.String(), "12") {
@@ -281,7 +293,7 @@ func TestHistoricalAssessmentActivityHTTPIntegration(t *testing.T) {
 	if err := db.QueryRow(`SELECT version,snapshot,snapshot_sha256 FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4`, f.Semester, f.Class, f.Subject, f.StudentA).Scan(&finalVersion, &finalSnapshot, &storedFinalHash); err != nil {
 		t.Fatal(err)
 	}
-	if auditCount != 1 || relationCount != 2 || scoreCount != 0 || finalCount != 1 || finalVersion != 1 || string(finalSnapshot) != "{}" || string(storedFinalHash) != string(finalHash[:]) {
+	if auditCount != 1 || relationCount != 3 || scoreCount != 0 || finalCount != 1 || finalVersion != 1 || string(finalSnapshot) != "{}" || string(storedFinalHash) != string(finalHash[:]) {
 		t.Fatalf("integritas pasca-HTTP: audit=%d relasi=%d nilai=%d final=%d versi=%d snapshot=%s hash=%x", auditCount, relationCount, scoreCount, finalCount, finalVersion, finalSnapshot, storedFinalHash)
 	}
 	var routineScore string
