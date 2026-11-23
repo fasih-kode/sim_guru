@@ -1,5 +1,15 @@
 # Handover
 
+## RD-02 — FINAL GATE PASS / CLOSED (24 November 2026)
+
+Supervisor menetapkan **RD-02 CLOSED** secara terbatas melalui [keputusan resmi pada PR #1](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7115968783), setelah code review ulang **PASS** atas commit `e6a74e2b5ebc0bea490266b90b534c69eb6c26ac`. Fase 10 secara keseluruhan tetap **IN PROGRESS**. Penutupan ini bukan persetujuan merge, deployment, migrasi produksi, atau kesiapan produksi umum.
+
+Bukti yang dilaporkan Codex dan diterima supervisor, tanpa direproduksi secara independen oleh supervisor: UAT browser guru pada desktop dan ponsel setelah hotfix responsif; rekonsiliasi 390 sel dengan 53 nilai awal pada enam siswa sasaran dan 337 sel tetap kosong; nilai 0, 82,50, 100 dan koreksi 82,50 menjadi 83; histori S-06 dan penolakan batch Final basi tanpa Final parsial. Empat Final sintetis UAT awal dipertahankan dan satu Final sintetis tambahan dibuat untuk uji konflik. **64 baris Final baseline**, termasuk snapshot dan hash-nya, tetap identik berdasarkan fingerprint MD5 seluruh kolom. Kronologi dan hasil tes rinci tetap tercatat di bawah.
+
+Batas bukti tetap berlaku: **full integration suite NOT RUN**; satu tes batch lama gagal saat menyiapkan fixture karena privilege runtime, dengan regresi harness RD-02 dan konflik dua tab sebagai bukti pengganti terbatas. Pesan konflik terlihat di browser, tetapi **HTTP 409 tidak diamati langsung di browser**; bukti regresi service/HTTP tidak disamakan dengan pengamatan tersebut. Beranda terautentikasi gagal SQLSTATE 42501 pada database sintetis terbatas dan tidak diklaim lulus. Catatan tindak lanjut UX: halaman histori S-06 memakai syarat `CanSetApplicability`, sehingga akses baca histori setelah siswa Final masih perlu ditinjau secara terpisah bila diperlukan.
+
+Insiden paparan kredensial runtime yang dicatat dalam kronologi tetap terbuka: rotasi terkoordinasi diperlukan sebelum paparan lebih luas atau rollout produksi. Blocker keamanan direct SQL runtime sebelum produksi juga tetap terbuka. Seluruh bukti dan histori sebelumnya dipertahankan.
+
 ## RD-02 — Hotfix responsif dan bukti UAT lanjutan (24 November 2026)
 
 Label aksesibilitas yang diposisikan absolut di tabel keluar dari scroll container karena tidak ada containing block terposisi. Penambahan position:relative pada gradebook-scroll membatasi area tersebut. Pada browser guru terautentikasi, dokumen menjadi 1356 CSS px pada viewport 1366×768 dan 380 CSS px pada viewport 390×844; lebar konten tabel tetap melebihi scroll container. Posisi sticky header dan kolom nama diperiksa melalui computed style; scroll horizontal diuji mencapai batas akhir pada desktop dan ponsel. Pada ponsel, header tetap pada posisi 372,7 CSS px ketika tabel digulir vertikal sejauh 1097 px. Halaman penetapan sekarang menampilkan riwayat versi, keputusan, tanggal, aktor, waktu WIB dan alasan; akses dikendalikan role dan penugasan. Browser memperlihatkan versi 1 Berlaku dan Tidak Berlaku untuk siswa sintetis 65.
