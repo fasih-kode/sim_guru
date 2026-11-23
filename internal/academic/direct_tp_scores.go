@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -28,6 +29,22 @@ type directTPParsed struct {
 type DirectTPScore struct {
 	StudentID, ObjectiveID, InitialID, Version int64
 	Original, Current                          string
+}
+
+func (s *Store) beginDirectTP(ctx context.Context, actor int64) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, auth.MutationLock); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if err = s.authorize(ctx, tx, actor, "guru_mapel"); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 // DirectTPScores reads existing records for an actively assigned teacher.
@@ -104,7 +121,7 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 		return err
 	}
 	digest := sha256.Sum256(payload)
-	tx, err := s.begin(ctx, actor, "guru_mapel")
+	tx, err := s.beginDirectTP(ctx, actor)
 	if err != nil {
 		return err
 	}

@@ -97,6 +97,7 @@ type view struct {
 	AssessmentCorrection                *assessmentCorrectionView
 	AssessmentRemedial                  *assessmentRemedialView
 	AssessmentTPRecap                   *assessmentTPRecapView
+	DirectTPGradebook                   *directTPGradebookView
 	SemesterRecommendations             *semesterRecommendationView
 	SemesterFinalization                *semesterFinalView
 	SemesterFinalBatch                  *semesterFinalBatchView
@@ -194,6 +195,11 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/guru/rekomendasi-semester" || strings.HasPrefix(path, "/guru/rekomendasi-semester/"):
 		if user != nil && user.HasRole("guru_mapel") {
 			return "semester-recommendations", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/buku-nilai":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "direct-tp-gradebook", "guru-mapel"
 		}
 		return "", ""
 	case path == "/guru/rekap-nilai-tp":

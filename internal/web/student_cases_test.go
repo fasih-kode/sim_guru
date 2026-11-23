@@ -297,7 +297,7 @@ func TestTeacherAttendanceAndSubjectTeacherUseSharedNavigationTabs(t *testing.T)
 	}{
 		{"Kehadiran Guru", []string{"guru_mapel"}, 2},
 		{"Kehadiran Guru", []string{"wali_kelas"}, 2},
-		{"Guru Mapel", []string{"guru_mapel"}, 9},
+		{"Guru Mapel", []string{"guru_mapel"}, 10},
 		{"Guru Mapel", []string{"kurikulum"}, 0},
 	} {
 		user := &auth.User{Roles: tc.roles}
