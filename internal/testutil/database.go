@@ -44,8 +44,12 @@ func Database(t *testing.T, path string) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = provider.Up(context.Background()); err != nil {
+	current, target, err := provider.GetVersions(context.Background())
+	if err != nil {
 		t.Fatal(err)
+	}
+	if current != target {
+		t.Fatal("test database migrations must be applied separately before tests")
 	}
 	return db
 }

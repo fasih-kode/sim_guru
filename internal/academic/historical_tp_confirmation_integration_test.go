@@ -127,4 +127,11 @@ func TestHistoricalTPConfirmationConcurrencyAndIntegrityIntegration(t *testing.T
 	if objectives != 2 || audits != 1 || scores != 0 || links != 0 || finalSnapshot != originalSnapshot || !equalHash(finalHash, originalHash) {
 		t.Fatalf("integritas: %d %d %d %d %s", objectives, audits, scores, links, finalSnapshot)
 	}
+	var ordinal int
+	if err = db.QueryRow(`SELECT ordinal FROM app.direct_tp_codes WHERE objective_id=$1`, ids[0]).Scan(&ordinal); err != nil || ordinal != 2 {
+		t.Fatalf("kode TP historis: %d %v", ordinal, err)
+	}
+	if err = s.SaveDirectTPScores(ctx, f.Teacher, f.Semester, f.Class, f.Subject, "00000000-0000-4000-8000-000000002053", []DirectTPScoreInput{{StudentID: f.StudentB, ObjectiveID: ids[0], ExpectedVersion: -1, Value: "75"}}); err != nil {
+		t.Fatalf("nilai langsung TP historis pada penempatan sah: %v", err)
+	}
 }
