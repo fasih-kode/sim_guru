@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,19 @@ type directTPGradebookView struct {
 	Book        academic.DirectTPBook
 	Submission  string
 	CellErrors  map[string]string
+	Draft       bool
+	Conflict    bool
+	Reviewed    bool
+	Conflicts   []directTPConflict
+	Missing     []directTPMissingDraft
+}
+
+type directTPConflict struct {
+	Student, Objective, Stored, Draft string
+}
+
+type directTPMissingDraft struct {
+	Key, Value, Version string
 }
 
 func directTPCellKey(student, objective int64) string {
@@ -69,6 +83,7 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 	message := ""
 	draft := map[string]string{}
 	versions := map[string]string{}
+	review := r.Method == http.MethodPost && r.PostForm.Get("action") == "review_latest"
 	if r.Method == http.MethodPost {
 		if !data.SelectedSet {
 			a.academicFailure(w, academic.ValidationError("Pilih konteks penugasan."))
@@ -103,19 +118,24 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 		if err == nil && len(data.CellErrors) > 0 {
 			err = academic.ValidationError("Periksa nilai pada sel yang ditandai. Tidak ada nilai yang disimpan.")
 		}
-		if err == nil {
+		if err == nil && !review {
 			err = a.options.Academics.SaveDirectTPScores(r.Context(), actor, semester, class, subject, data.Submission, inputs)
 		}
-		if err == nil {
+		if err == nil && !review {
 			q := url.Values{"context": {fmt.Sprintf("%d:%d:%d", semester, class, subject)}, "saved": {data.Submission}}
 			http.Redirect(w, r, "/guru/buku-nilai?"+q.Encode(), http.StatusSeeOther)
 			return
 		}
-		status, message = academicError(err)
+		if err != nil {
+			status, message = academicError(err)
+		}
 		if status == http.StatusInternalServerError {
 			a.failure(w, err)
 			return
 		}
+		data.Draft = true
+		data.Conflict = status == http.StatusConflict
+		data.Reviewed = review && err == nil
 	}
 	if data.SelectedSet {
 		data.Book, err = a.options.Academics.DirectTPGradebook(r.Context(), actor, semester, class, subject)
@@ -128,13 +148,32 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 				cell := &data.Book.Students[i].Cells[j]
 				key := directTPCellKey(cell.StudentID, cell.ObjectiveID)
 				if val, ok := draft[key]; ok {
+					if old, e := strconv.ParseInt(versions[key], 10, 64); e == nil && (data.Conflict || old != cell.Version || !cell.Editable) {
+						stored := cell.Value
+						if stored == "" {
+							stored = "Belum dinilai"
+						}
+						data.Conflicts = append(data.Conflicts, directTPConflict{Student: data.Book.Students[i].Name, Objective: cell.Code, Stored: stored, Draft: val})
+					}
 					cell.Value = val
-					if version, e := strconv.ParseInt(versions[key], 10, 64); e == nil {
+					if version, e := strconv.ParseInt(versions[key], 10, 64); e == nil && !data.Reviewed {
 						cell.Version = version
 					}
+					delete(draft, key)
 				}
 			}
 		}
+		keys := make([]string, 0, len(draft))
+		for key := range draft {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			data.Missing = append(data.Missing, directTPMissingDraft{Key: key, Value: draft[key], Version: versions[key]})
+		}
+	}
+	if data.Reviewed {
+		data.Submission = ""
 	}
 	if data.Submission == "" {
 		data.Submission, err = newFinalSubmissionKey()

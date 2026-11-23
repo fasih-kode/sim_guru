@@ -158,6 +158,47 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT s.score::text,c.after_score::text FROM app.direct_tp_initial_scores s JOIN app.direct_tp_score_corrections c ON c.initial_score_id=s.id WHERE s.semester_id=$1 AND s.student_id=$2`, f.Semester, f.StudentB).Scan(&original, &corrected); err != nil || original != "82.50" || corrected != "100.00" {
 		t.Fatalf("histori nilai: %s %s %v", original, corrected, err)
 	}
+	// Dua tab: simpan tab lain lebih dahulu, lalu draft dua sel harus tetap utuh.
+	page = request("GET", path, nil, nil, owner)
+	staleKey, staleCSRF := field("submission_key"), field("gorilla.csrf.Token")
+	page = request("GET", path, nil, nil, owner)
+	otherForm := url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + b: {"95"}, "version_" + b: {"1"}}
+	if w = request("POST", "/guru/buku-nilai", otherForm, page.Result().Cookies(), owner); w.Code != http.StatusSeeOther {
+		t.Fatalf("simpan tab lain: %d %s", w.Code, w.Body.String())
+	}
+	page = request("GET", path, nil, nil, owner)
+	staleForm := url.Values{"context": {contextValue}, "submission_key": {staleKey}, "gorilla.csrf.Token": {staleCSRF}, "score_" + a: {"15"}, "version_" + a: {"0"}, "score_" + b: {"90"}, "version_" + b: {"1"}}
+	// Token dan cookie harus berasal dari halaman yang sama.
+	staleForm.Set("gorilla.csrf.Token", field("gorilla.csrf.Token"))
+	w = request("POST", "/guru/buku-nilai", staleForm, page.Result().Cookies(), owner)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "tersimpan 95") || !strings.Contains(w.Body.String(), "draft Anda 90") || !strings.Contains(w.Body.String(), `value="15"`) {
+		t.Fatalf("konflik dua tab dan draft: %d %s", w.Code, w.Body.String())
+	}
+	var corrections int
+	if err = db.QueryRow(`SELECT count(*) FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1`, f.Semester).Scan(&corrections); err != nil || corrections != 2 {
+		t.Fatalf("konflik tidak boleh menulis sebagian: %d %v", corrections, err)
+	}
+	staleForm.Set("action", "review_latest")
+	staleCookies := page.Result().Cookies()
+	w = request("POST", "/guru/buku-nilai", staleForm, staleCookies, owner)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Draft belum disimpan") || !strings.Contains(w.Body.String(), `value="15"`) || !strings.Contains(w.Body.String(), `value="90"`) {
+		t.Fatalf("tinjau versi terbaru: %d %s", w.Code, w.Body.String())
+	}
+	page = w
+	newKey := field("submission_key")
+	if newKey == staleKey {
+		t.Fatal("tinjau versi terbaru harus memakai UUID baru")
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1`, f.Semester).Scan(&corrections); err != nil || corrections != 2 {
+		t.Fatalf("tinjau tidak boleh menulis: %d %v", corrections, err)
+	}
+	staleForm.Del("action")
+	staleForm.Set("submission_key", newKey)
+	staleForm.Set("version_"+b, "2")
+	staleForm.Set("gorilla.csrf.Token", field("gorilla.csrf.Token"))
+	if w = request("POST", "/guru/buku-nilai", staleForm, staleCookies, owner); w.Code != http.StatusSeeOther {
+		t.Fatalf("simpan setelah keputusan eksplisit: %d %s", w.Code, w.Body.String())
+	}
 	page = request("GET", path, nil, nil, owner)
 	moved := fmt.Sprintf("%d_%d", f.MovedStudent, objective)
 	form = url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + moved: {"70"}, "version_" + moved: {"-1"}}
