@@ -23,6 +23,11 @@
     const data = new FormData(form);
     if (event.submitter && event.submitter.name) data.append(event.submitter.name, event.submitter.value);
     const review = data.get('action') === 'review_latest';
+    if (!review && ![...data].some(([name, value]) => name.startsWith('score_') && value !== data.get(`original_${name.slice(6)}`))) {
+      dirty = false;
+      status('Tidak ada perubahan untuk disimpan.');
+      return;
+    }
     const body = new URLSearchParams(data);
     const table = form.querySelector('.gradebook-scroll');
     const buttons = [...form.querySelectorAll('button[type="submit"]')];

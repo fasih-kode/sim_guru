@@ -23,6 +23,8 @@ type directTPGradebookView struct {
 	Reviewed    bool
 	Conflicts   []directTPConflict
 	Missing     []directTPMissingDraft
+	Originals   map[string]string
+	DraftKeys   map[string]bool
 }
 
 type directTPConflict struct {
@@ -30,7 +32,7 @@ type directTPConflict struct {
 }
 
 type directTPMissingDraft struct {
-	Key, Value, Version string
+	Key, Value, Version, Original string
 }
 
 func directTPCellKey(student, objective int64) string {
@@ -39,7 +41,7 @@ func directTPCellKey(student, objective int64) string {
 
 func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) {
 	actor := principal(r).ID
-	data := &directTPGradebookView{CellErrors: map[string]string{}}
+	data := &directTPGradebookView{CellErrors: map[string]string{}, Originals: map[string]string{}, DraftKeys: map[string]bool{}}
 	contexts, err := a.options.Academics.LearningObjectiveContexts(r.Context(), actor)
 	if err != nil {
 		a.academicFailure(w, err)
@@ -83,6 +85,8 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 	message := ""
 	draft := map[string]string{}
 	versions := map[string]string{}
+	originals := map[string]string{}
+	unchanged := map[string]int64{}
 	review := r.Method == http.MethodPost && r.PostForm.Get("action") == "review_latest"
 	if r.Method == http.MethodPost {
 		if !data.SelectedSet {
@@ -103,12 +107,19 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 			student, e1 := strconv.ParseInt(parts[0], 10, 64)
 			objective, e2 := strconv.ParseInt(parts[1], 10, 64)
 			version, e3 := strconv.ParseInt(r.PostForm.Get("version_"+key), 10, 64)
-			if e1 != nil || e2 != nil || e3 != nil || student < 1 || objective < 1 {
+			original, hasOriginal := r.PostForm["original_"+key]
+			if e1 != nil || e2 != nil || e3 != nil || student < 1 || objective < 1 || !hasOriginal || len(original) != 1 {
 				err = academic.ValidationError("Identitas atau versi sel tidak valid.")
 				break
 			}
+			if items[0] == original[0] {
+				unchanged[key] = version
+				continue
+			}
 			draft[key] = items[0]
 			versions[key] = r.PostForm.Get("version_" + key)
+			originals[key] = original[0]
+			data.DraftKeys[key] = true
 			if e := academic.ValidateDirectTPValue(items[0]); e != nil {
 				data.CellErrors[key] = "Masukkan nilai 0–100 dengan paling banyak dua angka desimal."
 			}
@@ -117,6 +128,28 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 		data.Submission = r.PostForm.Get("submission_key")
 		if err == nil && len(data.CellErrors) > 0 {
 			err = academic.ValidationError("Periksa nilai pada sel yang ditandai. Tidak ada nilai yang disimpan.")
+		}
+		if err == nil && !review && len(inputs) == 0 {
+			err = academic.ValidationError("Tidak ada perubahan untuk disimpan.")
+		}
+		// Sel yang tidak diedit hanya diperiksa untuk menginformasikan perubahan
+		// tabel; sel tersebut tidak pernah diteruskan sebagai mutasi.
+		if err == nil && !review && len(unchanged) > 0 {
+			var saved bool
+			saved, err = a.options.Academics.DirectTPSubmissionSaved(r.Context(), actor, semester, class, subject, data.Submission)
+			if err == nil && !saved {
+				var book academic.DirectTPBook
+				book, err = a.options.Academics.DirectTPGradebook(r.Context(), actor, semester, class, subject)
+				if err == nil {
+					for _, student := range book.Students {
+						for _, cell := range student.Cells {
+							if v, ok := unchanged[directTPCellKey(cell.StudentID, cell.ObjectiveID)]; ok && v != cell.Version {
+								err = academic.ErrConflict
+							}
+						}
+					}
+				}
+			}
 		}
 		if err == nil && !review {
 			err = a.options.Academics.SaveDirectTPScores(r.Context(), actor, semester, class, subject, data.Submission, inputs)
@@ -133,7 +166,7 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 			a.failure(w, err)
 			return
 		}
-		data.Draft = true
+		data.Draft = len(draft) > 0
 		data.Conflict = status == http.StatusConflict
 		data.Reviewed = review && err == nil
 	}
@@ -147,6 +180,7 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 			for j := range data.Book.Students[i].Cells {
 				cell := &data.Book.Students[i].Cells[j]
 				key := directTPCellKey(cell.StudentID, cell.ObjectiveID)
+				data.Originals[key] = cell.Value
 				if val, ok := draft[key]; ok {
 					if old, e := strconv.ParseInt(versions[key], 10, 64); e == nil && (data.Conflict || old != cell.Version || !cell.Editable) {
 						stored := cell.Value
@@ -156,6 +190,9 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 						data.Conflicts = append(data.Conflicts, directTPConflict{Student: data.Book.Students[i].Name, Objective: cell.Code, Stored: stored, Draft: val})
 					}
 					cell.Value = val
+					if !data.Reviewed {
+						data.Originals[key] = originals[key]
+					}
 					if version, e := strconv.ParseInt(versions[key], 10, 64); e == nil && !data.Reviewed {
 						cell.Version = version
 					}
@@ -169,7 +206,7 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			data.Missing = append(data.Missing, directTPMissingDraft{Key: key, Value: draft[key], Version: versions[key]})
+			data.Missing = append(data.Missing, directTPMissingDraft{Key: key, Value: draft[key], Version: versions[key], Original: originals[key]})
 		}
 	}
 	if data.Reviewed {

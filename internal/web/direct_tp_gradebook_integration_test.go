@@ -13,11 +13,55 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
+
 	"github.com/fasih-kode/sim_guru/internal/academic"
 	"github.com/fasih-kode/sim_guru/internal/auth"
 	"github.com/fasih-kode/sim_guru/internal/master"
 	"github.com/fasih-kode/sim_guru/internal/testutil"
 )
+
+// serializeGradebook meniru successful controls pada formulir HTML yang benar-benar dirender.
+func serializeGradebook(t *testing.T, body string) url.Values {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := url.Values{}
+	var walk func(*html.Node, bool)
+	walk = func(n *html.Node, inForm bool) {
+		if n.Type == html.ElementNode && n.Data == "form" {
+			inForm = false
+			for _, a := range n.Attr {
+				if a.Key == "data-gradebook-form" {
+					inForm = true
+				}
+			}
+		}
+		if inForm && n.Type == html.ElementNode && n.Data == "input" {
+			name, value, disabled := "", "", false
+			for _, a := range n.Attr {
+				switch a.Key {
+				case "name":
+					name = a.Val
+				case "value":
+					value = a.Val
+				case "disabled":
+					disabled = true
+				}
+			}
+			if name != "" && !disabled {
+				values.Add(name, value)
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, inForm)
+		}
+	}
+	walk(doc, false)
+	return values
+}
 
 func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	db := testutil.Database(t, "../../.env")
@@ -111,7 +155,7 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	csrf, submission := field("gorilla.csrf.Token"), field("submission_key")
 	a := fmt.Sprintf("%d_%d", f.StudentA, objective)
 	b := fmt.Sprintf("%d_%d", f.StudentB, objective)
-	form := url.Values{"context": {contextValue}, "submission_key": {submission}, "gorilla.csrf.Token": {csrf}, "score_" + a: {"0"}, "version_" + a: {"-1"}, "score_" + b: {"100,01"}, "version_" + b: {"-1"}}
+	form := url.Values{"context": {contextValue}, "submission_key": {submission}, "gorilla.csrf.Token": {csrf}, "score_" + a: {"0"}, "version_" + a: {"-1"}, "original_" + a: {""}, "score_" + b: {"100,01"}, "version_" + b: {"-1"}, "original_" + b: {""}}
 	if w := request("POST", "/guru/buku-nilai", form, nil, owner); w.Code != http.StatusForbidden {
 		t.Fatalf("CSRF: %d", w.Code)
 	}
@@ -150,6 +194,7 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	form.Del("score_" + a)
 	form.Del("version_" + a)
 	form.Set("version_"+b, "0")
+	form.Set("original_"+b, "82.50")
 	w = request("POST", "/guru/buku-nilai", form, page.Result().Cookies(), owner)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("koreksi pra-Final: %d %s", w.Code, w.Body.String())
@@ -162,12 +207,12 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	page = request("GET", path, nil, nil, owner)
 	staleKey, staleCSRF := field("submission_key"), field("gorilla.csrf.Token")
 	page = request("GET", path, nil, nil, owner)
-	otherForm := url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + b: {"95"}, "version_" + b: {"1"}}
+	otherForm := url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + b: {"95"}, "version_" + b: {"1"}, "original_" + b: {"100.00"}}
 	if w = request("POST", "/guru/buku-nilai", otherForm, page.Result().Cookies(), owner); w.Code != http.StatusSeeOther {
 		t.Fatalf("simpan tab lain: %d %s", w.Code, w.Body.String())
 	}
 	page = request("GET", path, nil, nil, owner)
-	staleForm := url.Values{"context": {contextValue}, "submission_key": {staleKey}, "gorilla.csrf.Token": {staleCSRF}, "score_" + a: {"15"}, "version_" + a: {"0"}, "score_" + b: {"90"}, "version_" + b: {"1"}}
+	staleForm := url.Values{"context": {contextValue}, "submission_key": {staleKey}, "gorilla.csrf.Token": {staleCSRF}, "score_" + a: {"15"}, "version_" + a: {"0"}, "original_" + a: {"0.00"}, "score_" + b: {"90"}, "version_" + b: {"1"}, "original_" + b: {"100.00"}}
 	// Token dan cookie harus berasal dari halaman yang sama.
 	staleForm.Set("gorilla.csrf.Token", field("gorilla.csrf.Token"))
 	w = request("POST", "/guru/buku-nilai", staleForm, page.Result().Cookies(), owner)
@@ -195,13 +240,64 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	staleForm.Del("action")
 	staleForm.Set("submission_key", newKey)
 	staleForm.Set("version_"+b, "2")
+	staleForm.Set("original_"+b, "95.00")
 	staleForm.Set("gorilla.csrf.Token", field("gorilla.csrf.Token"))
 	if w = request("POST", "/guru/buku-nilai", staleForm, staleCookies, owner); w.Code != http.StatusSeeOther {
 		t.Fatalf("simpan setelah keputusan eksplisit: %d %s", w.Code, w.Body.String())
 	}
+	var beforeB, afterB string
+	if err = db.QueryRow(`SELECT c.before_score::text,c.after_score::text FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1 AND s.student_id=$2 ORDER BY c.version DESC LIMIT 1`, f.Semester, f.StudentB).Scan(&beforeB, &afterB); err != nil || beforeB != "95.00" || afterB != "90.00" {
+		t.Fatalf("histori sel konflik: %s -> %s %v", beforeB, afterB, err)
+	}
+	// Serialisasi HTML lengkap seperti submit tanpa JavaScript: hanya A diubah,
+	// sementara tab lain mengubah B. Nilai B lama tidak boleh menjadi koreksi.
+	first := request("GET", path, nil, nil, owner)
+	second := request("GET", path, nil, nil, owner)
+	firstForm := serializeGradebook(t, first.Body.String())
+	secondForm := serializeGradebook(t, second.Body.String())
+	noChange := serializeGradebook(t, first.Body.String())
+	if w = request("POST", "/guru/buku-nilai", noChange, first.Result().Cookies(), owner); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Tidak ada perubahan") {
+		t.Fatalf("form tanpa perubahan tidak boleh menulis: %d", w.Code)
+	}
+	firstForm.Set("score_"+a, "90")
+	secondForm.Set("score_"+b, "85")
+	if w = request("POST", "/guru/buku-nilai", secondForm, second.Result().Cookies(), owner); w.Code != http.StatusSeeOther {
+		t.Fatalf("tab B: %d %s", w.Code, w.Body.String())
+	}
+	var countBeforeB, countAfterB int
+	if err = db.QueryRow(`SELECT count(*) FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1 AND s.student_id=$2`, f.Semester, f.StudentB).Scan(&countBeforeB); err != nil {
+		t.Fatal(err)
+	}
+	w = request("POST", "/guru/buku-nilai", firstForm, first.Result().Cookies(), owner)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("tab A harus konflik: %d %s", w.Code, w.Body.String())
+	}
+	conflictForm := serializeGradebook(t, w.Body.String())
+	if conflictForm.Get("score_"+a) != "90" || conflictForm.Get("score_"+b) != "85.00" {
+		t.Fatalf("draft A / B terbaru: %#v", conflictForm)
+	}
+	conflictForm.Set("action", "review_latest")
+	w = request("POST", "/guru/buku-nilai", conflictForm, first.Result().Cookies(), owner)
+	if w.Code != http.StatusOK {
+		t.Fatalf("tinjau A: %d %s", w.Code, w.Body.String())
+	}
+	reviewed := serializeGradebook(t, w.Body.String())
+	if reviewed.Get("submission_key") == firstForm.Get("submission_key") || reviewed.Get("score_"+b) != "85.00" {
+		t.Fatal("UUID baru dan B terbaru wajib dipertahankan")
+	}
+	if w = request("POST", "/guru/buku-nilai", reviewed, first.Result().Cookies(), owner); w.Code != http.StatusSeeOther {
+		t.Fatalf("simpan A setelah tinjau: %d %s", w.Code, w.Body.String())
+	}
+	var latestB string
+	if err = db.QueryRow(`SELECT c.after_score::text FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1 AND s.student_id=$2 ORDER BY c.version DESC LIMIT 1`, f.Semester, f.StudentB).Scan(&latestB); err != nil || latestB != "85.00" {
+		t.Fatalf("B tidak boleh ditimpa: %q %v", latestB, err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM app.direct_tp_score_corrections c JOIN app.direct_tp_initial_scores s ON s.id=c.initial_score_id WHERE s.semester_id=$1 AND s.student_id=$2`, f.Semester, f.StudentB).Scan(&countAfterB); err != nil || countAfterB != countBeforeB {
+		t.Fatalf("A tidak boleh membuat koreksi B: %d -> %d %v", countBeforeB, countAfterB, err)
+	}
 	page = request("GET", path, nil, nil, owner)
 	moved := fmt.Sprintf("%d_%d", f.MovedStudent, objective)
-	form = url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + moved: {"70"}, "version_" + moved: {"-1"}}
+	form = url.Values{"context": {contextValue}, "submission_key": {field("submission_key")}, "gorilla.csrf.Token": {field("gorilla.csrf.Token")}, "score_" + moved: {"70"}, "version_" + moved: {"-1"}, "original_" + moved: {""}}
 	if w = request("POST", "/guru/buku-nilai", form, page.Result().Cookies(), owner); w.Code != http.StatusForbidden {
 		t.Fatalf("penempatan pindah: %d", w.Code)
 	}
@@ -217,6 +313,7 @@ func TestDirectTPGradebookHTTPIntegration(t *testing.T) {
 	form.Set("submission_key", field("submission_key"))
 	form.Set("score_"+a, "100")
 	form.Set("version_"+a, "0")
+	form.Set("original_"+a, "15.00")
 	form.Del("score_" + moved)
 	form.Del("version_" + moved)
 	form.Del("score_" + b)
