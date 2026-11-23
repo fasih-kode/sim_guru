@@ -23,8 +23,10 @@ type DirectTPBookStudent struct {
 }
 type DirectTPBookCell struct {
 	StudentID, ObjectiveID, Version int64
+	ApplicabilityVersion            int64
 	Code, Value                     string
 	Editable                        bool
+	CanSetApplicability             bool
 	Note                            string
 }
 
@@ -131,42 +133,26 @@ func (s *Store) DirectTPGradebook(ctx context.Context, actor, semester, class, s
 		return out, err
 	}
 	rows.Close()
-	historical := make(map[cellKey]bool)
-	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,h.learning_objective_id,coalesce(p.starts_on IS NOT NULL AND p.starts_on<=h.assessment_date AND app.student_placement_class_at(p.id,h.assessment_date)=$3,false) FROM app.student_placements p JOIN app.historical_learning_objective_insertions h ON (h.semester_id,h.class_id,h.subject_id)=($1,$3,$4) WHERE p.school_year_id=$2`, semester, year, class, subject)
-	if err != nil {
-		return out, err
-	}
-	for rows.Next() {
-		var key cellKey
-		var applies bool
-		if err = rows.Scan(&key.student, &key.objective, &applies); err != nil {
-			rows.Close()
-			return out, err
-		}
-		historical[key] = applies
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return out, err
-	}
-	rows.Close()
 	for _, r := range rosterRows {
 		for _, o := range out.Objectives {
-			cell := DirectTPBookCell{StudentID: r.student.ID, ObjectiveID: o.ID, Version: -1, Code: o.Code, Editable: r.valid && !r.student.Final}
+			state, _, applicabilityVersion, e := readDirectTPApplicability(ctx, tx, semester, class, subject, r.student.ID, o.ID)
+			if e != nil {
+				return out, e
+			}
+			cell := DirectTPBookCell{StudentID: r.student.ID, ObjectiveID: o.ID, Version: -1, ApplicabilityVersion: applicabilityVersion, Code: o.Code, Editable: state == directTPApplicable && !r.student.Final, CanSetApplicability: (!r.valid || state == directTPUnknown || applicabilityVersion > 0) && !r.student.Final}
 			if r.student.Final {
 				cell.Note = "Siswa sudah Final"
-			} else if !r.valid {
+			} else if state == directTPNotApplicable {
+				cell.Note = "TP tidak berlaku"
+			} else if state == directTPUnknown {
 				cell.Note = "Penempatan perlu diverifikasi"
 			}
 			key := cellKey{r.student.ID, o.ID}
-			if applies, exists := historical[key]; exists && !applies {
-				cell.Editable = false
-				cell.Note = "Keberlakuan TP perlu diverifikasi"
-			}
 			if value, exists := stored[key]; exists {
 				cell.Version, cell.Value = value.version, value.value
 				if value.owner != teacher {
 					cell.Editable = false
+					cell.CanSetApplicability = false
 					cell.Note = "Nilai milik guru lain"
 				}
 			}

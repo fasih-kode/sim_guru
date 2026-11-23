@@ -40,7 +40,11 @@ func Database(t *testing.T, path string) *sql.DB {
 	if err = db.QueryRow(`SELECT current_database(),rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user`).Scan(&actual, &privileged); err != nil || privileged || !strings.HasSuffix(actual, "_test") {
 		t.Fatal("unsafe test database")
 	}
-	provider, err := migrations.Provider(db)
+	metadataDB := db
+	if actual == "sim_guru_rd02_s06_20261123_test" {
+		metadataDB = FixtureDatabase(t)
+	}
+	provider, err := migrations.Provider(metadataDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +54,27 @@ func Database(t *testing.T, path string) *sql.DB {
 	}
 	if current != target {
 		t.Fatal("test database migrations must be applied separately before tests")
+	}
+	return db
+}
+
+// FixtureDatabase hanya untuk seed/metadata pada database RD-02 terisolasi.
+// Koneksi ini tidak boleh diberikan kepada service yang sedang diuji.
+func FixtureDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := database.Open(context.Background(), "postgres:///sim_guru_rd02_s06_20261123_test?host=/home/fasih/Projects/sim_guru/.local/postgres/socket&port=55436")
+	if err != nil {
+		t.Fatal("koneksi fixture tidak tersedia")
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if _, err = db.Exec(`SET ROLE sim_guru_ddl_owner`); err != nil {
+		t.Fatal("role fixture tidak tersedia")
+	}
+	var name, role string
+	var oid int64
+	if err = db.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database())`).Scan(&name, &role, &oid); err != nil || name != "sim_guru_rd02_s06_20261123_test" || role != "sim_guru_ddl_owner" || oid != 84604 {
+		t.Fatal("identitas fixture tidak aman")
 	}
 	return db
 }

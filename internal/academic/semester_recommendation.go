@@ -27,6 +27,7 @@ type SemesterRecommendationStudent struct {
 	FinalValue                             string
 	FinalVersion                           int64
 	NeedsReview                            bool
+	ReviewUncertain                        bool     `json:"-"`
 	ExceptionEligible                      bool     `json:"-"`
 	ExceptionEvidence                      []string `json:"-"`
 	FinalType                              string   `json:"-"`
@@ -70,13 +71,7 @@ func (s *Store) semesterRecommendationsHistoricalScoreStudentTx(ctx context.Cont
 }
 
 func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID, studentID, historicalActivityID int64) (SemesterRecommendation, error) {
-	var recap AssessmentTPRecap
-	var err error
-	if historicalActivityID > 0 {
-		recap, err = s.assessmentTPRecapForHistoricalScore(ctx, tx, actor, semesterID, classID, subjectID, studentID, historicalActivityID)
-	} else {
-		recap, err = s.assessmentTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, true, studentID)
-	}
+	recap, err := s.directTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, studentID, historicalActivityID)
 	if err != nil {
 		return SemesterRecommendation{}, err
 	}
@@ -87,7 +82,7 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 		if err = tx.QueryRowContext(ctx, `SELECT name,coalesce(nis,'') FROM app.students WHERE id=$1`, studentID).Scan(&name, &nis); err != nil {
 			return SemesterRecommendation{}, err
 		}
-		recap.Students = append(recap.Students, AssessmentTPRecapStudent{ID: fmtID(studentID), Name: name, NIS: nis})
+		recap.Students = append(recap.Students, AssessmentTPRecapStudent{ID: fmtID(studentID), Name: name, NIS: nis, PlacementUncertain: true})
 	}
 	out := SemesterRecommendation{Context: recap.Context, UnknownPlacementCount: recap.UnknownPlacementCount, OutOfCalendarActivityCount: recap.OutOfCalendarActivityCount}
 	out.Weights.SemesterID = semesterID
@@ -144,15 +139,11 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 			}
 		}
 		if student.NHComplete {
-			nh = new(big.Rat)
-			for _, objective := range student.Objectives {
-				avg, e := exactAverage(objective.Activities)
-				if e != nil {
-					return out, e
-				}
-				nh.Add(nh, avg)
+			var ok bool
+			nh, ok = new(big.Rat).SetString(student.NHExact)
+			if !ok {
+				return out, errors.New("rata-rata TP langsung tidak valid")
 			}
-			nh.Quo(nh, big.NewRat(int64(len(student.Objectives)), 1))
 			item.NHExact = nh.RatString()
 		}
 		asts := evidence[student.ID+":asts"]
@@ -184,12 +175,16 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 				a != nil, asts.localCount > 0,
 				b != nil, asas.localCount > 0,
 			)
+			if student.PlacementUncertain {
+				ready = false
+				item.Missing = append(item.Missing, "Penempatan atau keberlakuan TP perlu diverifikasi.")
+			}
 			if out.Weights.NH > 0 && nh == nil {
 				if len(student.Objectives) == 0 {
 					item.Missing = append(item.Missing, "NH belum memiliki TP atau nilai Sumatif lengkap.")
 				} else {
 					for _, objective := range student.Objectives {
-						if !objective.Complete {
+						if !objective.Complete && objective.HistoricalApplicability != "tidak berlaku" {
 							item.Missing = append(item.Missing, objective.Definition+": "+strings.Join(objective.Missing, "; "))
 						}
 					}
@@ -213,13 +208,11 @@ func (s *Store) semesterRecommendationsStudentModeTx(ctx context.Context, tx *sq
 		}
 		// Bukti pengecualian berasal dari nilai yang sah pada komponen berbobot positif.
 		// Field presentasi tidak ikut hash snapshot agar Final lama tetap stabil.
-		if out.Weights.Configured && item.Status == "Belum Lengkap" {
+		if out.Weights.Configured && item.Status == "Belum Lengkap" && !student.PlacementUncertain {
 			if out.Weights.NH > 0 {
 				for _, objective := range item.Objectives {
-					for _, activity := range objective.Activities {
-						if activity.HasValue {
-							item.ExceptionEvidence = append(item.ExceptionEvidence, "Sumatif "+activity.Name+" · "+objective.Definition+": "+activity.EffectiveValue)
-						}
+					if objective.ScoredCount > 0 {
+						item.ExceptionEvidence = append(item.ExceptionEvidence, "Nilai TP · "+objective.Definition+": "+objective.Average)
 					}
 				}
 			}

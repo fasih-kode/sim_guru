@@ -19,12 +19,14 @@ type AssessmentTPRecap struct {
 }
 
 type AssessmentTPRecapStudent struct {
-	ID, NIS    string
-	Name       string
-	Objectives []AssessmentTPRecapObjective
-	NH         string
-	NHComplete bool
-	Missing    []string
+	ID, NIS            string
+	Name               string
+	Objectives         []AssessmentTPRecapObjective
+	NH                 string
+	NHComplete         bool
+	NHExact            string
+	PlacementUncertain bool
+	Missing            []string
 }
 
 type AssessmentTPRecapObjective struct {
@@ -58,7 +60,7 @@ func (s *Store) AssessmentTPRecap(ctx context.Context, actor, semesterID, classI
 		return AssessmentTPRecap{}, err
 	}
 	defer tx.Rollback()
-	return s.assessmentTPRecap(ctx, tx, actor, semesterID, classID, subjectID, false)
+	return s.directTPRecapForStudent(ctx, tx, actor, semesterID, classID, subjectID, 0, 0)
 }
 
 func (s *Store) assessmentTPRecap(ctx context.Context, tx *sql.Tx, actor, semesterID, classID, subjectID int64, includeEmptyRoster bool) (AssessmentTPRecap, error) {

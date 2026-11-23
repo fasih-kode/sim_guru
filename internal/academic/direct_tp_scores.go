@@ -162,28 +162,18 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 	}
 	changes := make([]change, 0, len(items))
 	for _, item := range items {
-		var placement int64
-		err = tx.QueryRowContext(ctx, `SELECT p.id FROM app.student_placements p JOIN app.students st ON st.id=p.student_id AND st.active JOIN app.semester_calendars cal ON cal.semester_id=$1
-			WHERE p.school_year_id=$2 AND p.student_id=$3 AND p.starts_on IS NOT NULL AND p.starts_on<=cal.starts_on
-			AND app.student_placement_class_at(p.id,cal.starts_on)=$4
-			AND app.student_placement_class_at(p.id,LEAST(cal.ends_on,(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date))=$4
-			AND NOT EXISTS (SELECT 1 FROM app.student_class_moves m WHERE m.placement_id=p.id AND m.effective_date BETWEEN cal.starts_on AND cal.ends_on)
-			AND NOT EXISTS (SELECT 1 FROM app.student_school_exits x WHERE x.student_id=p.student_id AND x.effective_date BETWEEN cal.starts_on AND cal.ends_on)
-			AND NOT EXISTS (SELECT 1 FROM app.student_school_returns r WHERE r.placement_id=p.id AND r.effective_date BETWEEN cal.starts_on AND cal.ends_on)
-			FOR SHARE OF p`, semester, year, item.StudentID, class).Scan(&placement)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrForbidden
-		}
+		applicability, placement, _, err := readDirectTPApplicability(ctx, tx, semester, class, subject, item.StudentID, item.ObjectiveID)
 		if err != nil {
 			return err
 		}
+		if applicability != directTPApplicable {
+			return ErrForbidden
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT id FROM app.student_placements WHERE id=$1 FOR SHARE`, placement).Scan(&placement); err != nil {
+			return err
+		}
 		var exists bool
-		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.learning_objectives o JOIN app.direct_tp_codes c ON c.objective_id=o.id
-			WHERE o.id=$1 AND (o.school_year_id,o.semester_id,o.class_id,o.subject_id)=($2,$3,$4,$5)
-			AND NOT EXISTS (SELECT 1 FROM app.historical_learning_objective_insertions h
-				WHERE h.learning_objective_id=o.id AND NOT EXISTS
-				(SELECT 1 FROM app.student_placements p WHERE p.id=$6 AND p.starts_on IS NOT NULL
-				 AND p.starts_on<=h.assessment_date AND app.student_placement_class_at(p.id,h.assessment_date)=$4)))`, item.ObjectiveID, year, semester, class, subject, placement).Scan(&exists)
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.direct_tp_codes WHERE objective_id=$1)`, item.ObjectiveID).Scan(&exists)
 		if err != nil {
 			return err
 		}

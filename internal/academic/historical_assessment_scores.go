@@ -515,18 +515,8 @@ func (s *Store) previewHistoricalAssessmentScoresTx(ctx context.Context, tx *sql
 					st.BeforeRecommendation = rs.Recommendation
 					st.BeforeNeedsReview = rs.NeedsReview
 					st.AfterNeedsReview = rs.NeedsReview
-					if rs.Finalized {
-						for key := range entryByKey {
-							if key[0] == r.id {
-								// Snapshot Final memuat sumber nilai awal. Setiap slot baru
-								// mengubah fingerprint input Final secara dinamis, tanpa
-								// menulis ulang versi atau snapshot historis.
-								st.AfterNeedsReview = true
-								break
-							}
-						}
-					}
-					st.AfterNH, st.AfterStatus, st.AfterRecommendation = projectHistoricalScoreAfter(rec, out.Activity.ID, r.id, entryByKey, out.Weights)
+					// Arsip kegiatan bukan sumber NH aktif pada Revisi 3.
+					st.AfterNH, st.AfterStatus, st.AfterRecommendation = rs.NH, rs.Status, rs.Recommendation
 					break
 				}
 			}
@@ -542,7 +532,7 @@ func (s *Store) previewHistoricalAssessmentScoresTx(ctx context.Context, tx *sql
 		}
 		out.Students = append(out.Students, st)
 	}
-	out.ImpactNotice = "Nilai hanya ditranskripsi untuk sel yang dipilih dan didukung bukti per siswa/TP. Nilai kosong tetap kosong, nilai 0 sah. Nilai Final dan snapshot lama tidak diubah; Final terkait dapat ditandai Perlu Ditinjau setelah penyimpanan."
+	out.ImpactNotice = "Nilai arsip kegiatan tidak menjadi sumber NH aktif. Nilai Final dan snapshot lama tidak diubah."
 	stateHash := sha256.Sum256([]byte(sourceState))
 	out.SourceFingerprint = hex.EncodeToString(stateHash[:])
 	inputJSON, err := json.Marshal(struct {

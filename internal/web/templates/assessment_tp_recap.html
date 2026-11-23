@@ -2,7 +2,7 @@
 <section class="panel mb-5 max-w-5xl">
   <div class="mb-5">
     <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
-    <p class="mt-1 text-sm leading-6 text-gray-500">Rekap hanya menampilkan kelas, mata pelajaran, dan semester yang sedang menjadi penugasan resmi Anda. Data dibaca sesuai penempatan siswa pada tanggal setiap kegiatan.</p>
+    <p class="mt-1 text-sm leading-6 text-gray-500">Rekap hanya menampilkan kelas, mata pelajaran, dan semester yang sedang menjadi penugasan resmi Anda. Data dibaca sesuai penempatan dan keberlakuan TP siswa.</p>
   </div>
   {{if .AssessmentTPRecap.Contexts}}
   <form method="get" action="/guru/rekap-nilai-tp" class="flex flex-wrap items-end gap-3">
@@ -27,11 +27,11 @@
   <header class="mb-5 border-b border-gray-200 pb-4">
     <h2 class="text-lg font-semibold text-gray-900">{{.AssessmentTPRecap.Selected.ClassName}} · {{.AssessmentTPRecap.Selected.SubjectName}}</h2>
     <p class="mt-1 text-sm text-gray-500">{{.AssessmentTPRecap.Selected.SemesterName}} · Rekap baca-saja</p>
-    <p class="mt-2 text-sm leading-6 text-gray-600">Nilai TP adalah rata-rata kegiatan Sumatif yang wajib bagi siswa. NH adalah rata-rata tanpa bobot dari seluruh nilai TP yang lengkap. Formatif tidak dihitung.</p>
+    <p class="mt-2 text-sm leading-6 text-gray-600">Nilai TP diambil dari nilai langsung siswa. NH adalah rata-rata tanpa bobot dari seluruh nilai TP yang berlaku dan lengkap. Formatif tidak dihitung.</p>
   </header>
 
   {{if gt .AssessmentTPRecap.Recap.UnknownPlacementCount 0}}
-  <p class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{{.AssessmentTPRecap.Recap.UnknownPlacementCount}} data penempatan belum dapat dipastikan karena tanggal mulainya belum diketahui. Data tersebut tidak dimasukkan ke perhitungan dan roster di bawah belum mencakup penempatan itu.</p>
+  <p class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{{.AssessmentTPRecap.Recap.UnknownPlacementCount}} siswa memiliki penempatan atau keberlakuan TP yang belum dapat dipastikan. Nilai pada TP tersebut belum dimasukkan ke NH.</p>
   {{end}}
   {{if gt .AssessmentTPRecap.Recap.OutOfCalendarActivityCount 0}}
   <p class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Ada {{.AssessmentTPRecap.Recap.OutOfCalendarActivityCount}} kegiatan Sumatif dengan tanggal di luar rentang kalender semester. Kegiatan tetap ditampilkan dan dihitung menurut penempatan siswa pada tanggal pelaksanaan sebenarnya.</p>
@@ -71,12 +71,12 @@
               <div class="shrink-0 text-right">
                 <span class="block text-xs text-gray-500">Nilai TP</span>
                 {{if .Complete}}<strong class="text-lg text-gray-900">{{.Average}}</strong>{{else}}<strong class="text-sm text-amber-800">Belum lengkap</strong>{{end}}
-                <span class="block text-xs text-gray-500">{{.ScoredCount}} / {{.RequiredCount}} kegiatan</span>
+                <span class="block text-xs text-gray-500">{{.ScoredCount}} / {{.RequiredCount}} nilai TP</span>
                 <span class="block text-sm font-medium text-gray-800">{{.Achievement}}</span>
                 <span class="block text-xs text-gray-500">{{if .Threshold}}Batas {{.Threshold}} · {{.ThresholdSource}}{{else}}Batas belum diatur{{end}}</span>
               </div>
             </div>
-            {{if eq .HistoricalApplicability "belum pasti"}}<p class="mt-3 text-sm text-amber-800">Keberlakuan pada tanggal sumber historis belum dapat diverifikasi. Kegiatan lain dinilai menurut tanggal dan penempatan masing-masing.</p>{{end}}
+            {{if eq .HistoricalApplicability "belum pasti"}}<p class="mt-3 text-sm text-amber-800">Keberlakuan TP belum dapat diverifikasi; periksa penempatan dan tanggal siswa.</p>{{end}}
             {{if .Activities}}
             <div class="mt-3 border-t border-gray-200 pt-3">
               <h5 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Kegiatan Sumatif penyusun</h5>

@@ -186,7 +186,8 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 	}
 	var version, finalID int64
 	var finalScore int
-	if err = tx.QueryRowContext(ctx, `SELECT id,version,final_score FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4 ORDER BY version DESC LIMIT 1 FOR UPDATE`, semester, class, subject, student).Scan(&finalID, &version, &finalScore); err != nil {
+	var savedSnapshot, savedHash []byte
+	if err = tx.QueryRowContext(ctx, `SELECT id,version,final_score,snapshot,snapshot_sha256 FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4 ORDER BY version DESC LIMIT 1 FOR UPDATE`, semester, class, subject, student).Scan(&finalID, &version, &finalScore, &savedSnapshot, &savedHash); err != nil {
 		return err
 	}
 	if version != expected {
@@ -206,6 +207,13 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 	}
 	if !equalHash(hash, currentHash[:]) {
 		return ErrConflict
+	}
+	_, uncertain, err := semesterFinalNeedsReview(ctx, tx, semester, class, subject, fmtID(student), savedSnapshot, savedHash, currentHash[:])
+	if err != nil {
+		return err
+	}
+	if uncertain {
+		return ValidationError("Bukti Final historis belum dapat diverifikasi; perubahan belum tersedia.")
 	}
 	if action == "retain" {
 		if score != finalScore {

@@ -21,6 +21,7 @@
   <article class="p-3"><div class="flex items-center gap-3">{{if and (eq .Status "Siap Final") (not .Finalized)}}<input class="w-auto" type="checkbox" name="student_id" value="{{.ID}}" aria-label="Pilih {{.Name}} untuk Finalisasi Massal">{{end}}<h3 class="font-semibold">{{.Name}}</h3></div><p class="mt-2 text-sm">NH{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.NH 0)}} (bobot 0%, tidak wajib){{end}}: {{if .NH}}{{.NH}}{{else}}Belum lengkap{{end}} · ASTS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASTS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASTS}}{{.ASTS}}{{else}}Belum tersedia{{end}} · ASAS{{if and $.SemesterRecommendations.Result.Weights.Configured (eq $.SemesterRecommendations.Result.Weights.ASAS 0)}} (bobot 0%, tidak wajib){{end}}: {{if .ASAS}}{{.ASAS}}{{else}}Belum tersedia{{end}}</p>
    {{if $.SemesterRecommendations.Result.Weights.Configured}}<p class="mt-2 text-sm font-semibold">{{.Status}}{{if .Recommendation}} · Rekomendasi {{.Recommendation}}{{end}}{{if .Finalized}} · Nilai Final {{.FinalValue}}{{if eq .FinalType "exception"}} · Dengan Pengecualian{{end}}{{end}}</p>{{end}}
    {{if .Finalized}}
+    {{if .ReviewUncertain}}<p class="mt-2 text-sm text-amber-900">Bukti Final historis belum dapat diverifikasi; perubahan Final ditahan.</p>{{end}}
     {{if .NeedsReview}}<p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Final tersimpan, tetapi bukti atau konteks berubah setelah Final dibuat. Periksa snapshot untuk melihat penanda Perlu Ditinjau.</p>{{end}}
     <a class="button-secondary mt-3 inline-flex" href="/guru/rekomendasi-semester/final?context={{$.SemesterRecommendations.Selected.SemesterID}}:{{$.SemesterRecommendations.Selected.ClassID}}:{{$.SemesterRecommendations.Selected.SubjectID}}&amp;student_id={{.ID}}">Lihat snapshot Final</a>
    {{else if eq .Status "Siap Final"}}
@@ -28,7 +29,7 @@
    {{else if .ExceptionEligible}}
     <a class="button-secondary mt-3 inline-flex" href="/guru/rekomendasi-semester/final?context={{$.SemesterRecommendations.Selected.SemesterID}}:{{$.SemesterRecommendations.Selected.ClassID}}:{{$.SemesterRecommendations.Selected.SubjectID}}&amp;student_id={{.ID}}">Tinjau Final dengan Pengecualian</a>
    {{end}}
-   {{range .Objectives}}{{if eq .HistoricalApplicability "belum pasti"}}<p class="mt-2 text-sm text-amber-800">Keberlakuan historis TP {{.Definition}} belum dapat diverifikasi; kegiatan lain dihitung menurut tanggal pelaksanaannya.</p>{{end}}{{end}}
+   {{range .Objectives}}{{if eq .HistoricalApplicability "belum pasti"}}<p class="mt-2 text-sm text-amber-800">Keberlakuan TP {{.Definition}} belum dapat diverifikasi; periksa penempatan dan tanggal siswa.</p>{{end}}{{end}}
    {{if .Missing}}<ul class="mt-2 list-disc pl-5 text-sm text-gray-600">{{range .Missing}}<li>{{.}}</li>{{end}}</ul>{{end}}
   </article>{{else}}<p class="p-3 text-sm text-gray-500">Belum ada siswa dengan penempatan yang dapat dipastikan.</p>{{end}}</div></form>
 </section>{{end}}
