@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func Database(t *testing.T, path string) *sql.DB {
 		t.Fatal("unsafe test database")
 	}
 	metadataDB := db
-	if actual == "sim_guru_rd02_s06_20261123_test" {
+	if os.Getenv("TEST_FIXTURE_DATABASE_URL") != "" {
 		metadataDB = FixtureDatabase(t)
 	}
 	provider, err := migrations.Provider(metadataDB)
@@ -58,23 +59,47 @@ func Database(t *testing.T, path string) *sql.DB {
 	return db
 }
 
-// FixtureDatabase hanya untuk seed/metadata pada database RD-02 terisolasi.
+// FixtureDatabase hanya untuk seed/metadata pada database test terisolasi.
 // Koneksi ini tidak boleh diberikan kepada service yang sedang diuji.
 func FixtureDatabase(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := database.Open(context.Background(), "postgres:///sim_guru_rd02_s06_20261123_test?host=/home/fasih/Projects/sim_guru/.local/postgres/socket&port=55436")
+	fixtureDSN := os.Getenv("TEST_FIXTURE_DATABASE_URL")
+	runtimeDSN := os.Getenv("TEST_DATABASE_URL")
+	role := os.Getenv("TEST_FIXTURE_ROLE")
+	expectedOID, err := strconv.ParseInt(os.Getenv("TEST_FIXTURE_DATABASE_OID"), 10, 64)
+	fixtureURL, e1 := url.Parse(fixtureDSN)
+	runtimeURL, e2 := url.Parse(runtimeDSN)
+	if err != nil || expectedOID <= 0 || role == "" || fixtureDSN == "" || e1 != nil || e2 != nil || fixtureURL.Path != runtimeURL.Path || !strings.HasSuffix(fixtureURL.Path, "_test") || fixtureDSN == runtimeDSN {
+		t.Fatal("konfigurasi fixture terisolasi tidak valid")
+	}
+	db, err := database.Open(context.Background(), fixtureDSN)
 	if err != nil {
 		t.Fatal("koneksi fixture tidak tersedia")
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	if _, err = db.Exec(`SET ROLE sim_guru_ddl_owner`); err != nil {
+	if _, err = db.Exec(`SELECT set_config('role',$1,false)`, role); err != nil {
 		t.Fatal("role fixture tidak tersedia")
 	}
-	var name, role string
+	var name, fixturePort string
 	var oid int64
-	if err = db.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database())`).Scan(&name, &role, &oid); err != nil || name != "sim_guru_rd02_s06_20261123_test" || role != "sim_guru_ddl_owner" || oid != 84604 {
+	var actualRole string
+	var owner string
+	var rolePrivileged bool
+	var fixtureStart time.Time
+	if err = db.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database()),current_setting('port'),pg_postmaster_start_time(),(SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()),(SELECT rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user)`).Scan(&name, &actualRole, &oid, &fixturePort, &fixtureStart, &owner, &rolePrivileged); err != nil || name != strings.TrimPrefix(fixtureURL.Path, "/") || actualRole != role || actualRole != owner || rolePrivileged || oid != expectedOID {
 		t.Fatal("identitas fixture tidak aman")
+	}
+	runtimeDB, err := database.Open(context.Background(), runtimeDSN)
+	if err != nil {
+		t.Fatal("koneksi runtime tidak tersedia")
+	}
+	defer runtimeDB.Close()
+	var runtimeName, runtimeRole, runtimePort string
+	var runtimeOID int64
+	var runtimeStart time.Time
+	if err = runtimeDB.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database()),current_setting('port'),pg_postmaster_start_time()`).Scan(&runtimeName, &runtimeRole, &runtimeOID, &runtimePort, &runtimeStart); err != nil || runtimeName != name || runtimeOID != oid || runtimeRole != "sim_guru_app" || runtimeRole == actualRole || runtimePort != fixturePort || !runtimeStart.Equal(fixtureStart) {
+		t.Fatal("identitas runtime dan fixture tidak aman")
 	}
 	return db
 }

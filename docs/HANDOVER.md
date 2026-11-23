@@ -1,5 +1,13 @@
 # Handover
 
+## RD-02 — Perbaikan review S-06 (24 November 2026)
+
+Review independen [7114774227](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7114774227) meminta perbaikan konsistensi penetapan, performa dan harness. Penetapan eksplisit terbaru yang sah kini diprioritaskan atas default penempatan normal; jika fakta tanggal atau penempatan tidak lagi mendukung penetapan, status menjadi belum pasti. Histori tidak diubah. Regresi PostgreSQL ber-race memeriksa keputusan Berlaku/Tidak Berlaku, penempatan normal, perpindahan yang dinormalkan, perubahan fakta dan NH; regresi S-06, Final historis, bobot dan HTTP juga lulus.
+
+Pengukuran lokal sebelum perubahan untuk 39 siswa × 10 TP mencatat Buku Nilai 399 query/257 ms, rekap 398/225 ms dan rekomendasi 401/240 ms. Pembacaan set-based pada snapshot transaksi mengurangi menjadi 10, 9 dan 12 query; sampel terakhir setelah perubahan masing-masing 86, 113 dan 115 ms. Angka adalah pengamatan lokal, bukan uji beban. Harness fixture menggunakan konfigurasi test-only `TEST_FIXTURE_DATABASE_URL`, `TEST_FIXTURE_DATABASE_OID` dan `TEST_FIXTURE_ROLE`, memverifikasi nama, OID, pemilik, role serta instance PostgreSQL sama dengan runtime sebelum fixture ditulis.
+
+Unit Go, vet, make check/build, npm build dan diff check lulus. Full integration suite tidak dijalankan: suite lain masih menyiapkan fixture dengan koneksi runtime dan memerlukan privilege baseline di luar manifest yang diizinkan; ini bukan klaim PASS. UAT browser, visual dan uji beban belum dijalankan. Tidak ada migration, grant tambahan, perubahan database lain, merge atau deployment. RD-02 tetap IN PROGRESS dan menunggu review ulang.
+
 ## RD-02 — Pengujian terfokus setelah remediasi privilege (24 November 2026)
 
 PO mengotorisasi manifest privilege baseline terbatas untuk `sim_guru_rd02_s06_20261123_test`, OID 84604. Grant dijalankan dengan guard nama/OID dalam satu transaksi oleh `sim_guru_ddl_owner`: USAGE schema app, SELECT pada 29 tabel yang disetujui, INSERT empat tabel Final, dan UPDATE(id) pada penempatan serta penugasan. Tidak diberikan SELECT `public.goose_db_version`, grant sequence tambahan, UPDATE/DELETE histori, privilege database lain, atau perubahan role/owner. ACL pasca-perubahan: 34 tabel SELECT, delapan INSERT, nol UPDATE tingkat tabel dan nol DELETE; UPDATE(id) Final/nilai awal tetap hak 00061. Runtime tetap tidak dapat membaca Goose dan tidak dapat mengubah kolom kelas/guru maupun UPDATE/DELETE histori (SQLSTATE 42501).

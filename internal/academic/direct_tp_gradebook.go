@@ -133,12 +133,14 @@ func (s *Store) DirectTPGradebook(ctx context.Context, actor, semester, class, s
 		return out, err
 	}
 	rows.Close()
+	applicabilities, err := loadDirectTPApplicabilities(ctx, tx, semester, class, subject, 0, 0)
+	if err != nil {
+		return out, err
+	}
 	for _, r := range rosterRows {
 		for _, o := range out.Objectives {
-			state, _, applicabilityVersion, e := readDirectTPApplicability(ctx, tx, semester, class, subject, r.student.ID, o.ID)
-			if e != nil {
-				return out, e
-			}
+			resolution := applicabilities[directTPKey{r.student.ID, o.ID}]
+			state, applicabilityVersion := resolution.state, resolution.version
 			cell := DirectTPBookCell{StudentID: r.student.ID, ObjectiveID: o.ID, Version: -1, ApplicabilityVersion: applicabilityVersion, Code: o.Code, Editable: state == directTPApplicable && !r.student.Final, CanSetApplicability: (!r.valid || state == directTPUnknown || applicabilityVersion > 0) && !r.student.Final}
 			if r.student.Final {
 				cell.Note = "Siswa sudah Final"

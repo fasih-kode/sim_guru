@@ -93,29 +93,56 @@ func (s *Store) SaveDirectTPApplicability(ctx context.Context, actor int64, in D
 
 // readDirectTPApplicability adalah sumber tunggal bagi input dan perhitungan.
 // Keputusan yang tanggal/penempatannya tidak lagi cocok diperlakukan tidak pasti.
-func readDirectTPApplicability(ctx context.Context, tx *sql.Tx, semester, class, subject, student, objective int64) (directTPApplicability, int64, int64, error) {
-	var placement, version int64
-	var normal, validDecision bool
-	var decision sql.NullBool
-	err := tx.QueryRowContext(ctx, `SELECT p.id,
+type directTPKey struct{ student, objective int64 }
+type directTPResolution struct {
+	state              directTPApplicability
+	placement, version int64
+}
+
+func loadDirectTPApplicabilities(ctx context.Context, tx *sql.Tx, semester, class, subject, student, objective int64) (map[directTPKey]directTPResolution, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT p.student_id,o.id,p.id,
  COALESCE(st.active AND p.starts_on IS NOT NULL AND p.starts_on<=cal.starts_on AND app.student_placement_class_at(p.id,cal.starts_on)=$2 AND app.student_placement_class_at(p.id,least(cal.ends_on,(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date))=$2 AND NOT EXISTS(SELECT 1 FROM app.student_class_moves m WHERE m.placement_id=p.id AND m.effective_date BETWEEN cal.starts_on AND cal.ends_on) AND NOT EXISTS(SELECT 1 FROM app.student_school_exits x WHERE x.student_id=p.student_id AND x.effective_date BETWEEN cal.starts_on AND cal.ends_on) AND NOT EXISTS(SELECT 1 FROM app.student_school_returns r WHERE r.placement_id=p.id AND r.effective_date BETWEEN cal.starts_on AND cal.ends_on) AND NOT EXISTS(SELECT 1 FROM app.historical_learning_objective_insertions h WHERE h.learning_objective_id=o.id AND (p.starts_on>h.assessment_date OR app.student_placement_class_at(p.id,h.assessment_date) IS DISTINCT FROM $2)),false),
  d.applicable,coalesce(d.version,0),COALESCE(st.active AND d.placement_id=p.id AND p.starts_on IS NOT NULL AND p.starts_on<=d.effective_date AND d.effective_date BETWEEN cal.starts_on AND cal.ends_on AND d.effective_date <= (clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date AND app.student_placement_class_at(p.id,d.effective_date)=$2,false)
- FROM app.semesters sm JOIN app.semester_calendars cal ON cal.semester_id=sm.id JOIN app.student_placements p ON p.school_year_id=sm.school_year_id AND p.student_id=$4 JOIN app.students st ON st.id=p.student_id JOIN app.learning_objectives o ON (o.id,o.school_year_id,o.semester_id,o.class_id,o.subject_id)=($5,sm.school_year_id,$1,$2,$3)
- LEFT JOIN LATERAL (SELECT applicable,version,effective_date,placement_id FROM app.direct_tp_applicability_history WHERE (semester_id,class_id,subject_id,student_id,objective_id)=($1,$2,$3,$4,$5) ORDER BY version DESC LIMIT 1) d ON true WHERE sm.id=$1`, semester, class, subject, student, objective).Scan(&placement, &normal, &decision, &version, &validDecision)
-	if errors.Is(err, sql.ErrNoRows) {
-		return directTPUnknown, 0, 0, nil
+ FROM app.semesters sm JOIN app.semester_calendars cal ON cal.semester_id=sm.id JOIN app.student_placements p ON p.school_year_id=sm.school_year_id AND ($4::bigint=0 OR p.student_id=$4) JOIN app.students st ON st.id=p.student_id JOIN app.learning_objectives o ON (o.school_year_id,o.semester_id,o.class_id,o.subject_id)=(sm.school_year_id,$1,$2,$3) AND ($5::bigint=0 OR o.id=$5)
+ LEFT JOIN LATERAL (SELECT applicable,version,effective_date,placement_id FROM app.direct_tp_applicability_history WHERE (semester_id,class_id,subject_id,student_id,objective_id)=($1,$2,$3,p.student_id,o.id) ORDER BY version DESC LIMIT 1) d ON true WHERE sm.id=$1 AND (p.class_id=$2 OR EXISTS(SELECT 1 FROM app.student_class_moves m WHERE m.placement_id=p.id AND (m.from_class_id=$2 OR m.to_class_id=$2)) OR EXISTS(SELECT 1 FROM app.student_school_returns r WHERE r.placement_id=p.id AND r.target_class_id=$2))`, semester, class, subject, student, objective)
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
+	out := make(map[directTPKey]directTPResolution)
+	for rows.Next() {
+		var k directTPKey
+		var v directTPResolution
+		var normal, valid bool
+		var decision sql.NullBool
+		if err = rows.Scan(&k.student, &k.objective, &v.placement, &normal, &decision, &v.version, &valid); err != nil {
+			return nil, err
+		}
+		switch {
+		case v.version > 0 && (!valid || !decision.Valid):
+			v.state = directTPUnknown
+		case v.version > 0 && decision.Bool:
+			v.state = directTPApplicable
+		case v.version > 0:
+			v.state = directTPNotApplicable
+		case normal:
+			v.state = directTPApplicable
+		default:
+			v.state = directTPUnknown
+		}
+		out[k] = v
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func readDirectTPApplicability(ctx context.Context, tx *sql.Tx, semester, class, subject, student, objective int64) (directTPApplicability, int64, int64, error) {
+	resolved, err := loadDirectTPApplicabilities(ctx, tx, semester, class, subject, student, objective)
 	if err != nil {
 		return directTPUnknown, 0, 0, err
 	}
-	if normal {
-		return directTPApplicable, placement, version, nil
-	}
-	if validDecision && decision.Valid {
-		if decision.Bool {
-			return directTPApplicable, placement, version, nil
-		}
-		return directTPNotApplicable, placement, version, nil
-	}
-	return directTPUnknown, placement, version, nil
+	v := resolved[directTPKey{student, objective}]
+	return v.state, v.placement, v.version, nil
 }

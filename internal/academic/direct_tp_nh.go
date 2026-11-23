@@ -188,6 +188,10 @@ ORDER BY st.name,p.student_id,lo.id`, semester, class, subject, student)
 	if err = rows.Close(); err != nil {
 		return base, err
 	}
+	applicabilities, err := loadDirectTPApplicabilities(ctx, tx, semester, class, subject, student, 0)
+	if err != nil {
+		return base, err
+	}
 	for i := range base.Students {
 		st := &base.Students[i]
 		studentID, e := strconv.ParseInt(st.ID, 10, 64)
@@ -201,10 +205,7 @@ ORDER BY st.name,p.student_id,lo.id`, semester, class, subject, student)
 			if e != nil {
 				return base, e
 			}
-			a, _, _, e := readDirectTPApplicability(ctx, tx, semester, class, subject, studentID, objectiveID)
-			if e != nil {
-				return base, e
-			}
+			a := applicabilities[directTPKey{studentID, objectiveID}].state
 			value := values[st.ID+":"+o.ID]
 			switch a {
 			case directTPUnknown:
