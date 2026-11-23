@@ -1,5 +1,11 @@
 # Handover
 
+## Kontrak Fase 10 Revisi 3 FINAL (23 November 2026)
+
+[Kontrak Bisnis Fase 10 Revisi 3 FINAL](contracts/KONTRAK_BISNIS_FASE_10_SIM_GURU_REVISI_3_FINAL.md) disahkan melalui [keputusan Product Owner](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7088764355), setelah [final verification supervisor PASS](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7088746908). Revisi 3 menjadi acuan implementasi dan menggantikan Revisi 2; dokumen Revisi 2 tetap utuh sebagai arsip.
+
+Kebijakan yang disahkan menetapkan satu model penilaian aktif: NH dari nilai langsung siswa–TP, ASTS/ASAS mempertahankan nilai asli dan remedial, serta Formatif teks opsional tidak masuk NH. Buku Nilai Guru dirancang dengan tab Nilai TP, ASTS dan ASAS. **Implementasi kontrak baru belum dimulai.** CP10-01 sampai CP10-23 tetap CLOSED sebagai catatan historis; CP10-24 susulan ON HOLD dan Fase 10 belum CLOSED. Reset fixture, transisi DEV, deployment dan pengakuan nilai TP lintas kelas memerlukan izin terpisah.
+
 ## CP10-23 — FINAL GATE PASS / CLOSED (22 November 2026)
 
 Supervisor menetapkan CP10-23 **FINAL GATE PASS / CLOSED** pada [keputusan resmi PR #1, komentar 7079190263](https://github.com/fasih-kode/sim_guru/pull/1#issuecomment-7079190263), berdasarkan [code review PASS 6011944303](https://github.com/fasih-kode/sim_guru/pull/1). Keputusan menerima UAT A dan UAT B dengan batas evidensi eksplisit di bawah. CP10-01 sampai CP10-23 CLOSED; Fase 10 secara keseluruhan belum CLOSED dan CP10-24 belum dimulai. Penutupan tidak mengizinkan merge atau deployment.
