@@ -4,6 +4,10 @@
  <p class="mt-2 text-sm">{{.DirectTPApplicability.Context.SemesterName}} · {{.DirectTPApplicability.Context.ClassName}} · {{.DirectTPApplicability.Context.SubjectName}}</p>
  <p class="mt-2 text-sm">{{.DirectTPApplicability.Student.Name}} · {{.DirectTPApplicability.Cell.Code}}</p>
  <p class="mt-3 text-sm text-gray-600">Gunakan tanggal penempatan yang dapat diverifikasi. Keputusan berdasarkan pembelajaran dan penilaian yang benar-benar terjadi.</p>
+ <section class="mt-4" aria-label="Riwayat penetapan">
+  <h3 class="font-semibold">Riwayat penetapan</h3>
+  {{range .DirectTPApplicability.History}}<p class="mt-2 text-sm">Versi {{.Version}} · {{if .Applicable}}Berlaku{{else}}Tidak Berlaku{{end}} · Tanggal penempatan {{.EffectiveDate}} · {{.Actor}} · {{.RecordedAt}} WIB<br>Alasan: {{.Reason}}</p>{{else}}<p class="mt-2 text-sm">Belum ada penetapan.</p>{{end}}
+ </section>
  {{if .Error}}<p class="mt-3 text-sm">Jika versi sudah berubah, kembali ke Buku Nilai dan buka kembali penetapan untuk meninjau data terbaru.</p>{{end}}
  <form method="post" action="/guru/buku-nilai/keberlakuan" class="mt-4 space-y-4">
  {{.CSRF}}<input type="hidden" name="context" value="{{.DirectTPApplicability.Context.SemesterID}}:{{.DirectTPApplicability.Context.ClassID}}:{{.DirectTPApplicability.Context.SubjectID}}"><input type="hidden" name="student_id" value="{{.DirectTPApplicability.Student.ID}}"><input type="hidden" name="objective_id" value="{{.DirectTPApplicability.Cell.ObjectiveID}}"><input type="hidden" name="version" value="{{.DirectTPApplicability.Version}}"><input type="hidden" name="submission_key" value="{{.DirectTPApplicability.Submission}}">

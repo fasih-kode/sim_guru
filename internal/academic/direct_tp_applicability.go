@@ -21,6 +21,52 @@ type DirectTPApplicabilityInput struct {
 	SubmissionKey                                          string
 }
 
+type DirectTPApplicabilityHistory struct {
+	Version                                  int64
+	Applicable                               bool
+	EffectiveDate, Reason, Actor, RecordedAt string
+}
+
+// DirectTPApplicabilityHistoryFor hanya menampilkan riwayat dalam penugasan guru yang sah.
+func (s *Store) DirectTPApplicabilityHistoryFor(ctx context.Context, actor, semester, class, subject, student, objective int64) ([]DirectTPApplicabilityHistory, error) {
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err = s.authorize(ctx, tx, actor, "guru_mapel"); err != nil {
+		return nil, err
+	}
+	teacher, err := learningObjectiveTeacherID(ctx, tx, actor)
+	if err != nil {
+		return nil, err
+	}
+	allowed, err := learningObjectiveAssignment(ctx, tx, teacher, semester, class, subject)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT h.version,h.applicable,to_char(h.effective_date,'YYYY-MM-DD'),h.reason,u.display_name,to_char(h.recorded_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS') FROM app.direct_tp_applicability_history h JOIN app.users u ON u.id=h.actor_id WHERE (h.semester_id,h.class_id,h.subject_id,h.student_id,h.objective_id)=($1,$2,$3,$4,$5) ORDER BY h.version DESC`, semester, class, subject, student, objective)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DirectTPApplicabilityHistory
+	for rows.Next() {
+		var h DirectTPApplicabilityHistory
+		if err = rows.Scan(&h.Version, &h.Applicable, &h.EffectiveDate, &h.Reason, &h.Actor, &h.RecordedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SaveDirectTPApplicability menambahkan satu keputusan berversi tanpa mengubah
 // nilai atau Final. Kasus pasca-Final ditahan sampai alur peninjauan tersedia.
 func (s *Store) SaveDirectTPApplicability(ctx context.Context, actor int64, in DirectTPApplicabilityInput) error {

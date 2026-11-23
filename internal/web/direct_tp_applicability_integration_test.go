@@ -92,6 +92,12 @@ func TestDirectTPApplicabilityHTTPIntegration(t *testing.T) {
 	if w = request("POST", "/guru/buku-nilai/keberlakuan", values, page.Result().Cookies(), owner); w.Code != 303 {
 		t.Fatalf("replay %d %s", w.Code, w.Body.String())
 	}
+	if w = request("GET", path, nil, nil, owner); w.Code != 200 || !strings.Contains(w.Body.String(), "Riwayat penetapan") || !strings.Contains(w.Body.String(), "Versi 1") || !strings.Contains(w.Body.String(), "Bukti sintetis") {
+		t.Fatalf("riwayat tidak ditampilkan: %d %s", w.Code, w.Body.String())
+	}
+	if w = request("GET", path, nil, nil, other); w.Code != 403 {
+		t.Fatalf("riwayat bocor ke guru lain: %d", w.Code)
+	}
 	var count int
 	if err = fixture.QueryRow(`SELECT count(*) FROM app.direct_tp_applicability_history WHERE semester_id=$1`, f.Semester).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("histori %d %v", count, err)

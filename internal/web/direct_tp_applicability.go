@@ -14,6 +14,7 @@ type directTPApplicabilityView struct {
 	Student                                   academic.DirectTPBookStudent
 	Cell                                      academic.DirectTPBookCell
 	Submission, Date, Reason, Choice, Version string
+	History                                   []academic.DirectTPApplicabilityHistory
 }
 
 func (a *application) directTPApplicability(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +72,11 @@ func (a *application) directTPApplicability(w http.ResponseWriter, r *http.Reque
 	}
 	if !found {
 		a.academicFailure(w, academic.ErrForbidden)
+		return
+	}
+	data.History, err = a.options.Academics.DirectTPApplicabilityHistoryFor(r.Context(), actor, semester, class, subject, student, objective)
+	if err != nil {
+		a.academicFailure(w, err)
 		return
 	}
 	data.Submission = values.Get("submission_key")
