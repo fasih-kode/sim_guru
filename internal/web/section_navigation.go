@@ -49,39 +49,52 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 		return "", ""
 	}
 	if path == "/jurnal-saya" || strings.HasPrefix(path, "/jurnal-saya/") {
-		return "Guru Mapel", "teaching-journal"
+		return subjectTeacherSection("teaching-journal"), "teaching-journal"
 	}
 	if path == "/guru/tujuan-pembelajaran" || strings.HasPrefix(path, "/guru/tujuan-pembelajaran/") || path == "/guru/kriteria-tp" {
-		return "Guru Mapel", "learning-objectives"
+		return subjectTeacherSection("learning-objectives"), "learning-objectives"
 	}
 	if path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/") {
-		return "Guru Mapel", "exam-initial-scores"
+		return subjectTeacherSection("exam-initial-scores"), "exam-initial-scores"
 	}
 	if path == "/guru/rekomendasi-semester" || strings.HasPrefix(path, "/guru/rekomendasi-semester/") {
-		return "Guru Mapel", "semester-recommendations"
+		return subjectTeacherSection("semester-recommendations"), "semester-recommendations"
 	}
 	if path == "/guru/rekap-nilai-tp" {
-		return "Guru Mapel", "assessment-tp-recap"
+		return subjectTeacherSection("assessment-tp-recap"), "assessment-tp-recap"
 	}
 	if path == "/guru/buku-nilai" || strings.HasPrefix(path, "/guru/buku-nilai/") {
-		return "Guru Mapel", "direct-tp-gradebook"
+		return subjectTeacherSection("direct-tp-gradebook"), "direct-tp-gradebook"
 	}
 	if path == "/guru/kegiatan-penilaian" || strings.HasPrefix(path, "/guru/kegiatan-penilaian/") {
-		return "Guru Mapel", "assessment-activities"
+		return subjectTeacherSection("assessment-activities"), "assessment-activities"
 	}
 	if strings.HasPrefix(path, "/guru/nilai-awal/") && strings.HasSuffix(path, "/remedial") {
-		return "Guru Mapel", "assessment-activities"
+		return subjectTeacherSection("assessment-activities"), "assessment-activities"
 	}
 	if path == "/guru/nilai-awal-saya" || strings.HasPrefix(path, "/guru/nilai-awal/") {
-		return "Guru Mapel", "assessment-score-history"
+		return subjectTeacherSection("assessment-score-history"), "assessment-score-history"
 	}
 	if path != "/jadwal-saya" && !strings.HasPrefix(path, "/jadwal-saya/") {
 		return "", ""
 	}
 	if strings.HasPrefix(path, "/jadwal-saya/absensi") {
-		return "Guru Mapel", "lesson-attendance"
+		return subjectTeacherSection("lesson-attendance"), "lesson-attendance"
 	}
-	return "Guru Mapel", "my-schedule"
+	return subjectTeacherSection("my-schedule"), "my-schedule"
+}
+
+// subjectTeacherSection membagi halaman guru menurut pekerjaan tanpa mengubah route.
+func subjectTeacherSection(active string) string {
+	switch active {
+	case "my-schedule", "lesson-attendance", "teaching-journal":
+		return "Mengajar"
+	case "assessment-activities", "assessment-score-history":
+		return "Riwayat & Koreksi"
+	case "learning-objectives", "direct-tp-gradebook", "exam-initial-scores", "assessment-tp-recap", "semester-recommendations":
+		return "Penilaian"
+	}
+	return ""
 }
 
 func teacherManagementNavigationState(path string, user *auth.User) (section, active string) {
@@ -218,7 +231,7 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 			{ID: "teacher-attendance", Label: "Kehadiran Saya", Href: "/kehadiran-saya", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9"/>`},
 			{ID: "teacher-recap", Label: "Rekap Kehadiran Saya", Href: "/kehadiran-saya/rekap", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h5M8 17h3" stroke-linecap="round"/>`},
 		}
-	case "Guru Mapel":
+	case "Mengajar", "Penilaian", "Riwayat & Koreksi":
 		if user == nil || !user.HasRole("guru_mapel") {
 			return nil
 		}
@@ -263,6 +276,15 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 		}
 	default:
 		return nil
+	}
+	if section == "Mengajar" || section == "Penilaian" || section == "Riwayat & Koreksi" {
+		filtered := make([]navigationTab, 0, len(tabs))
+		for _, tab := range tabs {
+			if subjectTeacherSection(tab.ID) == section {
+				filtered = append(filtered, tab)
+			}
+		}
+		tabs = filtered
 	}
 	for i := range tabs {
 		tabs[i].Icon += `</svg>`
