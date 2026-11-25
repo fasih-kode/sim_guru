@@ -349,3 +349,10 @@ body:has(.form-modal[open]) { overflow:hidden; }
  .teacher-work-tabs .navigation-tabs-row { width:100%; flex-wrap:wrap; gap:0 8px; }
  .teacher-work-tabs .navigation-tab { white-space:normal; }
 }
+
+/* Ringkasan konteks tetap terbaca penuh pada layar sempit. */
+.assessment-context-summary{display:flex;flex-wrap:wrap;gap:.25rem .75rem;margin-top:.75rem;overflow-wrap:anywhere;color:#344054}
+.assessment-context-summary span{display:block}
+.assessment-context-form{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem;margin-top:1rem}
+.assessment-context-select{flex:1 1 18rem;min-width:0;max-width:100%}
+.assessment-context-select select{max-width:100%}

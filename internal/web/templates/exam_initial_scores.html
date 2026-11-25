@@ -1,22 +1,5 @@
 {{define "exam-initial-scores"}}
-<section class="panel mb-5 max-w-5xl">
-  <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
-  <p class="mt-2"><a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian-saya">Lihat nilai ASTS/ASAS milik saya dan koreksi →</a></p>
-  <p class="mt-2 text-sm text-gray-600">Pilih tanggal untuk melihat siswa yang berada di kelas pada tanggal tersebut. Tanggal pelaksanaan dapat diisi untuk masing-masing siswa.</p>
-  <form method="get" action="/guru/nilai-asts-asas" class="mt-4 flex flex-wrap items-end gap-3">
-    <div class="min-w-0 flex-1">
-      <label for="exam-context">Semester · Kelas · Mata pelajaran</label>
-      <select id="exam-context" name="context" required>
-        <option value="">Pilih konteks</option>
-        {{range .ExamInitial.Contexts}}
-        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.ExamInitial.SelectedSet (eq .SemesterID $.ExamInitial.Selected.SemesterID) (eq .ClassID $.ExamInitial.Selected.ClassID) (eq .SubjectID $.ExamInitial.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
-        {{end}}
-      </select>
-    </div>
-    <div><label for="roster-date">Tanggal roster</label><input id="roster-date" type="date" name="date" value="{{.ExamInitial.Date}}" required></div>
-    <button class="button-secondary" type="submit">Lihat siswa</button>
-  </form>
-</section>
+{{template "assessment-context" .}}
 {{if .ExamInitial.SelectedSet}}
 <section class="panel max-w-5xl">
   <h2 class="text-lg font-semibold">Nilai awal ASTS dan ASAS</h2>

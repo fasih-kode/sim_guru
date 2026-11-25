@@ -66,3 +66,34 @@ test('submit menunggu bukti respons sebelum menandai berhasil', async () => {
   finish({ ok: true, redirected: true, status: 200, url: '/guru/buku-nilai', text: async () => 'ok' }); await pending;
   assert.match(b.status.textContent, /berhasil/i); assert.equal(b.unload(), false);
 });
+
+test('pergantian konteks dengan draft memulihkan pemilih tanpa mengubah tujuan GET', async () => {
+  let requests = 0;
+  const b = browser(async () => { requests++; });
+  const active = '1:1:10';
+  const destination = '1:2:10';
+  const select = { name: 'context', value: destination };
+  const contextForm = {
+    matches: selector => selector === '[data-gradebook-context]',
+    reset: () => { select.value = active; }
+  };
+  b.input();
+  const payload = new URLSearchParams([[select.name, select.value]]);
+  b.listeners.formdata({ target: contextForm, formData: payload });
+
+  assert.equal(select.value, active);
+  assert.equal(payload.get('context'), destination);
+  assert.equal(b.unload(), true);
+  assert.equal(b.form.elements[0].value, '90');
+  assert.equal(requests, 0);
+
+  // Mengembalikan nilai ke nilai awal membuang perubahan secara eksplisit.
+  b.form.elements[0].value = '80';
+  b.input();
+  await b.submit();
+  select.value = destination;
+  b.listeners.formdata({ target: contextForm });
+  assert.equal(b.unload(), false);
+  assert.equal(select.value, destination);
+  assert.equal(requests, 0);
+});

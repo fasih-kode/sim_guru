@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"net/url"
 	"os"
 	"strconv"
@@ -22,6 +23,26 @@ import (
 )
 
 func Database(t *testing.T, path string) *sql.DB {
+	return databaseForTarget(t, path, "", 0)
+}
+
+// DatabaseForTarget menambahkan verifikasi nama dan OID sebelum pemeriksaan
+// migration atau akses fixture khusus.
+func DatabaseForTarget(t *testing.T, path, expectedName string, expectedOID int64) *sql.DB {
+	if expectedName == "" || expectedOID <= 0 {
+		t.Fatal("target database test tidak valid")
+	}
+	return databaseForTarget(t, path, expectedName, expectedOID)
+}
+
+func validateDatabaseTarget(actual string, actualOID int64, expectedName string, expectedOID int64) error {
+	if actual != expectedName || actualOID != expectedOID {
+		return fmt.Errorf("database test target tidak cocok: nama=%q OID=%d; butuh nama=%q OID=%d", actual, actualOID, expectedName, expectedOID)
+	}
+	return nil
+}
+
+func databaseForTarget(t *testing.T, path, expectedName string, expectedOID int64) *sql.DB {
 	t.Helper()
 	if err := godotenv.Load(path); err != nil && !os.IsNotExist(err) {
 		t.Fatal("cannot load test configuration")
@@ -37,9 +58,15 @@ func Database(t *testing.T, path string) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	var actual string
+	var actualOID int64
 	var privileged bool
-	if err = db.QueryRow(`SELECT current_database(),rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user`).Scan(&actual, &privileged); err != nil || privileged || !strings.HasSuffix(actual, "_test") {
+	if err = db.QueryRow(`SELECT current_database(),(SELECT oid FROM pg_database WHERE datname=current_database()),rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user`).Scan(&actual, &actualOID, &privileged); err != nil || privileged || !strings.HasSuffix(actual, "_test") {
 		t.Fatal("unsafe test database")
+	}
+	if expectedName != "" {
+		if err = validateDatabaseTarget(actual, actualOID, expectedName, expectedOID); err != nil {
+			t.Fatal(err)
+		}
 	}
 	metadataDB := db
 	if os.Getenv("TEST_FIXTURE_DATABASE_URL") != "" {

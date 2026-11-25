@@ -1,26 +1,5 @@
 {{define "assessment-tp-recap"}}
-<section class="panel mb-5 max-w-5xl">
-  <div class="mb-5">
-    <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
-    <p class="mt-1 text-sm leading-6 text-gray-500">Rekap hanya menampilkan kelas, mata pelajaran, dan semester yang sedang menjadi penugasan resmi Anda. Data dibaca sesuai penempatan dan keberlakuan TP siswa.</p>
-  </div>
-  {{if .AssessmentTPRecap.Contexts}}
-  <form method="get" action="/guru/rekap-nilai-tp" class="flex flex-wrap items-end gap-3">
-    <div class="min-w-0 flex-1">
-      <label for="assessment-tp-context">Semester · Kelas · Mata pelajaran</label>
-      <select id="assessment-tp-context" name="context" required>
-        <option value="">Pilih konteks penugasan</option>
-        {{range .AssessmentTPRecap.Contexts}}
-        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.AssessmentTPRecap.SelectedSet (eq .SemesterID $.AssessmentTPRecap.Selected.SemesterID) (eq .ClassID $.AssessmentTPRecap.Selected.ClassID) (eq .SubjectID $.AssessmentTPRecap.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
-        {{end}}
-      </select>
-    </div>
-    <button class="button-secondary" type="submit">Lihat Rekap</button>
-  </form>
-  {{else}}
-  <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Belum ada penugasan resmi yang berlaku untuk akun Anda.</p>
-  {{end}}
-</section>
+{{template "assessment-context" .}}
 
 {{if .AssessmentTPRecap.SelectedSet}}
 <section class="panel max-w-5xl">

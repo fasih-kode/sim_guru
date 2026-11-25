@@ -63,6 +63,7 @@ type view struct {
 	NavActive, NavGroup                 string
 	NavigationSection, NavigationActive string
 	NavigationTabs                      []navigationTab
+	AssessmentContext                   *assessmentContextView
 	Dashboard                           *dashboardPresentation
 	AdditionalDashboards                []*dashboardPresentation
 	HomeAttendance                      *homeAttendanceShortcuts
@@ -118,6 +119,10 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
 	v.NavigationSection, v.NavigationActive = sectionNavigationState(r.URL.Path, v.User)
 	v.NavigationTabs = sectionNavigationTabs(v.NavigationSection, v.NavigationActive, v.User)
+	v.AssessmentContext = assessmentContextForView(v)
+	if v.NavigationSection == "Penilaian" {
+		assessmentContextNavigation(v.NavigationTabs, v.AssessmentContext)
+	}
 	v.LiveList = liveListPage(v.Page)
 	if name == "page" && v.LiveList && r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-List-Request") == "true" {
 		name = "list-fragment"

@@ -15,6 +15,13 @@
     }
   });
 
+  document.addEventListener('formdata', (event) => {
+    const form = event.target;
+    if (!dirty || !form.matches('[data-gradebook-context]')) return;
+    // Tujuan sudah tercatat dalam data GET. Pulihkan pemilih bila halaman ini tetap terbuka.
+    form.reset();
+  });
+
   document.addEventListener('submit', async (event) => {
     const form = event.target;
     if (!form.matches(formSelector)) return;

@@ -1,27 +1,6 @@
 {{define "learning-objectives"}}
 <p class="mb-4 flex flex-wrap gap-2"><a class="button-secondary" href="/guru/kriteria-tp">Pengaturan kriteria ketercapaian TP</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/historis">Pratinjau TP historis</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/relasi-historis">Koreksi relasi Sumatif historis</a></p>
-<section class="panel mb-5 max-w-5xl">
-  <div class="mb-5">
-    <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
-    <p class="mt-1 text-sm leading-6 text-gray-500">Konteks hanya menampilkan semester, kelas, dan mata pelajaran yang sedang menjadi penugasan resmi Anda.</p>
-  </div>
-  {{if .LearningObjectives.Contexts}}
-  <form method="get" action="/guru/tujuan-pembelajaran" class="flex flex-wrap items-end gap-3">
-    <div class="min-w-0 flex-1">
-      <label for="learning-objective-context">Semester · Kelas · Mata pelajaran</label>
-      <select id="learning-objective-context" name="context" required>
-        <option value="">Pilih konteks penugasan</option>
-        {{range .LearningObjectives.Contexts}}
-        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.LearningObjectives.SelectedSet (eq .SemesterID $.LearningObjectives.Selected.SemesterID) (eq .ClassID $.LearningObjectives.Selected.ClassID) (eq .SubjectID $.LearningObjectives.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
-        {{end}}
-      </select>
-    </div>
-    <button class="button-secondary" type="submit">Lihat TP</button>
-  </form>
-  {{else}}
-  <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Belum ada penugasan resmi yang berlaku untuk akun Anda.</p>
-  {{end}}
-</section>
+{{template "assessment-context" .}}
 
 {{if .LearningObjectives.SelectedSet}}
 <section class="panel max-w-5xl">

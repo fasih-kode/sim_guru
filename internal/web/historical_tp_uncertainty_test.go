@@ -20,10 +20,12 @@ func TestHistoricalTPUncertaintyRemainsVisible(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := template.ParseFiles(tc.file)
+			tpl, err := template.ParseFiles(tc.file, "templates/assessment_context.html")
 			if err != nil {
 				t.Fatal(err)
 			}
+			tc.data.Page = tc.entry
+			tc.data.AssessmentContext = assessmentContextForView(tc.data)
 			var b bytes.Buffer
 			if err = tpl.ExecuteTemplate(&b, tc.entry, tc.data); err != nil {
 				t.Fatal(err)

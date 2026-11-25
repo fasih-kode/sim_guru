@@ -8,6 +8,26 @@ import (
 	"testing"
 )
 
+func TestValidateDatabaseTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		actual   string
+		actualID int64
+		wantErr  bool
+	}{
+		{name: "exact target", actual: "sim_guru_rd02_s06_20261123_test", actualID: 84604},
+		{name: "wrong database", actual: "sim_guru_test", actualID: 84604, wantErr: true},
+		{name: "wrong OID", actual: "sim_guru_rd02_s06_20261123_test", actualID: 84605, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateDatabaseTarget(tc.actual, tc.actualID, "sim_guru_rd02_s06_20261123_test", 84604)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validateDatabaseTarget() error = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 // TestDatabaseUsesPreMigratedRuntime verifies test connections never need DDL.
 func TestDatabaseUsesPreMigratedRuntime(t *testing.T) {
 	db := Database(t, "../../.env")
