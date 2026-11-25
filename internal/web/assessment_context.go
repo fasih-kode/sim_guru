@@ -13,6 +13,7 @@ type assessmentContextView struct {
 	SelectedSet  bool
 	Action, Date string
 	Exam         bool
+	ExamTab      string
 }
 
 // assessmentContextForView hanya menggunakan konteks yang sudah diperiksa handler.
@@ -27,7 +28,8 @@ func assessmentContextForView(v view) *assessmentContextView {
 		c.Contexts, c.Selected, c.SelectedSet, c.Action = x.Contexts, x.Selected, x.SelectedSet, "/guru/buku-nilai"
 	case v.Page == "exam-initial-scores" && v.ExamInitial != nil:
 		x := v.ExamInitial
-		c.Contexts, c.Selected, c.SelectedSet, c.Action, c.Date, c.Exam = x.Contexts, x.Selected, x.SelectedSet, "/guru/nilai-asts-asas", x.Date, true
+		c.Contexts, c.Selected, c.SelectedSet, c.Action, c.Date, c.Exam = x.Contexts, x.Selected, x.SelectedSet, examGradebookPath, x.Date, true
+		c.ExamTab = x.Tab
 	case v.Page == "assessment-tp-recap" && v.AssessmentTPRecap != nil:
 		x := v.AssessmentTPRecap
 		c.Contexts, c.Selected, c.SelectedSet, c.Action = x.Contexts, x.Selected, x.SelectedSet, "/guru/rekap-nilai-tp"

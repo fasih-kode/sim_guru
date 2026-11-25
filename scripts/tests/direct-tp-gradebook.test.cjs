@@ -4,12 +4,12 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const source = fs.readFileSync('internal/web/static/direct-tp-gradebook.js', 'utf8');
 
-function browser(fetch) {
+function browser(fetch, exam = false) {
   const listeners = {}, windowListeners = {};
   const status = { textContent: '' };
   const button = { disabled: false };
   const table = { inert: false };
-  const form = { action: '/guru/buku-nilai', matches: () => true, querySelector: () => table, querySelectorAll: () => [button], elements: [
+  const form = { action: '/guru/buku-nilai', matches: () => true, hasAttribute: (name) => exam && name === 'data-gradebook-exam', querySelector: () => table, querySelectorAll: () => [button], elements: [
     { name: 'score_1_2', value: '90' }, { name: 'original_1_2', value: '80' }, { name: 'version_1_2', value: '0' },
     { name: 'score_3_2', value: '70' }, { name: 'original_3_2', value: '70' }, { name: 'version_3_2', value: '0' },
     { name: 'score_disabled', value: '100', disabled: true }
@@ -17,14 +17,14 @@ function browser(fetch) {
   const content = { replaceWith: () => {}, contains: () => true };
   const document = {
     addEventListener: (name, fn) => { listeners[name] = fn; },
-    querySelector: (selector) => selector === '[data-gradebook-status]' ? status : selector === '#content' ? content : selector.includes('[data-draft]') ? null : form
+    querySelector: (selector) => selector === '[data-gradebook-status]' ? status : selector === '#content' ? content : selector === '[data-gradebook-form]' ? form : null
   };
   const window = { addEventListener: (name, fn) => { windowListeners[name] = fn; } };
   class FormDataStub { constructor(form) { this.entries = form.elements.filter(e => e.name && !e.disabled).map(e => [e.name, e.value]); } append(k, v) { this.entries.push([k,v]); } get(k) { return this.entries.find(x => x[0] === k)?.[1]; } [Symbol.iterator]() { return this.entries[Symbol.iterator](); } }
   const replacement = { querySelector: (selector) => selector === '[data-gradebook-confirmed]' ? {} : null };
   class DOMParserStub { parseFromString() { return { querySelector: () => replacement }; } }
   vm.runInNewContext(source, { document, window, fetch, FormData: FormDataStub, URLSearchParams, DOMParser: DOMParserStub, history: { replaceState() {} } });
-  const input = () => listeners.input({ target: { closest: () => form } });
+  const input = () => listeners.input({ target: { closest: (selector) => selector === '[data-gradebook-form]' ? form : null } });
   const unload = () => { let blocked = false; windowListeners.beforeunload({ preventDefault() { blocked = true; } }); return blocked; };
   const submit = () => listeners.submit({ target: form, preventDefault() {} });
   return { input, unload, submit, status, listeners, form };
@@ -96,4 +96,37 @@ test('pergantian konteks dengan draft memulihkan pemilih tanpa mengubah tujuan G
   assert.equal(b.unload(), false);
   assert.equal(select.value, destination);
   assert.equal(requests, 0);
+});
+
+for (const component of ['asts', 'asas']) {
+  test(`draft ${component} menserialisasi komponen aktif, nol, sel kosong, dan tanggal`, async () => {
+    let request;
+    const b = browser(async (url, { body }) => { request = { url, body }; throw new Error('offline'); }, true);
+    b.form.action = `/guru/nilai-asts-asas?tab=${component}`;
+    b.form.elements = [
+      { name: 'roster_date', value: '2026-11-19' },
+      { name: `score_${component}_1`, value: '0' },
+      { name: `date_${component}_1`, value: '2026-11-20' },
+      { name: `score_${component}_2`, value: '' },
+      { name: `date_${component}_2`, value: '2026-11-21' }
+    ];
+    b.input();
+    assert.equal(b.unload(), true);
+    await b.submit();
+    assert.equal(request.url, b.form.action);
+    assert.deepEqual([...request.body], b.form.elements.map(({ name, value }) => [name, value]));
+    assert.equal(b.form.elements[1].value, '0');
+    assert.equal(b.unload(), true);
+  });
+}
+
+test('tab ASAS kosong dengan tanggal yang diedit tidak mengirim permintaan', async () => {
+  let calls = 0;
+  const b = browser(async () => { calls++; }, true);
+  b.form.elements = [{ name: 'score_asas_1', value: '' }, { name: 'date_asas_1', value: '2026-11-21' }];
+  b.input();
+  await b.submit();
+  assert.equal(calls, 0);
+  assert.equal(b.unload(), true);
+  assert.match(b.status.textContent, /Isi sedikitnya satu nilai/);
 });

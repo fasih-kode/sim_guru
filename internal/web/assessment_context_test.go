@@ -57,7 +57,7 @@ func TestAssessmentContextTemplateRendersSummaryAndChoices(t *testing.T) {
 		t.Fatal(err)
 	}
 	selected := academic.LearningObjectiveContext{SemesterID: 1, ClassID: 2, SubjectID: 3, SemesterName: "Tahun 2026 Semester 1", ClassName: "Kelas 7B", SubjectName: "Pendidikan Agama dan Budi Pekerti"}
-	data := view{AssessmentContext: &assessmentContextView{Contexts: []academic.LearningObjectiveContext{selected}, Selected: selected, SelectedSet: true, Action: "/guru/buku-nilai"}}
+	data := view{GradebookNavigation: &gradebookNavigationView{}, AssessmentContext: &assessmentContextView{Contexts: []academic.LearningObjectiveContext{selected}, Selected: selected, SelectedSet: true, Action: "/guru/buku-nilai"}}
 	var output bytes.Buffer
 	if err = tpl.ExecuteTemplate(&output, "assessment-context", data); err != nil {
 		t.Fatal(err)

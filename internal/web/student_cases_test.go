@@ -298,7 +298,7 @@ func TestTeacherAttendanceAndSubjectTeacherUseSharedNavigationTabs(t *testing.T)
 		{"Kehadiran Guru", []string{"guru_mapel"}, 2},
 		{"Kehadiran Guru", []string{"wali_kelas"}, 2},
 		{"Mengajar", []string{"guru_mapel"}, 3},
-		{"Penilaian", []string{"guru_mapel"}, 5},
+		{"Penilaian", []string{"guru_mapel"}, 4},
 		{"Riwayat & Koreksi", []string{"guru_mapel"}, 2},
 		{"Mengajar", []string{"kurikulum"}, 0},
 		{"Penilaian", []string{"kurikulum"}, 0},

@@ -64,6 +64,7 @@ type view struct {
 	NavigationSection, NavigationActive string
 	NavigationTabs                      []navigationTab
 	AssessmentContext                   *assessmentContextView
+	GradebookNavigation                 *gradebookNavigationView
 	Dashboard                           *dashboardPresentation
 	AdditionalDashboards                []*dashboardPresentation
 	HomeAttendance                      *homeAttendanceShortcuts
@@ -120,6 +121,11 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.NavigationSection, v.NavigationActive = sectionNavigationState(r.URL.Path, v.User)
 	v.NavigationTabs = sectionNavigationTabs(v.NavigationSection, v.NavigationActive, v.User)
 	v.AssessmentContext = assessmentContextForView(v)
+	gradebookRosterDate := r.URL.Query().Get("date")
+	if r.Method == http.MethodPost {
+		gradebookRosterDate = r.PostForm.Get("date")
+	}
+	v.GradebookNavigation = gradebookNavigationForView(v, gradebookRosterDate)
 	if v.NavigationSection == "Penilaian" {
 		assessmentContextNavigation(v.NavigationTabs, v.AssessmentContext)
 	}
@@ -195,7 +201,7 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "", ""
 	case path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/"):
 		if user != nil && user.HasRole("guru_mapel") {
-			return "exam-initial-scores", "guru-mapel"
+			return "direct-tp-gradebook", "guru-mapel"
 		}
 		return "", ""
 	case path == "/guru/rekomendasi-semester" || strings.HasPrefix(path, "/guru/rekomendasi-semester/"):

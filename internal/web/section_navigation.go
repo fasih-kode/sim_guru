@@ -55,7 +55,7 @@ func subjectTeacherNavigationState(path string, user *auth.User) (section, activ
 		return subjectTeacherSection("learning-objectives"), "learning-objectives"
 	}
 	if path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/") {
-		return subjectTeacherSection("exam-initial-scores"), "exam-initial-scores"
+		return "Penilaian", "direct-tp-gradebook"
 	}
 	if path == "/guru/rekomendasi-semester" || strings.HasPrefix(path, "/guru/rekomendasi-semester/") {
 		return subjectTeacherSection("semester-recommendations"), "semester-recommendations"
@@ -91,7 +91,7 @@ func subjectTeacherSection(active string) string {
 		return "Mengajar"
 	case "assessment-activities", "assessment-score-history":
 		return "Riwayat & Koreksi"
-	case "learning-objectives", "direct-tp-gradebook", "exam-initial-scores", "assessment-tp-recap", "semester-recommendations":
+	case "learning-objectives", "direct-tp-gradebook", "assessment-tp-recap", "semester-recommendations":
 		return "Penilaian"
 	}
 	return ""
@@ -244,7 +244,6 @@ func sectionNavigationTabs(section, active string, user *auth.User) []navigation
 			navigationTab{ID: "assessment-activities", Label: "Kegiatan Penilaian", Href: "/guru/kegiatan-penilaian", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2Zm2 5h8m-8 4h8m-8 4h5" stroke-linecap="round" stroke-linejoin="round"/>`},
 			navigationTab{ID: "assessment-score-history", Label: "Nilai Milik Saya", Href: "/guru/nilai-awal-saya", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h4m-4 4h8" stroke-linecap="round" stroke-linejoin="round"/><path d="m14 11 2 2 4-5" stroke-linecap="round" stroke-linejoin="round"/>`},
 
-			navigationTab{ID: "exam-initial-scores", Label: "Nilai ASTS/ASAS", Href: "/guru/nilai-asts-asas", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5" stroke-linecap="round"/></svg>`},
 			navigationTab{ID: "semester-recommendations", Label: "Rekomendasi Semester", Href: "/guru/rekomendasi-semester", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5" stroke-linecap="round"/></svg>`},
 			navigationTab{ID: "assessment-tp-recap", Label: "Rekap Nilai TP/NH", Href: "/guru/rekap-nilai-tp", Icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19.5V4.5M4 19.5h17M8 16v-4m4 4V7m4 9v-6m4 6V4" stroke-linecap="round" stroke-linejoin="round"/>`},
 		}

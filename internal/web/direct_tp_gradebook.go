@@ -156,6 +156,9 @@ func (a *application) directTPGradebook(w http.ResponseWriter, r *http.Request) 
 		}
 		if err == nil && !review {
 			q := url.Values{"context": {fmt.Sprintf("%d:%d:%d", semester, class, subject)}, "saved": {data.Submission}}
+			if date := gradebookDate(r.PostForm.Get("date")); date != "" {
+				q.Set("date", date)
+			}
 			http.Redirect(w, r, "/guru/buku-nilai?"+q.Encode(), http.StatusSeeOther)
 			return
 		}

@@ -8,7 +8,29 @@
     if (element) element.textContent = message;
   }
 
+  function filterStudents() {
+    const filters = document.querySelector('[data-gradebook-filters]');
+    if (!filters) return;
+    filters.hidden = false;
+    const search = filters.querySelector('[data-gradebook-search]').value.trim().toLocaleLowerCase('id');
+    const emptyOnly = filters.querySelector('[data-gradebook-empty]').checked;
+    const rows = [...document.querySelectorAll('[data-gradebook-student]')];
+    let visible = 0;
+    for (const row of rows) {
+      const matches = row.dataset.gradebookStudent.toLocaleLowerCase('id').includes(search);
+      const hasEmpty = [...row.querySelectorAll('input[name^="score_"]:not([type="hidden"])')].some((input) => !input.value.trim());
+      row.hidden = !matches || (emptyOnly && !hasEmpty);
+      if (!row.hidden) visible++;
+    }
+    filters.querySelector('[data-gradebook-count]').textContent = `${visible} dari ${rows.length} siswa · Simpan mencakup seluruh tabel`;
+  }
+
+  filterStudents();
   document.addEventListener('input', (event) => {
+    if (event.target.closest('[data-gradebook-filters]')) {
+      filterStudents();
+      return;
+    }
     if (event.target.closest(formSelector)) {
       dirty = true;
       status('Draft belum disimpan.');
@@ -29,8 +51,13 @@
     if (saving) return;
     const data = new FormData(form);
     if (event.submitter && event.submitter.name) data.append(event.submitter.name, event.submitter.value);
+    const exam = form.hasAttribute('data-gradebook-exam');
+    if (exam && ![...data].some(([name, value]) => name.startsWith('score_') && value.trim() !== '')) {
+      status('Isi sedikitnya satu nilai sebelum menyimpan.');
+      return;
+    }
     const review = data.get('action') === 'review_latest';
-    if (!review && ![...data].some(([name, value]) => name.startsWith('score_') && value !== data.get(`original_${name.slice(6)}`))) {
+    if (!exam && !review && ![...data].some(([name, value]) => name.startsWith('score_') && value !== data.get(`original_${name.slice(6)}`))) {
       dirty = false;
       status('Tidak ada perubahan untuk disimpan.');
       return;
@@ -51,10 +78,16 @@
       const existing = document.querySelector('#content');
       const confirmed = response.ok && response.redirected && replacement && replacement.querySelector('[data-gradebook-confirmed]');
       const draftResponse = replacement && replacement.querySelector(`${formSelector}[data-draft]`) && (response.status === 409 || response.status === 422 || (review && response.ok && !response.redirected));
+      if (exam && !confirmed && replacement && (response.status === 409 || response.status === 422)) {
+        const error = replacement.querySelector('[data-exam-save-error]');
+        status(error ? error.textContent : 'Penyimpanan gagal. Draft belum disimpan.');
+        return;
+      }
       if (!existing || (!confirmed && !draftResponse)) throw new Error('Respons penyimpanan tidak dapat diverifikasi');
       existing.replaceWith(replacement);
       if (window.htmx) window.htmx.process(replacement);
       dirty = !confirmed;
+      filterStudents();
       if (confirmed) {
         history.replaceState(null, '', response.url);
         status('Berhasil disimpan.');
@@ -81,6 +114,7 @@
   document.addEventListener('htmx:afterSwap', (event) => {
     if (!dirty && event.detail && event.detail.target && event.detail.target.id === 'content') {
       dirty = Boolean(document.querySelector(`${formSelector}[data-draft]`));
+      filterStudents();
     }
   });
   window.addEventListener('beforeunload', (event) => {

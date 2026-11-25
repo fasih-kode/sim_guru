@@ -25,13 +25,13 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"kepala sekolah satu halaman", "/absensi/harian", "", "", "attendance", []string{"kepala_sekolah"}, 0},
 		{"role gabungan tanpa duplikasi", "/absensi/harian", "Kehadiran Siswa", "daily-attendance", "attendance", []string{"petugas_absensi", "kesiswaan", "wali_kelas"}, 4},
 		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Mengajar", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 3},
-		{"Buku Nilai Guru Mapel", "/guru/buku-nilai", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Penilaian", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 5},
+		{"Buku Nilai Guru Mapel", "/guru/buku-nilai", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Penilaian", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 4},
 		{"kegiatan Guru Mapel", "/guru/kegiatan-penilaian", "Riwayat & Koreksi", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 2},
-		{"daftar ujian historis", "/guru/nilai-ujian-saya", "Penilaian", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"koreksi ujian", "/guru/nilai-ujian/123/koreksi", "Penilaian", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"nilai ujian Guru Mapel", "/guru/nilai-asts-asas", "Penilaian", "exam-initial-scores", "guru-mapel", []string{"guru_mapel"}, 5},
-		{"rekap nilai TP Guru Mapel", "/guru/rekap-nilai-tp", "Penilaian", "assessment-tp-recap", "guru-mapel", []string{"guru_mapel"}, 5},
+		{"daftar ujian historis", "/guru/nilai-ujian-saya", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"koreksi ujian", "/guru/nilai-ujian/123/koreksi", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"nilai ujian Guru Mapel", "/guru/nilai-asts-asas", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"rekap nilai TP Guru Mapel", "/guru/rekap-nilai-tp", "Penilaian", "assessment-tp-recap", "guru-mapel", []string{"guru_mapel"}, 4},
 		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Riwayat & Koreksi", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 2},
 		{"nilai historis milik guru", "/guru/nilai-awal-saya", "Riwayat & Koreksi", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 2},
 		{"koreksi nilai historis", "/guru/nilai-awal/123/koreksi", "Riwayat & Koreksi", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 2},
@@ -201,7 +201,7 @@ func TestSubjectTeacherWorkGroupsRetainAllRoutes(t *testing.T) {
 	user := &auth.User{ID: 42, Active: true, Roles: []string{"guru_mapel", "kurikulum"}}
 	groups := map[string][]string{
 		"Mengajar":          {"/jadwal-saya", "/jadwal-saya/absensi", "/jurnal-saya"},
-		"Penilaian":         {"/guru/tujuan-pembelajaran", "/guru/buku-nilai", "/guru/nilai-asts-asas", "/guru/rekomendasi-semester", "/guru/rekap-nilai-tp"},
+		"Penilaian":         {"/guru/tujuan-pembelajaran", "/guru/buku-nilai", "/guru/rekomendasi-semester", "/guru/rekap-nilai-tp"},
 		"Riwayat & Koreksi": {"/guru/kegiatan-penilaian", "/guru/nilai-awal-saya"},
 	}
 	for group, routes := range groups {

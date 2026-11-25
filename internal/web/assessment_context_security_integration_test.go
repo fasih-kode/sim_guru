@@ -90,9 +90,12 @@ func TestAssessmentContextCrossTeacherReadOnlyIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := []string{"/guru/tujuan-pembelajaran", "/guru/buku-nilai", "/guru/nilai-asts-asas", "/guru/rekap-nilai-tp", "/guru/rekomendasi-semester"}
+	paths := []string{"/guru/tujuan-pembelajaran", "/guru/buku-nilai", "/guru/nilai-asts-asas?tab=asts", "/guru/nilai-asts-asas?tab=asas", "/guru/rekap-nilai-tp", "/guru/rekomendasi-semester"}
 	request := func(path string, user int64, c academic.LearningObjectiveContext) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("GET", fmt.Sprintf("%s?context=%d:%d:%d", path, c.SemesterID, c.ClassID, c.SubjectID), nil)
+		r := httptest.NewRequest("GET", path, nil)
+		q := r.URL.Query()
+		q.Set("context", fmt.Sprintf("%d:%d:%d", c.SemesterID, c.ClassID, c.SubjectID))
+		r.URL.RawQuery = q.Encode()
 		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.User{ID: user, Active: true, Roles: []string{"guru_mapel"}}))
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)

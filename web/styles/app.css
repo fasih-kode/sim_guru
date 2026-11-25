@@ -356,3 +356,10 @@ body:has(.form-modal[open]) { overflow:hidden; }
 .assessment-context-form{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem;margin-top:1rem}
 .assessment-context-select{flex:1 1 18rem;min-width:0;max-width:100%}
 .assessment-context-select select{max-width:100%}
+
+.gradebook-table tr>th:first-child{overflow-wrap:anywhere}
+.gradebook-exam-table td input[type="date"]{width:10rem;min-height:2.75rem}
+.gradebook-exam-table td input[inputmode="decimal"]{min-height:2.75rem}
+.gradebook-filters:not([hidden]){display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}
+.gradebook-filters input[type="checkbox"]{width:auto}
+.gradebook-filters [data-gradebook-count]{font-size:.875rem;color:#475467}

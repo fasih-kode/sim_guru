@@ -1,63 +1,51 @@
 {{define "exam-initial-scores"}}
+{{template "gradebook-navigation" .}}
 {{template "assessment-context" .}}
-{{if .ExamInitial.SelectedSet}}
-<section class="panel max-w-5xl">
-  <h2 class="text-lg font-semibold">Nilai awal ASTS dan ASAS</h2>
-  <p class="mt-1 text-sm text-gray-600">{{.ExamInitial.Selected.SemesterName}} · {{.ExamInitial.Selected.ClassName}} · {{.ExamInitial.Selected.SubjectName}}</p>
-  <p class="mt-2 text-sm text-gray-600">Nilai yang sudah disimpan tidak dapat ditimpa di sini. Koreksi, remedial, dan susulan tersedia melalui mekanisme berbeda pada tahap berikutnya.</p>
-  {{if gt .ExamInitial.Sheet.UnknownPlacementCount 0}}
-  <p class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{{.ExamInitial.Sheet.UnknownPlacementCount}} penempatan belum memiliki tanggal mulai dan belum dapat ditampilkan.</p>
+{{with .Error}}<span data-exam-save-error hidden>{{.}} Draft belum disimpan.</span>{{end}}
+{{with .ExamInitial}}{{if .SelectedSet}}
+<section class="panel gradebook-panel">
+  <h2 class="text-lg font-semibold">Nilai awal {{if .LegacyDraft}}ASTS dan ASAS{{else if eq .Tab "asas"}}ASAS{{else}}ASTS{{end}}</h2>
+  <p class="mt-2 text-sm text-gray-600">Nilai 0–100, maksimal dua desimal. Biarkan nilai kosong untuk siswa yang belum dinilai. Gunakan tanggal pelaksanaan masing-masing siswa.</p>
+  {{if gt .Sheet.UnknownPlacementCount 0}}
+  <p class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{{.Sheet.UnknownPlacementCount}} penempatan belum memiliki tanggal mulai dan belum dapat ditampilkan.</p>
   {{end}}
-  {{if .ExamInitial.Sheet.Students}}
-  <form method="post" action="/guru/nilai-asts-asas" class="mt-5 space-y-4">
-    {{.CSRF}}
-    <input type="hidden" name="semester_id" value="{{.ExamInitial.Selected.SemesterID}}">
-    <input type="hidden" name="class_id" value="{{.ExamInitial.Selected.ClassID}}">
-    <input type="hidden" name="subject_id" value="{{.ExamInitial.Selected.SubjectID}}">
-    <input type="hidden" name="roster_date" value="{{.ExamInitial.Date}}">
-    {{range .ExamInitial.Sheet.Students}}
-    <article class="rounded-xl border border-gray-200 p-4">
-      <h3 class="font-semibold">{{.Name}}</h3>
-      <p class="text-sm text-gray-500">{{if .NIS}}NIS {{.NIS}}{{else}}NIS tidak tersedia{{end}}</p>
-      <div class="mt-3 grid gap-4 sm:grid-cols-2">
-        <div class="rounded-lg bg-gray-50 p-3">
-          <h4 class="font-semibold">ASTS</h4>
-          {{if .ASTS.Recorded}}
-          <p class="mt-2 text-sm">Sudah dicatat · Nilai awal asli: <strong>{{.ASTS.Value}}</strong> · {{.ASTS.Date}}</p>
-          <p class="text-sm">Nilai terkoreksi terbaru: <strong>{{.ASTS.CorrectedValue}}</strong></p>
-          {{if .ASTS.CanCorrect}}<a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.ASTS.ScoreID}}/koreksi">Koreksi nilai</a>{{end}}
-          <p class="text-sm text-gray-600">Guru: {{.ASTS.TeacherName}} · Pencatat: {{.ASTS.RecordedBy}} · {{.ASTS.RecordedAt}} WIB</p>
-          {{if .ASTS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASTS.AttemptedValue}} · {{.ASTS.AttemptedDate}}</p>{{end}}
-          {{else}}
-          <p class="mt-2 text-sm text-gray-500">Belum dicatat</p>
-          <label for="score_asts_{{.ID}}">Nilai ASTS</label>
-          <input id="score_asts_{{.ID}}" name="score_asts_{{.ID}}" inputmode="decimal" value="{{.ASTS.Value}}" placeholder="0–100">
-          <label for="date_asts_{{.ID}}">Tanggal pelaksanaan ASTS</label>
-          <input id="date_asts_{{.ID}}" name="date_asts_{{.ID}}" type="date" value="{{if .ASTS.Entered}}{{.ASTS.Date}}{{else}}{{$.ExamInitial.Date}}{{end}}">
+  {{if .Sheet.Students}}
+  <form method="post" action="/guru/nilai-asts-asas{{if not .LegacyDraft}}?tab={{.Tab}}{{end}}" data-gradebook-form data-gradebook-exam {{if .Draft}}data-draft="true"{{end}}>
+    {{$.CSRF}}
+    <input type="hidden" name="semester_id" value="{{.Selected.SemesterID}}">
+    <input type="hidden" name="class_id" value="{{.Selected.ClassID}}">
+    <input type="hidden" name="subject_id" value="{{.Selected.SubjectID}}">
+    <input type="hidden" name="roster_date" value="{{.Date}}">
+    <div class="gradebook-scroll mt-4" tabindex="0" role="region" aria-label="Tabel nilai ujian">
+      <table class="gradebook-table gradebook-exam-table">
+        <thead><tr><th scope="col">Siswa</th>{{if .LegacyDraft}}<th scope="col">Komponen</th>{{end}}<th scope="col">Nilai awal</th><th scope="col">Tanggal pelaksanaan</th><th scope="col">Koreksi dan histori</th></tr></thead>
+        <tbody>
+          {{range .Rows}}{{$key := printf "%s_%d" .Component .Student.ID}}
+          <tr>
+            <th scope="row">{{.Student.Name}}{{if .Student.NIS}}<small>NIS {{.Student.NIS}}</small>{{end}}</th>
+            {{if $.ExamInitial.LegacyDraft}}<td>{{if eq .Component "asts"}}ASTS{{else}}ASAS{{end}}</td>{{end}}
+            {{if .Cell.Recorded}}
+            <td><strong>{{.Cell.Value}}</strong><small>Sudah dicatat · Terkunci</small></td>
+            <td>{{.Cell.Date}}</td>
+            <td>
+              <p>Terkoreksi: <strong>{{.Cell.CorrectedValue}}</strong></p>
+              {{if .Cell.CanCorrect}}<a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.Cell.ScoreID}}/koreksi">Koreksi nilai</a> · <a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.Cell.ScoreID}}/remedial">Remedial dan histori</a>{{end}}
+              <small>Guru: {{.Cell.TeacherName}} · Pencatat: {{.Cell.RecordedBy}} · {{.Cell.RecordedAt}} WIB</small>
+              {{if .Cell.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.Cell.AttemptedValue}} · {{.Cell.AttemptedDate}}</p>{{end}}
+            </td>
+            {{else}}
+            <td><label class="sr-only" for="score_{{$key}}">Nilai · {{.Student.Name}}</label><input id="score_{{$key}}" name="score_{{$key}}" inputmode="decimal" autocomplete="off" value="{{.Cell.Value}}" maxlength="12" placeholder="0–100"></td>
+            <td><label class="sr-only" for="date_{{$key}}">Tanggal pelaksanaan · {{.Student.Name}}</label><input id="date_{{$key}}" name="date_{{$key}}" type="date" value="{{if .Cell.Entered}}{{.Cell.Date}}{{else}}{{$.ExamInitial.Date}}{{end}}"></td>
+            <td><small>Belum dicatat</small></td>
+            {{end}}
+          </tr>
           {{end}}
-        </div>
-        <div class="rounded-lg bg-gray-50 p-3">
-          <h4 class="font-semibold">ASAS</h4>
-          {{if .ASAS.Recorded}}
-          <p class="mt-2 text-sm">Sudah dicatat · Nilai awal asli: <strong>{{.ASAS.Value}}</strong> · {{.ASAS.Date}}</p>
-          <p class="text-sm">Nilai terkoreksi terbaru: <strong>{{.ASAS.CorrectedValue}}</strong></p>
-          {{if .ASAS.CanCorrect}}<a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian/{{.ASAS.ScoreID}}/koreksi">Koreksi nilai</a>{{end}}
-          <p class="text-sm text-gray-600">Guru: {{.ASAS.TeacherName}} · Pencatat: {{.ASAS.RecordedBy}} · {{.ASAS.RecordedAt}} WIB</p>
-          {{if .ASAS.Entered}}<p class="text-sm text-amber-900">Input belum tersimpan: {{.ASAS.AttemptedValue}} · {{.ASAS.AttemptedDate}}</p>{{end}}
-          {{else}}
-          <p class="mt-2 text-sm text-gray-500">Belum dicatat</p>
-          <label for="score_asas_{{.ID}}">Nilai ASAS</label>
-          <input id="score_asas_{{.ID}}" name="score_asas_{{.ID}}" inputmode="decimal" value="{{.ASAS.Value}}" placeholder="0–100">
-          <label for="date_asas_{{.ID}}">Tanggal pelaksanaan ASAS</label>
-          <input id="date_asas_{{.ID}}" name="date_asas_{{.ID}}" type="date" value="{{if .ASAS.Entered}}{{.ASAS.Date}}{{else}}{{$.ExamInitial.Date}}{{end}}">
-          {{end}}
-        </div>
-      </div>
-    </article>
-    {{end}}
-    <button type="submit" class="button-primary">Simpan nilai awal</button>
+        </tbody>
+      </table>
+    </div>
+    <div class="gradebook-actions"><button type="submit" class="button-primary">Simpan nilai awal</button><span class="text-sm text-gray-600" data-gradebook-status role="status" aria-live="polite">{{if .Draft}}Draft belum disimpan.{{else if $.Message}}Berhasil disimpan.{{end}}</span>{{if $.Message}}<span data-gradebook-confirmed hidden></span>{{end}}</div>
   </form>
   {{else}}<p class="mt-4 text-sm">Belum ada siswa pada tanggal ini.</p>{{end}}
 </section>
-{{end}}
+{{end}}{{end}}
 {{end}}
