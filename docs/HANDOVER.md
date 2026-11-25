@@ -1,5 +1,21 @@
 # Handover
 
+## UX-02D — CLOSED / UAT ACCEPTED WITH DOCUMENTED LIMITATIONS (26 November 2026)
+
+Supervisor menerima implementasi dan UAT serta mengizinkan publikasi ke branch review. Pemeriksaan final mencakup seluruh sembilan file UX-02D.
+
+Pada baseline `c3d38f77e499f7edf094ef44f37d8fdc909bc3d0`, Rekap TP/NH memakai tabel ringkas dalam urutan service. Pencarian lokal nama/NIS memakai seluruh roster sebelum pagination browser. Tautan GET `student_id` membuka satu detail. Tombol Kembali memulihkan konteks dan pencarian. Tidak ada filter NH tambahan. Ringkasan mengambil NH dari service dan menghitung TP lengkap lewat `Complete`. TP Tidak Berlaku dan keberlakuan yang belum pasti ditandai terpisah dari penyebut TP yang sudah diketahui berlaku.
+
+Rincian mempertahankan identitas, semua TP siswa, skor termasuk nol, ketercapaian, kriteria, alasan ketidaklengkapan, ketidakpastian, dan histori Sumatif beserta tanggal, nilai, dan tautan lama jika tersedia pada hasil service. Audit menemukan jalur rekap TP langsung saat ini tidak mengisi koleksi kegiatan. Tampilan histori diuji dengan hasil sintetis yang memuat kegiatan. NH aktif tetap berasal dari nilai TP langsung. Tidak ada perubahan service akademik, skema, migrasi, penempatan, bobot, Final, snapshot, ASTS, atau ASAS.
+
+Tes Go, race web terfokus, vet, `make check`, build Go/frontend, cek sintaks JavaScript, sepuluh tes JavaScript Buku Nilai, dan `git diff --check` PASS. Tes HTTP baca saja pada fixture RD-02 (OID 84604, migrasi 66) dengan race PASS untuk seluruh alur Penilaian dan detail rekap. Guru berizin mendapat 200, ID tidak valid 422, penugasan asing 403, dan siswa dari kelas lain mendapat respons 404 yang sama seperti ID yang tidak ditemukan. Keanggotaan siswa diperiksa pada hasil rekap berizin tanpa kueri tambahan.
+
+Daftar ringkas, detail siswa, pencarian, dan pagination PASS di Chrome dengan fixture sintetis 39 siswa × 10 TP pada 1366×768, 1920×1080, 390×844, dan 360×800. Setelah pagination ponsel diperbaiki, tidak ada overflow dokumen atau tabel. Pencarian menemukan NIS di luar halaman pertama dan nama panjang tanpa NIS. Pesan kosong, detail tunggal, refresh, Back/Forward, serta Kembali dengan pencarian lulus. Screenshot dan log sintetis tersimpan privat di `/home/fasih/.local/share/sim-guru/ux02d-browser-20261126.DpE3HqJl`. Screenshot terautentikasi tidak tersedia sebagai file. Log mencatat hasil pengukuran dan tidak menggantikan screenshot.
+
+UAT browser terautentikasi baca saja pada preview terpisah 18746 memakai `sim_guru_dev` OID 18393 migrasi 66. Readiness 200 serta penyimpanan foto dan worker retensi nonaktif terverifikasi. Koneksi preview sempat terputus. Preview dipulihkan, dan UAT selesai memakai sesi Guru Mapel yang sah. Pencarian dan navigasi detail 7A, perpindahan konteks 7B, serta alur Rekap → Buku Nilai → ASTS → ASAS → Nilai TP → Rekap PASS. Responsif desktop dan mobile PASS. Daftar dan detail pada empat viewport memiliki lebar dokumen masing-masing 1356, 1910, 380, dan 350 CSS px. Header tetap pada posisi 0 saat detail digulir. Aksi Detail setinggi 44 CSS px. Kelas DEV yang diperiksa berisi tiga atau empat siswa. Cakupan 39 siswa dan tampilan histori kegiatan dibuktikan melalui fixture sintetis. Preview sementara dihentikan. DEV 18743 dan UAT resmi 18744 tidak dijalankan dalam pekerjaan ini. Tidak ada POST akademik, perubahan nilai akademik, atau migrasi.
+
+`make integration` **NOT RUN** karena `sim_guru_test` masih di migrasi 60. UAT resmi `sim_guru_ci_test` masih di versi 60. Keyboard virtual perangkat fisik berstatus **NOT TESTED**. Pengujian penyimpanan nilai sintetis end-to-end dari UX-02C dan full integration tetap wajib sebelum keputusan merge atau produksi. UX-02E tetap HOLD.
+
 ## UX-02C — CLOSED / UAT ACCEPTED WITH DOCUMENTED LIMITATIONS (26 November 2026)
 
 Supervisor menerima final gate dan mengizinkan publikasi ke branch review.

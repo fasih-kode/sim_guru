@@ -363,3 +363,15 @@ body:has(.form-modal[open]) { overflow:hidden; }
 .gradebook-filters:not([hidden]){display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}
 .gradebook-filters input[type="checkbox"]{width:auto}
 .gradebook-filters [data-gradebook-count]{font-size:.875rem;color:#475467}
+
+.recap-students th[scope="row"]{white-space:normal;overflow-wrap:anywhere}
+.recap-student-number{color:#667085}
+.recap-student-action{display:inline-flex;min-height:44px;align-items:center;font-weight:500}
+@media (max-width:600px){
+ .recap-table-surface + .table-pagination{flex-wrap:wrap;justify-content:center;gap:8px;padding:10px 6px}
+ .recap-students{table-layout:fixed}
+ .recap-students th,.recap-students td{padding:8px 5px;white-space:normal;overflow-wrap:anywhere}
+ .recap-students th:first-child{width:42%}
+ .recap-students th:nth-child(2){width:16%}
+ .recap-students th:last-child{width:21%}
+}

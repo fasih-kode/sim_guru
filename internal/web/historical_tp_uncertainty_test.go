@@ -15,7 +15,7 @@ func TestHistoricalTPUncertaintyRemainsVisible(t *testing.T) {
 		name, file, entry string
 		data              view
 	}{
-		{"rekap", "templates/assessment_tp_recap.html", "assessment-tp-recap", view{AssessmentTPRecap: &assessmentTPRecapView{SelectedSet: true, Recap: &academic.AssessmentTPRecap{Students: []academic.AssessmentTPRecapStudent{{Name: "Siswa", Objectives: []academic.AssessmentTPRecapObjective{objective}, NHComplete: true, NH: "0,00"}}}}}},
+		{"rekap", "templates/assessment_tp_recap.html", "assessment-tp-recap", view{AssessmentTPRecap: &assessmentTPRecapView{SelectedSet: true, Recap: &academic.AssessmentTPRecap{}, Student: &academic.AssessmentTPRecapStudent{Name: "Siswa", Objectives: []academic.AssessmentTPRecapObjective{objective}, NHComplete: true, NH: "0,00"}}}},
 		{"rekomendasi", "templates/semester_recommendations.html", "semester-recommendations", view{SemesterRecommendations: &semesterRecommendationView{SelectedSet: true, Result: &academic.SemesterRecommendation{Students: []academic.SemesterRecommendationStudent{{Name: "Siswa", Objectives: []academic.AssessmentTPRecapObjective{objective}}}}}}},
 	}
 	for _, tc := range tests {

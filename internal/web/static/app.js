@@ -173,7 +173,7 @@ function setupLocalTable(table) {
   if (surface) surface.insertAdjacentElement('afterend', nav);
   const state = { rows, placeholder, nav, query: '', filters: {}, page: 1, size: 10 };
   const render = () => {
-    const matching = rows.filter((row) => row.textContent.toLocaleLowerCase().includes(state.query)
+    const matching = rows.filter((row) => (row.dataset.tableSearchText ?? row.textContent).toLocaleLowerCase().includes(state.query)
       && Object.entries(state.filters).every(([column, value]) => !value || (row.dataset.filterGlobal === 'true' && column !== 'day') || row.dataset[`filter${column[0].toUpperCase()}${column.slice(1)}`] === value));
     const totalPages = Math.max(1, Math.ceil(matching.length / state.size));
     state.page = Math.min(state.page, totalPages);
@@ -271,7 +271,22 @@ function initializePage(root = document) {
     const table = document.querySelector(input.dataset.tableSearch);
     if (!table) return;
     const state = setupLocalTable(table);
-    input.addEventListener('input', () => state?.setSearch(input.value));
+    const param = input.dataset.tableSearchParam;
+    input.addEventListener('input', () => {
+      state?.setSearch(input.value);
+      if (!param) return;
+      const search = input.value.trim();
+      const updateURL = (href) => {
+        const url = new URL(href);
+        if (search) url.searchParams.set(param, search);
+        else url.searchParams.delete(param);
+        return url.href;
+      };
+      history.replaceState(history.state, '', updateURL(location.href));
+      table.querySelectorAll('[data-table-search-link]').forEach((link) => {
+        link.href = updateURL(link.href);
+      });
+    });
     if (input.value) state?.setSearch(input.value);
   });
   const savedTableFilters = new Map();

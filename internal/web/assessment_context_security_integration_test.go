@@ -125,4 +125,62 @@ func TestAssessmentContextCrossTeacherReadOnlyIntegration(t *testing.T) {
 			}
 		})
 	}
+	t.Run("detail rekap", func(t *testing.T) {
+		var owner candidate
+		var rec academic.AssessmentTPRecap
+		for _, c := range candidates {
+			var err error
+			rec, err = store.AssessmentTPRecap(context.Background(), c.id, c.c.SemesterID, c.c.ClassID, c.c.SubjectID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rec.Students) > 0 {
+				owner = c
+				break
+			}
+		}
+		if len(rec.Students) == 0 {
+			t.Fatal("fixture rekap tidak memiliki siswa")
+		}
+		pupil := rec.Students[0]
+		path := "/guru/rekap-nilai-tp?student_id="
+		page := request(path+pupil.ID+"&q=contoh", owner.id, owner.c)
+		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Kembali ke daftar siswa") || strings.Contains(page.Body.String(), `id="recap-students"`) {
+			t.Fatalf("detail siswa sendiri tidak berhasil: %d", page.Code)
+		}
+		if page := request(path+"0", owner.id, owner.c); page.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("ID siswa tidak valid: %d", page.Code)
+		}
+		missing := request(path+"9223372036854775807", owner.id, owner.c)
+		if missing.Code != http.StatusNotFound || strings.Contains(missing.Body.String(), "Kembali ke daftar siswa") {
+			t.Fatalf("ID siswa di luar roster: %d", missing.Code)
+		}
+		if page := request(path+pupil.ID, a.id, b.c); page.Code != http.StatusForbidden || strings.Contains(page.Body.String(), "Kembali ke daftar siswa") {
+			t.Fatalf("detail pada penugasan asing: %d", page.Code)
+		}
+		roster := make(map[string]bool, len(rec.Students))
+		for _, s := range rec.Students {
+			roster[s.ID] = true
+		}
+		for _, c := range candidates {
+			if c.c.ClassID == owner.c.ClassID {
+				continue
+			}
+			foreign, err := store.AssessmentTPRecap(context.Background(), c.id, c.c.SemesterID, c.c.ClassID, c.c.SubjectID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range foreign.Students {
+				if roster[s.ID] {
+					continue
+				}
+				page := request(path+s.ID, owner.id, owner.c)
+				if page.Code != missing.Code || page.Body.String() != missing.Body.String() {
+					t.Fatalf("respons siswa kelas lain berbeda dari ID yang tidak ditemukan: %d", page.Code)
+				}
+				return
+			}
+		}
+		t.Fatal("fixture tidak memiliki siswa dengan keanggotaan kelas berbeda")
+	})
 }
