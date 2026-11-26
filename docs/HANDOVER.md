@@ -1,5 +1,106 @@
 # Handover
 
+## UX-02E-02B — CLOSED / 14 E2E PASS WITH DOCUMENTED FINDINGS (26 November 2026)
+
+Supervisor menerima final gate 14/14 E2E PASS dan mengizinkan publikasi HANDOVER. Baseline sebelum publikasi `12a4c284b2e298ff25b447e10dceae1434ab8457` pada `review/fase10-checkpoints`. PR #1 **OPEN / DRAFT / UNMERGED**. UX-02E-03 tetap HOLD. [Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1)
+
+### Preflight dan fixture
+
+Seluruh penulisan dilakukan di `sim_guru_ux02e_e2e_test` OID 16390, PostgreSQL 18.6, system identifier `7712449350873102267`, migration 66/66 melalui socket privat `/home/fasih/.local/share/sim-guru/ux02e02a.NLoYs4/socket/.s.PGSQL.55477`. TCP PostgreSQL nonaktif. Sebelum perubahan, checksum 02A, role runtime/fixture/owner, nama/OID/cluster, ledger, kepemilikan dan trigger diverifikasi. PID setelah restart 16323. Harness Go overlay di luar repository memakai router produksi, login dan logout resmi, CSRF, HTTP loopback in-process, dan koneksi akademik runtime `sim_guru_app`. Seed dan pemeriksaan hasil memakai koneksi fixture `ux02e_fixture` dengan role efektif owner yang terpisah.
+
+Fixture run lulus memakai tahun 4, semester 7/8, kelas 7/8, mapel 4, guru 7/8 dan TP 10/11/12. Siswa 19 dinilai, 20 punya Final sintetis, 21 pindahan dengan keputusan TP berlaku/tidak berlaku, 22 memiliki ASAS awal dan sel TP kosong, 23 berpenempatan belum pasti, serta 24 hanya di konteks B. Siswa 25 menjadi fixture konfirmasi browser. Bobot NH/ASTS/ASAS kelas A 50/25/25 dan kelas B 0/40/60.
+
+### Matriks hasil
+
+| Skenario | Hasil | Bukti |
+| --- | --- | --- |
+| 01 Simpan nilai TP | PASS | Tanpa CSRF 403, POST sah 303, GET 200. Nilai 80 dan audit batch dengan satu sel cocok. |
+| 02 Nol dan kosong | PASS | POST 303 dan GET 200 menampilkan 0.00. Siswa spare dan penempatan belum pasti tidak memiliki baris nilai. |
+| 03 Konflik versi | PASS | Simpan pertama 303, versi basi 409, peninjauan draft 200. Dua nilai draft bertahan, fingerprint nilai dan audit tidak berubah dari sebelum konflik. |
+| 04 Replay submission | PASS | Replay identik 303 tanpa baris tambahan. UUID sama, payload berbeda 409. Nilai awal tetap 80. |
+| 05 Respons gagal | PASS | HTTP 500 terkontrol sebelum backend tidak menulis. Setelah backend commit, harness memutus koneksi sebelum respons dikirim. Pemeriksaan terpisah mengonfirmasi nilai koreksi 84, retry identik 303 tanpa duplikasi. Perilaku draft dan ketiadaan status sukses palsu dibuktikan oleh tes JavaScript, bukan browser fault injection. |
+| 06 POST ASTS | PASS | Input sah 303, payload ASAS di tab ASTS 422. ASAS tetap identik. Browser menyimpan 76.00 dengan tanggal 2020-01-23. |
+| 07 POST ASAS | PASS | Input sah 303, payload ASTS di tab ASAS 422. ASTS tetap identik. Browser menyimpan 86.00 dengan tanggal 2020-01-27. |
+| 08 Tanggal | PASS | Roster sebelum dan sesudah perpindahan berbeda. Tanggal pelaksanaan pada kelas yang sudah ditinggalkan 422, tanggal sah 303 dan tersimpan terpisah dari tanggal roster. |
+| 09 Nilai awal terkunci | PASS | GET 200 menampilkan nilai tercatat terkunci. Percobaan menimpa 409, seluruh bukti asli tetap identik. |
+| 10 Koreksi dan remedial | PASS | Kedua POST 303 dan histori GET 200. ASTS asli 70, koreksi 75, remedial dan nilai efektif 80. Pencatat cocok. |
+| 11 Perlindungan Final | PASS | Input TP sel kosong dan koreksi TP rutin siswa Final masing-masing 409. Koreksi ujian oleh guru lain 403. Empat Final baseline sintetis, snapshot dan hash tetap identik. |
+| 12 Rekap dan rekomendasi | PASS | GET 200. NH 42 menghasilkan rekomendasi 64 dengan bobot positif. NH 0% menghasilkan rekomendasi 70 dari ujian dengan NH kosong. Tidak ada Final tambahan. |
+| 13 Dua guru | PASS | Login/logout resmi memakai dua cookie jar HTTP independen. GET dan POST lintas konteks 403 dua arah tanpa kebocoran nama atau perubahan audit akademik. Browser memakai akun A untuk konfirmasi penulisan. |
+| 14 Refresh, Back/Forward dan resend | PASS | Browser mempertahankan pemilih, konteks, tab dan tanggal roster. GET ulang menampilkan nilai tersimpan. Replay HTTP TP dan ASTS 303 tanpa baris tambahan. |
+
+`TestUX02EAcademicWrites` dan `TestUX02EBrowserProof` dengan race detector lulus. Browser login/logout resmi dan ketiga POST simpan berstatus 303. Koneksi pemeriksaan terpisah mengonfirmasi TP 0.00 (satu audit batch) serta ASTS/ASAS dan tanggalnya untuk siswa 25. Bukti browser berupa observasi DOM, log HTTP dan audit database. Tiga percobaan awal dipertahankan. Dua penyesuaian harness mencocokkan teks UI. Pada percobaan ketiga PostgreSQL menolak pembacaan tabel sumber historis untuk overlay Final (42501), kemudian template Rekomendasi gagal dereference Result nil dan memberi HTTP 500. Setelah grant SELECT tepat sasaran, alur Rekomendasi lulus. Penanganan error template itu dan ACL dashboard `staff_members` / `teacher_attendance_events` berada di luar alur yang dibuktikan.
+
+### ACL, audit dan penutupan
+
+Seluruh grant tambahan di database E2E untuk `sim_guru_app`: SELECT/INSERT sesi, UPDATE hanya `last_seen_at`/`revoked_at`, INSERT audit akses dan USAGE sequence audit untuk login/logout; SELECT provenance TP dan UPDATE hanya `student_placements.id` untuk row lock `FOR SHARE` pada input TP; SELECT/INSERT tabel awal, koreksi dan remedial ujian beserta USAGE tiga sequence dan UPDATE hanya `exam_initial_scores.id` untuk row lock koreksi/remedial; SELECT kriteria TP dan bobot semester untuk rekap/rekomendasi; SELECT lima tabel kegiatan/nilai historis untuk fingerprint Final saat membaca rekomendasi. Grant kolom `student_placements.id` diperlukan oleh PostgreSQL untuk row lock pada query yang ada dan terbatas pada E2E. Daftar persis operasi dan objek ada di `runtime-acl.sql`; delta aktual cocok dengan daftar itu. Ledger, role, database ACL, ownership, constraint, rutin dan trigger tetap identik dengan 02A. Runtime tetap tidak memiliki CREATE schema `app`, membership owner, hak tulis ke guard atau EXECUTE helper penguncian.
+
+Empat versi Final baseline beserta snapshot dan hash identik setelah HTTP dan browser. SHA-256 JSON keduanya `44e66997d1ac2b94f39616635b89973b73eba9b6bb9b078b352e6717b83b9a20`. Fingerprint 14.998 berkas cluster proyek berhenti tetap identik. Berkas relasi dan katalog database migration/suite di cluster sementara tetap identik. Dua file `pg_internal.init` berbeda sebagai cache internal PostgreSQL ketika cluster direstart. Log koneksi klien hanya mencatat database E2E. [Source PostgreSQL relcache](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/utils/cache/relcache.c)
+
+Preview browser sudah tutup, postmaster berhenti secara smart, dan socket hilang. Bukti privat di `/home/fasih/.local/share/sim-guru/ux02e02b.xXlLS5` dengan indeks `SHA256SUMS` ber-hash `17721cb2d8cd836f570d7c6b7d3fb18db93da50a6fd5c122b269f73722689667`. Indeks, 14 hasil PASS, audit browser dan kesamaan snapshot diperiksa ulang pada finalisasi. Screenshot browser tidak tersimpan sebagai file. Go, race terfokus, 17 tes JavaScript, vet, `make check` dan `git diff --check` lulus saat E2E. Full integration **NOT RUN** dan masih menjadi gerbang sebelum merge. Risiko pemisahan fixture umum serta kebutuhan ACL per operasi untuk full integration tetap tercatat di 02A.
+
+### Triase Rekomendasi — P2 (sedang)
+
+- **Reproduksi.** GET `/guru/rekomendasi-semester` dengan konteks penugasan sah, lalu buat pemanggilan `SemesterRecommendations` gagal sesudah pemilihan. Kasus nyata di E2E adalah 42501 pada pembacaan `assessment_activity_objectives` untuk overlay Final. Tes sintetis tanpa database memakai `httptest`, kode `academicError`, renderer dan template aplikasi, dengan `SelectedSet=true`, `Result=nil` dan error 42501, validasi, atau terlarang. Semua variasi biasa dan HTMX mereproduksi bug. Kontrol tanpa pilihan dan dengan hasil terisi merender HTTP 200. File overlay dan log diagnosis tersimpan di `/home/fasih/.local/share/sim-guru/ux02e02b-triage.jukMys`.
+- **Akar masalah.** Handler menetapkan `SelectedSet=true` sebelum memanggil service, lalu meneruskan view error dengan `Result=nil`. Blok hasil pada template hanya memeriksa `SelectedSet`, sehingga dereferensi `Result.Weights.Configured` gagal. Renderer membuang HTML parsial dan mengirim HTTP 500 `text/plain` dengan pesan “Halaman tidak dapat ditampilkan.” Status awal 403/422 hilang, dan status awal 500 kehilangan pesan akademik serta pilihan konteks. Log sintetis memperlihatkan nama template, field, dan nil pointer pada server. Body respons hanya membawa pesan generik, tanpa detail internal atau error SQL. Marker internal sintetis juga tidak muncul di log renderer.
+- **Dampak dan usulan.** Gangguan storage atau error bisnis pada konteks sah menyembunyikan penyebab dari pengguna dan memutus tampilan halaman. Batasi blok hasil pada kondisi `Result != nil` sambil mempertahankan `SelectedSet`, pemilih konteks dan banner error. Verifikasi 403, 422 dan 500 mempertahankan status dan pesan yang sesuai, serta kontrol 200 masih merender hasil. Perbaikan ini dicatat untuk review terpisah.
+
+### Triase ACL dashboard — P3 (rendah pada fixture E2E)
+
+Sesudah login resmi 303, GET Beranda Guru Mapel pada preview E2E memakai `sim_guru_app` dengan ACL akademik terbatas. Log PostgreSQL dan source mengisolasi dua penolakan baca. `42501` adalah `insufficient_privilege`; log aplikasi menegaskannya pada error yang menghentikan handler Beranda. Audit ini tidak menguji ACL runtime deployment.
+
+| Objek | Operasi yang diamati | Dampak dan usulan minimum jika Beranda masuk cakupan review |
+| --- | --- | --- |
+| `app.staff_members` | `PersonalAttendanceEligibility` menjalankan `SELECT EXISTS` pada join menggunakan `user_id` dan `active`. PostgreSQL menolak 42501 meskipun aktor hanya Guru Mapel, karena query memeriksa kedua tipe identitas. | Kegagalan pemeriksaan menonaktifkan pintasan kehadiran. Usulan `GRANT SELECT (user_id, active) ON app.staff_members TO sim_guru_app`. |
+| `app.teacher_attendance_events` | `TeacherDashboard` menjalankan `SELECT EXISTS` untuk check-in/out menurut `teacher_id`, `on_date` dan `action`. PostgreSQL menolak 42501. | Error mencapai `academicFailure` lalu `failure`, yang mengirim HTTP 500 generik. Usulan `GRANT SELECT (teacher_id, on_date, action) ON app.teacher_attendance_events TO sim_guru_app`. |
+
+Keduanya merupakan hak baca yang dibutuhkan oleh implementasi Beranda saat ini jika Beranda dicakup dalam konfigurasi runtime. Penolakan pada fixture akademik tidak membatalkan login atau 14 alur E2E dan tidak membuktikan kekurangan privilege di deployment. Untuk verifikasi Beranda dengan semester aktif dan jadwal terbit, petakan kebutuhan query jadwal secara terpisah. DML tabel kehadiran/pegawai, baca kolom di luar kebutuhan ini, CREATE schema, ownership, dan perubahan trigger tetap di luar usulan. Hak aplikasi berdasarkan role pengguna tetap ditegakkan di service. Usulan ACL menunggu review, termasuk pengujian baca positif dan penolakan operasi di luar cakupan.
+
+### Reproduktibilitas dan gerbang sebelum merge
+
+- **Sudah ada di repository.** Tes integrasi TP/gradebook dan service Final mencakup penyimpanan, nol/kosong, versi, replay, atomisitas, guard dan preservasi Final. Tes ASTS/ASAS, koreksi, remedial dan nilai efektif mencakup validasi, tanggal, kepemilikan dan histori. Tes NH/rekomendasi menguji bobot positif dan 0%. Tes konteks menguji otorisasi, termasuk probe lintas guru opt-in pada fixture RD-02. Tes JS menguji serialisasi per tab, pemulihan draft, respons gagal dan konfirmasi simpan. Cakupan ini diinventarisasi dari source. Suite integration repository tidak dijalankan ulang saat finalisasi.
+- **Bukti privat.** `execute.py`, `overlay.json`, `academic_e2e_test.go`, `browser_e2e_test.go`, `e2e.log`, `browser.log`, `academic.audit`, snapshot dan ledger ada pada indeks bukti yang sama. Run matriks memakai cluster/socket yang dijaga, owner fixture terpisah, runtime terbatas, dan konteks sintetis yang dirinci di atas. Browser memakai satu login resmi fixture dan konfirmasi DB independen, dengan langkah interaktif. Kredensial serta konfigurasi privat berada di luar repository.
+- **Perlu otomasi sebelum merge.** Jadikan alur berulang untuk dua sesi resmi dan CSRF, pemisahan fixture/runtime, konflik dan fingerprint batch, putus respons sebelum/sesudah commit, isolasi ASTS/ASAS serta preservasi snapshot sebagai tes terisolasi yang dapat dijalankan ulang. Tambahkan pengujian browser untuk tiga alur simpan, draft ketika jaringan gagal, pergantian tab/konteks dengan Back/Forward dan pengiriman ulang. Tambahkan regresi error Rekomendasi normal/HTMX serta smoke Beranda dengan role minimum ketika patch/ACL disetujui. Jalankan full integration hanya setelah clearance UX-02E-03.
+
+Finalisasi menjalankan tes renderer sintetis dengan race, tes Go, vet dan pemeriksaan whitespace. Cluster sementara tetap berhenti selama triase.
+
+## UX-02E-02A — ISOLATED ENVIRONMENT READY / AWAITING SUPERVISOR E2E CLEARANCE (26 November 2026)
+
+Supervisor mengizinkan bootstrap, migrasi dan smoke test terfokus. Baseline `12a4c284b2e298ff25b447e10dceae1434ab8457` pada `review/fase10-checkpoints` cocok dengan head PR #1 dan working tree bersih sebelum mulai. PR #1 **OPEN / DRAFT / UNMERGED**. Working tree akhir hanya memuat perubahan HANDOVER ini. [Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1)
+
+### Identitas dan batas koneksi
+
+- Root privat `/home/fasih/.local/share/sim-guru/ux02e02a.NLoYs4`. Data PostgreSQL di `data/` dan socket di `socket/.s.PGSQL.55477`. Root, data, direktori socket dan file socket terverifikasi bermode 0700. Manifest koneksi `targets.json` bermode 0600 dan berada di luar repository.
+- PostgreSQL 18.6, system identifier `7712449350873102267`, postmaster PID 14284 saat bootstrap, pemilik OS `fasih`, executable `/usr/lib/postgresql/18/bin/postgres`. Kecocokan dari `pg_controldata`, koneksi socket, `postmaster.pid` dan identitas proses diperiksa sebelum pembuatan role dan database. `listen_addresses` kosong dan koneksi memakai Unix socket. Manifest awal menunjukkan hanya database bawaan `postgres`, `template0` dan `template1`.
+- Ketiga database dibuat dari `template0`, owner `ux02e_ddl_owner`. Satu OID sama dengan TEST lama (16390), sehingga guard memeriksa nama, OID, socket dan system identifier bersama.
+
+| Database sementara | OID | Migration | Penggunaan |
+| --- | ---: | ---: | --- |
+| `sim_guru_ux02e_migrations_test` | 16388 | 66/66 | Probe migration pada target yang awalnya kosong |
+| `sim_guru_ux02e_suite_test` | 16389 | 66/66 | Provision dan smoke runtime/fixture |
+| `sim_guru_ux02e_e2e_test` | 16390 | 66/66 | Provision dan smoke runtime/fixture |
+
+### Role, schema dan ACL
+
+`ux02e_bootstrap` adalah superuser lokal untuk bootstrap dan pemeriksaan identitas/katalog. `ux02e_ddl_owner` memiliki database, schema `app`, ledger dan objek aplikasi, serta menjalankan migrasi tanpa SUPERUSER, CREATEDB atau CREATEROLE. `ux02e_fixture` merupakan login terpisah dengan keanggotaan `SET TRUE, INHERIT FALSE, ADMIN FALSE` pada owner untuk kebutuhan `FixtureDatabase`. `sim_guru_app` merupakan login runtime nonprivileged tanpa membership owner. Autentikasi peer terbatas pada socket privat. HBA menolak fixture pada `postgres` dan database migrasi, serta menolak runtime pada database migrasi. PUBLIC kehilangan CONNECT dan TEMPORARY pada tiga database; CONNECT runtime dan fixture diberikan hanya pada suite dan E2E.
+
+ACL tambahan hanya diterapkan pada suite/E2E: `USAGE` pada schema `app`, `SELECT` pada `public.goose_db_version` untuk status migration, serta `SELECT` pada tabel identitas, penugasan, kurikulum, TP, roster dan Final yang dirinci di `runtime-read-acl.sql`. Runtime tidak menerima DDL atau DML tambahan untuk smoke. Grant resmi migration 61 dan 66 tetap sesuai source. Manifest membuktikan runtime tak memiliki CREATE di `app`, ownership guard/Final, hak tulis langsung ke guard, ataupun EXECUTE helper penguncian. Trigger Final dan nilai aktif. Tiga constraint `NOT VALID` tercatat sesuai SQL resmi 00043 dan 00064.
+
+### Bukti pengujian
+
+- `TestMigrationsIntegration` dengan race **PASS** pada database migration. Fixture upgrade 00035 berjalan karena schema `app` awalnya belum ada. Tes memverifikasi hasil upgrade, menjalankan migration penuh dan cek idempotensi, serta memeriksa rollback DDL probe yang sengaja gagal. Pemeriksaan sesudahnya menemukan nol residu probe, pengguna, jurnal dan Final.
+- `TestUX02EProvision` dengan race **PASS** pada suite dan E2E. Overlay test-only memanggil provider Goose resmi dengan role owner. Masing-masing menerapkan 65 migration hingga versi 66. Ledger ketiganya cocok dengan berkas SQL source, termasuk versi dasar 0 dan tanpa 00065.
+- `TestValidateDatabaseTarget`, `TestDatabaseUsesPreMigratedRuntime`, `TestDirectTPRuntimeCannotDisableGuardIntegration` dan `TestUX02EFixtureSeedRollback` dengan race **PASS** pada suite dan E2E. PostgreSQL menolak penonaktifan trigger Final dengan SQLSTATE 42501. Fixture dapat memasukkan pengguna/role sintetis melalui helper yang ada, lalu rollback. Runtime membaca tabel yang diperlukan dan memastikan seed tidak tertinggal.
+- Tujuh pengujian negatif wrapper **PASS**. Nama, OID, socket, system identifier, role, host jaringan dan variabel koneksi existing yang salah ditolak. Hasil tes dan inventory ACL/ownership disimpan privat.
+
+### Harness dan preservasi
+
+Wrapper sementara `isolated.py` merakit koneksi socket setelah memeriksa identitas dan menolak variabel koneksi warisan. Mode migration menyetel `TEST_DATABASE_URL` untuk owner pada target yang sesuai. Mode smoke memisahkan `TEST_DATABASE_URL` runtime dan `TEST_FIXTURE_DATABASE_URL` fixture beserta role efektif dan OID. Overlay Go berada di luar Git. Migrasi suite/E2E menggunakan provider yang sama dengan produksi karena validasi URL `cmd/migrate` mewajibkan hostname URL. Pemisahan ini menjaga DSN socket tanpa fallback host jaringan, tanpa perubahan SQL migration atau dependency produksi.
+
+ACL tambahan baru mencakup kebutuhan baca smoke. Tes lama seperti `internal/master/{staff,import}_integration_test.go` dan `internal/web/asc_import_integration_test.go` masih menggunakan koneksi runtime untuk membuat fixture. Sebelum full integration, petakan operasi service dan pindahkan operasi seed/cleanup yang relevan ke koneksi fixture. Jika kebutuhan tulis runtime untuk E2E disetujui, petakan ACL minimum secara terpisah dan pertahankan guard Final. `make integration` penuh dan 14 skenario penulisan E2E berstatus **NOT RUN**. UX-02E-02B dan UX-02E-03 tetap HOLD.
+
+Cluster proyek 55436 berada dalam keadaan berhenti selama pekerjaan. Fingerprint SHA-256 14.998 berkas di direktori datanya cocok sebelum dan sesudah, termasuk control file. SHA-256 kedua manifest adalah `9d03b3e32c29e530d56529b112af0f4cde454a3b5d58b35a87711af7dcb5980d`. Verifikasi fisik mencakup DEV, TEST, CI/UAT dan fixture RD-02 pada cluster itu tanpa startup atau koneksi. Cluster sementara dihentikan secara smart setelah identitas proses terverifikasi dan koneksi klien lain berjumlah nol. `pg_controldata` menunjukkan `shut down` dan socket sudah hilang. Direktori dan bukti dipertahankan. Indeks bukti `SHA256SUMS` terverifikasi dengan hash `4da7b345f03c7dea6d27374f1d069e3ed960a006bf43e411b0b660858c462b04`.
+
 ## UX-02E-01 — CLOSED / AUDIT & CROSS-FEATURE UAT ACCEPTED (26 November 2026)
 
 Supervisor menerima final gate dan mengizinkan publikasi tiga file. Baseline `d2d7658941c8b2a51f158f105ce1e165c7f34df0` cocok dengan HEAD lokal dan head PR #1 sebelum publikasi pada branch `review/fase10-checkpoints`. PR #1 tetap **OPEN / DRAFT / UNMERGED**. Implementasi dan keputusan penutupan UX-02A–D tercatat di bawah. [Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1)
