@@ -39,8 +39,8 @@
 
   document.addEventListener('formdata', (event) => {
     const form = event.target;
-    if (!dirty || !form.matches('[data-gradebook-context]')) return;
-    // Tujuan sudah tercatat dalam data GET. Pulihkan pemilih bila halaman ini tetap terbuka.
+    if (!form.matches('[data-gradebook-context]')) return;
+    // Tujuan sudah tercatat dalam data GET. Biarkan halaman asal menyimpan konteksnya sendiri.
     form.reset();
   });
 

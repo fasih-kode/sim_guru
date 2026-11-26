@@ -92,9 +92,11 @@ test('pergantian konteks dengan draft memulihkan pemilih tanpa mengubah tujuan G
   b.input();
   await b.submit();
   select.value = destination;
-  b.listeners.formdata({ target: contextForm });
+  const nextPayload = new URLSearchParams([[select.name, select.value]]);
+  b.listeners.formdata({ target: contextForm, formData: nextPayload });
   assert.equal(b.unload(), false);
-  assert.equal(select.value, destination);
+  assert.equal(select.value, active);
+  assert.equal(nextPayload.get('context'), destination);
   assert.equal(requests, 0);
 });
 

@@ -1,5 +1,90 @@
 # Handover
 
+## UX-02E-01 — CLOSED / AUDIT & CROSS-FEATURE UAT ACCEPTED (26 November 2026)
+
+Supervisor menerima final gate dan mengizinkan publikasi tiga file. Baseline `d2d7658941c8b2a51f158f105ce1e165c7f34df0` cocok dengan HEAD lokal dan head PR #1 sebelum publikasi pada branch `review/fase10-checkpoints`. PR #1 tetap **OPEN / DRAFT / UNMERGED**. Implementasi dan keputusan penutupan UX-02A–D tercatat di bawah. [Draft PR #1](https://github.com/fasih-kode/sim_guru/pull/1)
+
+### Audit lingkungan
+
+Ledger dan identitas diperiksa baca-saja pada cluster proyek PostgreSQL port 55436. Source menargetkan 66, dengan 00065 HOLD.
+
+| Database | OID | Versi diperiksa | Penggunaan saat audit |
+| --- | ---: | ---: | --- |
+| `sim_guru_dev` | 18393 | 66 | Preview terautentikasi, akademik baca-saja |
+| `sim_guru_test` | 16390 | 60 | Inventaris dan manifest baca-saja |
+| `sim_guru_ci_test` | 22689 | 60 | Inventaris dan manifest baca-saja |
+| `sim_guru_rd02_s06_20261123_test` | 84604 | 66 | Inventaris dan manifest baca-saja |
+
+`scripts/run-uat.sh` memvalidasi konfigurasi privat, target D-051, port, kunci CSRF terpisah, penyimpanan foto nonaktif, dan kesesuaian versi dengan source. Startup server memakai Goose `GetVersions` dan menolak mismatch. `cmd/migrate` punya aksi `status` dan `up` terpisah. Preview sementara `127.0.0.1:18746` memakai source lokal, `sim_guru_app`, kedua direktori foto kosong, serta kunci CSRF terpisah. Log mengonfirmasi dua storage foto dan worker retensi nonaktif. Audit lifecycle tidak menemukan worker mutasi lain dalam startup server ini. Health live, ready dan login masing-masing HTTP 200. Login resmi membuat sesi dan audit akses. Pembacaan dengan sesi sah memperbarui `last_seen_at`.
+
+`make integration` berjalan serial antarpaket (`-p 1`), dengan race dan tag `integration`. `testutil.Database` mewajibkan target `_test` terpisah dari DEV, role non-superuser tanpa CREATEDB/CREATEROLE, dan versi sesuai source. Guard nama/OID tambahan dipakai oleh tes khusus RD-02 yang opt-in. `FixtureDatabase` memeriksa nama, OID, role owner fixture, identitas cluster, dan runtime `sim_guru_app`. Helper fixture membuat akun/role aplikasi serta menulis dan membersihkan kalender/tahun aktif. Sejumlah tes umum juga menulis langsung melalui koneksi test, termasuk fixture dan operasi pembersihan. `TestMigrationsIntegration` memanggil `Up`, mengulangnya untuk idempotensi, dan menguji rollback DDL. Pada database kosong, tes membuat lalu menghapus schema probe `app` untuk rehearsal 00035 sebelum menjalankan migration penuh. Suite ini **NOT RUN** karena batas mutasi audit dan database TEST masih versi 60.
+
+### UAT terautentikasi dan pemeriksaan sintetis
+
+| Skenario browser | Hasil | Bukti dan batas |
+| --- | --- | --- |
+| Login resmi; Mengajar, Penilaian, Riwayat & Koreksi | PASS | Beranda Guru Mapel, jadwal, dan pintu masuk kegiatan lama terbuka |
+| Konteks semester, kelas, mapel, Tujuan Pembelajaran; TP → ASTS → ASAS → TP | PASS | Konteks 7A bertahan selama pergantian tab; 7B menampilkan input dan tanggal khusus komponen ASTS atau ASAS |
+| Sel TP kosong, siswa Final dan penempatan belum pasti | PASS | Enam sel kosong pada 7A, empat terkunci karena dua siswa Final, dua terkunci karena penempatan belum pasti |
+| Nilai nol TP tersimpan di DEV | NOT TESTED | Nilai nol tidak tersedia pada konteks DEV yang diperiksa. Nol dan kosong dibedakan pada render sintetis serta tes serialisasi |
+| Rekap, pencarian nama, detail dan kembali | PASS | Pencarian menyaring 3 siswa menjadi 1, detail tunggal terbuka dan Kembali memulihkan pencarian. Judul jumlah siswa menunjukkan total roster |
+| Rekomendasi, snapshot Final dan kembali ke Buku Nilai | PASS | Tautan snapshot Final dibuka lewat GET, tanpa konfirmasi Final |
+| Pergantian 7A ↔ 7B, refresh dan Back/Forward | PASS setelah perbaikan | Sebelum patch, Back memulihkan URL/ringkasan 7A tetapi select masih 7B. Sesudah patch ketiganya cocok pada Back, Forward dan refresh |
+| Draft dan navigasi dibatalkan | PASS untuk hasil yang teramati | Nilai sementara memunculkan indikator draft. Percobaan pindah 7B → 7A mempertahankan URL, ringkasan, select dan isian 7B. Dialog native **NOT TESTED** langsung |
+| Login dengan identitas kedua; keyboard virtual perangkat fisik | NOT TESTED | Tidak ada identitas Guru Mapel kedua yang tersedia untuk putaran browser ini. Fokus input diuji dengan browser dan keyboard |
+| POST akademik DEV dan penulisan end-to-end | NOT RUN | UAT menggunakan GET untuk alur akademik. Matriks mutasi menunggu database terisolasi |
+
+Pengukuran Buku Nilai terautentikasi pada 1366×768, 360×800 dan 390×844 menghasilkan lebar dokumen 1356, 350 dan 380 CSS px. Header aplikasi tetap di posisi atas saat scroll, tabel/header nama memakai sticky, dan aksi Simpan tersedia. Kontainer mobile 258/288 px memiliki isi tabel 480 px. Menu mobile terbuka dan dapat ditutup. Enam tampilan Penilaian termasuk ketiga tab Buku Nilai, Rekap dan Rekomendasi di 360 px masing-masing tetap 350 CSS px. DEV yang diperiksa berisi 3–4 siswa.
+
+Browser sintetis menjalankan template aktual melalui harness Go GET-only tanpa sambungan database. Pada 1366×768, 360×800 dan 390×844, Buku Nilai merender 39 siswa × 10 TP, dengan lebar dokumen 1356/350/380 px dan kontainer tabel 939/243/273 px berisi tabel selebar 1632/1313/1313 px. Scroll internal teramati dan CSS sticky aktif; pencarian menemukan siswa ke-39, sel nol dan kosong tampil, sepuluh sel siswa Final terkunci, dan input dapat difokuskan. Pencarian NIS Rekap menemukan siswa di luar halaman pertama dan membuka satu detail. Gambar Rekap sintetis tampil di sesi browser; screenshot sebagai file tidak tersedia. Pemilih native dapat memendekkan teks pada mobile, sementara ringkasan konteks lengkap tetap terlihat.
+
+Patch terbatas pada `direct-tp-gradebook.js` dan tesnya. Setelah data GET konteks diserialisasi, form konteks dipulihkan ke nilai aktif server meskipun Buku Nilai bersih. Parameter tujuan tetap dikirim dan Back tidak menghidupkan pilihan lama. Tes memastikan draft tetap dipertahankan dan mekanisme konfirmasi simpan tetap berlaku.
+
+Pemeriksaan final pada harness GET-only tanpa database mengulang 7A → 7B → Back → Forward dan refresh setelah Back. URL, ringkasan dan pemilih konsisten. Dengan parser aplikasi, konteks kosong menampilkan pemilih tanpa tabel, format tidak valid menghasilkan HTTP 422, dan pilihan di luar daftar fixture menghasilkan HTTP 403. Pemeriksaan otorisasi penugasan pada handler dan service tetap sama. Tes JavaScript untuk navigasi biasa dengan draft dan pencegahan swap HTMX lulus. Harness finalisasi dihentikan.
+
+### Audit regresi akademik
+
+- **TP:** `SaveDirectTPScores` memvalidasi versi sel dan hash submission per aktor. Sel kosong baru tidak membuat nilai, dan nilai 0 sah. Penempatan, assignment, guard Final, batch atomik dan histori koreksi tetap berada di service/database. JavaScript hanya memulihkan form pemilih konteks. Tes PostgreSQL fondasi, konflik/replay dan Final diperiksa dari source; eksekusi mutasinya **NOT RUN** pada tahap ini.
+- **ASTS/ASAS:** form dan parser memisahkan payload tab aktif serta membawa tanggal roster dan tanggal pelaksanaan. Route lama tanpa tab tetap kompatibel. Nilai awal yang telah tercatat terkunci pada tampilan dan dilindungi service; koreksi dan remedial mempunyai jalur sendiri. Render/parser dan serialisasi 0, kosong dan tanggal lulus. Integritas mutasi lintas komponen end-to-end **NOT TESTED**.
+- **Rekap, rekomendasi, Final:** rekap dan rekomendasi memakai rekap TP langsung dan `calculateDirectTPNH`; template menampilkan hasil service. Rekomendasi membaca bobot Kurikulum dan bukti ujian efektif. Riwayat kegiatan dan provenance dipertahankan sebagai bukti historis. Pembacaan rekap atau rekomendasi tidak menetapkan Final. Snapshot Final lama dibaca melalui GET dan tetap identik pada manifest.
+
+### Rencana full integration terisolasi
+
+1. Setelah persetujuan supervisor, inisialisasi cluster PostgreSQL baru di direktori privat 0700 dengan socket privat dan TCP nonaktif. Buat tiga database kosong `sim_guru_ux02e_migrations_test`, `sim_guru_ux02e_suite_test` dan `sim_guru_ux02e_e2e_test` di cluster tersebut. Catat setiap OID aktual setelah pembuatan, direktori data/socket, system identifier cluster, baseline ledger dan role. Semua koneksi harus cocok dengan nama, OID, socket dan cluster yang dicatat. Bersihkan variabel koneksi warisan dan gunakan konfigurasi test-only di luar repository. Tolak host jaringan, role tak terduga, dan seluruh target existing DEV, UAT, TEST, CI, serta produksi sebelum penulisan. Gunakan fixture sintetis tanpa mengambil salinan data dari lingkungan tersebut.
+2. Siapkan role administratif bootstrap, owner DDL tanpa hak cluster, dan login runtime `sim_guru_app` tanpa ownership schema/guard atau membership owner. Baseline migration membutuhkan nama role tersebut untuk ACL. Pada suite dan E2E, jalankan migration resmi dengan DDL owner sampai 66 dan cek 00065 absen. Gunakan operator fixture dengan effective role owner hanya untuk seed/metadata. Isi `TEST_DATABASE_URL`, `TEST_FIXTURE_DATABASE_URL`, `TEST_FIXTURE_ROLE` dan `TEST_FIXTURE_DATABASE_OID` sesuai guard, tanpa DSN produksi dan tanpa pemberian hak DDL kepada runtime.
+3. Pemetaan SQL fixture umum perlu diselesaikan sebelum eksekusi. Pindahkan seed/cleanup yang masih memakai koneksi runtime ke helper fixture di harness yang disetujui. Beri runtime ACL terbatas sesuai operasi service dan ekspektasi pengujian, termasuk pembacaan ledger. Verifikasi guard schema dan Final tetap terlindungi serta lakukan smoke test fixture sebelum menjalankan suite. Tes opt-in RD-02 tetap SKIP pada suite umum.
+4. `make integration` saat ini memberi `TEST_DATABASE_URL` yang sama kepada paket migration dan paket runtime, sedangkan paket migration membutuhkan DDL. Usulkan perbaikan test-only untuk menjalankan paket `./migrations` dengan DSN terpisah pada database migration kosong milik DDL owner, dan paket `./internal/database ./internal/auth ./internal/master ./internal/academic ./internal/web` serial pada database suite 66 dengan DSN runtime/fixture. Pertahankan tag, race, timeout dan status gabungan target. Sertakan `./internal/testutil` sebagai gerbang tambahan karena target sekarang tidak memuat paket tersebut. Sebelum wiring disetujui, dua invokasi terpisah dapat dipakai sebagai rehearsal, tanpa menyebut `make integration` PASS. Tes migration memverifikasi upgrade 00035, rollback, 66 dan idempotensi dalam database yang boleh dibuang.
+5. Gunakan fixture unik per tes dan jalankan E2E terpisah dari suite dan UAT. Sebelum eksekusi, simpan manifest baseline privat untuk data, ledger, ACL dan objek pengaman. Simpan hasil, log mutasi dan manifest sesudah tes. Buktikan batas koneksi melalui log tujuan dan guard identitas, lalu cocokkan fingerprint database existing yang berizin diaudit melalui transaksi baca-saja sebelum dan sesudah. Jika tes gagal, hentikan penulis dan simpan artefak kegagalan. Siapkan ulang hanya target sementara dari urutan migration dan seed sintetis yang sama setelah izin pembersihan, lalu catat OID baru dan cocokkan baseline sebelum mencoba ulang. Hentikan cluster sementara seusai tes. Hapus hanya cluster dan artefak sementara yang disetujui setelah memverifikasi identitas, kepemilikan, status berhenti dan ketiadaan pemakai.
+
+### Matriks penulisan E2E yang diusulkan — NOT RUN
+
+Gunakan browser terautentikasi atau HTTP asli dengan CSRF pada database E2E sementara dan dua guru sintetis. Verifikasi hasil melalui pembacaan database terpisah dan ulangi pembacaan dari UI.
+
+| Kasus | Bukti lulus yang diperlukan |
+| --- | --- |
+| 1. Simpan TP | GET ulang menunjukkan nilai baru dan audit untuk sel yang dituju |
+| 2. Nol dan kosong | 0 tersimpan, sel kosong tetap tanpa baris dan tanpa imputasi |
+| 3. Konflik versi | Kiriman versi basi ditolak, draft dipertahankan, batch gagal tanpa penulisan parsial |
+| 4. Submission duplikat | Replay TP identik tidak menambah audit, key sama dengan payload berbeda ditolak |
+| 5. Respons gagal | HTTP gagal atau jaringan putus mempertahankan input dan status belum disimpan; retry aman |
+| 6. POST ASTS | Hanya ASTS berubah; payload ASAS asing ditolak |
+| 7. POST ASAS | Hanya ASAS berubah; payload ASTS asing ditolak |
+| 8. Tanggal | Roster mengikuti tanggal roster, tanggal pelaksanaan tersimpan dari input dan penempatan efektif diperiksa |
+| 9. Nilai awal ujian tercatat | Pengiriman kedua tidak menimpa original dan konflik tidak menambah baris |
+| 10. Koreksi dan remedial | Jalur sah mencatat audit, nilai efektif mengikuti kontrak, original tetap identik |
+| 11. Siswa Final | Tulis rutin TP kosong dan koreksi TP untuk siswa Final ditolak, Final/snapshot/hash tetap identik |
+| 12. Rekap dan rekomendasi | Hasil konsisten dengan TP langsung yang berlaku serta bobot positif/0% setelah penyimpanan |
+| 13. Dua guru | Guru yang sah dapat bertindak pada konteks sendiri, konteks asing ditolak tanpa bocor atau menulis data |
+| 14. Refresh, Back/Forward dan resend | Konteks, versi dan tab konsisten; pengiriman ulang tidak menggandakan nilai atau histori |
+
+### Verifikasi, preservasi dan titik berhenti
+
+**PASS:** `go test -count=1 ./...`, race terfokus paket `web` dan `academic`, tes nama/OID murni `TestValidateDatabaseTarget` dengan tag integration dan race, 17 tes JavaScript (draft dan instant search), `go vet ./...`, `make check`, `make build`, `npm run build` dan `git diff --check`. **NOT RUN:** suite integrasi PostgreSQL penuh dan pengujian mutasi akademik.
+
+Manifest sebelum/sesudah menggunakan `REPEATABLE READ READ ONLY` dan SHA-256 per tabel atas baris terurut. Semua fingerprint tabel aplikasi nonoperasional dan ledger di empat database identik, termasuk seluruh 2 versi Final DEV beserta snapshot/hash. Satu sesi dan satu audit akses bertambah hanya di DEV. Bukti privat ada pada `/home/fasih/.local/share/sim-guru/ux02e01-20261126.3xGT4K`. SHA-256 `before.txt` = `6261ee37364e905485bd4204a14dab17487ff59776dc95d34f8262bfc31e1307`; `after.txt` = `b357fa64865a8e0b2e919569a07c03478a095cf44f36222c04d16a46937748af`. Preview 18746 dan harness dihentikan. Port tetap DEV 18743 dan UAT 18744 tidak digunakan dalam audit. Cluster 55436 yang dinyalakan untuk audit dikembalikan ke kondisi berhenti setelah tidak ada koneksi klien lain.
+
+Sebelum keputusan merge, selesaikan pengujian tulis E2E dan full integration. UX-02E-02 menunggu review rencana serta persetujuan untuk bootstrap cluster, pembuatan database dan role, ACL minimum, migration dan DDL probe, pemisahan koneksi pada harness, serta pembersihan target sementara. Finalisasi UX-02E-01 hanya mencakup publikasi hasil audit dan perbaikan. Batas keamanan produksi yang sudah tercatat pada RD-02 tetap berlaku.
+
 ## UX-02D — CLOSED / UAT ACCEPTED WITH DOCUMENTED LIMITATIONS (26 November 2026)
 
 Supervisor menerima implementasi dan UAT serta mengizinkan publikasi ke branch review. Pemeriksaan final mencakup seluruh sembilan file UX-02D.
