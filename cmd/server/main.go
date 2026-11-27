@@ -68,6 +68,13 @@ func run() error {
 	}
 	slog.Info("storage foto kehadiran pegawai", "active", staffPhotos != nil)
 	academics := &academic.Store{DB: db}
+	writerCtx, stopWriterCheck := context.WithTimeout(ctx, 10*time.Second)
+	closeWriters, writerErr := openAcademicWriters(writerCtx, cfg, academics)
+	stopWriterCheck()
+	if writerErr != nil {
+		return writerErr
+	}
+	defer closeWriters()
 	if photos != nil {
 		academics.Photos = photos
 	}

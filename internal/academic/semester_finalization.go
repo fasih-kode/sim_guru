@@ -173,34 +173,23 @@ func (s *Store) semesterFinalPreview(ctx context.Context, actor, semesterID, cla
 	}
 	out = SemesterFinalPreview{SemesterID: semesterID, ClassID: classID, SubjectID: subjectID, Student: *student, Weights: result.Weights}
 	out.HistoricalAccess = historical
-	_, hash, err := semesterFinalInputSnapshot(ctx, tx, semesterID, classID, subjectID, *student)
+	currentSnapshot, hash, err := semesterFinalInputSnapshot(ctx, tx, semesterID, classID, subjectID, *student)
 	if err != nil {
 		return out, err
 	}
 	out.SnapshotToken = hex.EncodeToString(hash[:])
 	var value int
 	var version int64
-	var storedHash, storedSnapshot []byte
-	err = tx.QueryRowContext(ctx, `SELECT v.final_score,v.version,v.snapshot_sha256,v.final_type,v.snapshot,v.reason,u.display_name,to_char(v.recorded_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS')
+	var storedSnapshot []byte
+	err = tx.QueryRowContext(ctx, `SELECT v.final_score,v.version,v.final_type,v.snapshot,v.reason,u.display_name,to_char(v.recorded_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS')
 		FROM app.semester_final_versions v JOIN app.users u ON u.id=v.recorded_by WHERE v.semester_id=$1 AND v.class_id=$2 AND v.subject_id=$3 AND v.student_id=$4
-		ORDER BY v.version DESC LIMIT 1`, semesterID, classID, subjectID, studentID).Scan(&value, &version, &storedHash, &out.FinalType, &storedSnapshot, &out.Reason, &out.RecordedBy, &out.RecordedAt)
+		ORDER BY v.version DESC LIMIT 1`, semesterID, classID, subjectID, studentID).Scan(&value, &version, &out.FinalType, &storedSnapshot, &out.Reason, &out.RecordedBy, &out.RecordedAt)
 	if err == nil {
-		var historic semesterFinalSnapshot
-		if err = json.Unmarshal(storedSnapshot, &historic); err != nil {
-			return out, err
-		}
-		out.HistoricalStudent = historic.Student
-		var evidence struct {
-			Weights struct{ NH, ASTS, ASAS int } `json:"weights"`
-		}
-		if err = json.Unmarshal(historic.Evidence, &evidence); err != nil {
-			return out, err
-		}
-		out.HistoricalWeights = AssessmentWeights{NH: evidence.Weights.NH, ASTS: evidence.Weights.ASTS, ASAS: evidence.Weights.ASAS, Configured: true}
+		out.HistoricalStudent, out.HistoricalWeights = semesterFinalHistoricalDetails(storedSnapshot)
 		out.Finalized = true
 		out.FinalValue = strconv.Itoa(value)
 		out.FinalVersion = version
-		out.NeedsReview, out.ReviewUncertain, err = semesterFinalNeedsReview(ctx, tx, semesterID, classID, subjectID, student.ID, storedSnapshot, storedHash, hash[:])
+		out.NeedsReview, out.ReviewUncertain, err = semesterFinalNeedsReview(ctx, tx, semesterID, classID, subjectID, student.ID, storedSnapshot, currentSnapshot)
 		if err != nil {
 			return out, err
 		}
@@ -240,72 +229,8 @@ func equalHash(a, b []byte) bool {
 	return diff == 0
 }
 
-// semesterFinalNeedsReview membandingkan bukti sesuai format versi yang
-// tersimpan. Snapshot lama tidak dihitung ulang memakai rumus NH baru.
-func semesterFinalNeedsReview(ctx context.Context, tx *sql.Tx, semester, class, subject int64, student string, savedSnapshot, savedHash, currentHash []byte) (bool, bool, error) {
-	var snapshot semesterFinalSnapshot
-	if err := json.Unmarshal(savedSnapshot, &snapshot); err != nil {
-		return false, true, nil
-	}
-	var old map[string]json.RawMessage
-	if err := json.Unmarshal(snapshot.Evidence, &old); err != nil || old == nil {
-		return false, true, nil
-	}
-	_, directFormat := old["direct_tp_scores"]
-	if _, hasApplicability := old["tp_applicability"]; directFormat && hasApplicability {
-		return !equalHash(savedHash, currentHash), false, nil
-	}
-	var raw string
-	if err := tx.QueryRowContext(ctx, semesterFinalEvidenceQuery, semester, class, subject, student).Scan(&raw); err != nil {
-		return false, true, err
-	}
-	var current map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(raw), &current); err != nil {
-		return false, true, err
-	}
-	// Nilai langsung baru merupakan bukti baru yang tidak ada dalam format lama.
-	var direct []json.RawMessage
-	if err := json.Unmarshal(current["direct_tp_scores"], &direct); err != nil {
-		return false, true, err
-	}
-	if !directFormat && len(direct) != 0 {
-		return true, false, nil
-	}
-	var decisions []json.RawMessage
-	if err := json.Unmarshal(current["tp_applicability"], &decisions); err != nil {
-		return false, true, err
-	}
-	if len(decisions) != 0 {
-		return true, false, nil
-	}
-	keys := []string{"semester", "class", "subject", "calendar", "teacher_assignments", "weights", "student", "placements", "placement_events", "objectives", "exam_sources"}
-	if directFormat {
-		keys = append(keys, "direct_tp_scores")
-	} else {
-		keys = append(keys, "activities")
-	}
-	for _, key := range keys {
-		before, ok := old[key]
-		if !ok {
-			return false, true, nil
-		}
-		after, ok := current[key]
-		if !ok {
-			return false, true, nil
-		}
-		var same bool
-		if err := tx.QueryRowContext(ctx, `SELECT $1::jsonb = $2::jsonb`, string(before), string(after)).Scan(&same); err != nil {
-			return false, true, err
-		}
-		if !same {
-			return true, false, nil
-		}
-	}
-	return false, false, nil
-}
-
 func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *SemesterRecommendation) error {
-	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT ON (student_id) student_id,final_score,version,snapshot_sha256,final_type,snapshot
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT ON (student_id) student_id,final_score,version,final_type,snapshot
 		FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3
 		ORDER BY student_id,version DESC`, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID)
 	if err != nil {
@@ -315,14 +240,13 @@ func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *S
 		studentID int64
 		value     int
 		version   int64
-		hash      []byte
 		snapshot  []byte
 		finalType string
 	}
 	finals := []finalRow{}
 	for rows.Next() {
 		var f finalRow
-		if err = rows.Scan(&f.studentID, &f.value, &f.version, &f.hash, &f.finalType, &f.snapshot); err != nil {
+		if err = rows.Scan(&f.studentID, &f.value, &f.version, &f.finalType, &f.snapshot); err != nil {
 			rows.Close()
 			return err
 		}
@@ -341,7 +265,7 @@ func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *S
 			if student.ID != strconv.FormatInt(f.studentID, 10) {
 				continue
 			}
-			_, currentHash, e := semesterFinalInputSnapshot(ctx, tx, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID, *student)
+			currentSnapshot, _, e := semesterFinalInputSnapshot(ctx, tx, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID, *student)
 			if e != nil {
 				return e
 			}
@@ -349,7 +273,7 @@ func (s *Store) overlaySemesterFinals(ctx context.Context, tx *sql.Tx, result *S
 			student.FinalType = f.finalType
 			student.FinalValue = strconv.Itoa(f.value)
 			student.FinalVersion = f.version
-			student.NeedsReview, student.ReviewUncertain, e = semesterFinalNeedsReview(ctx, tx, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID, student.ID, f.snapshot, f.hash, currentHash[:])
+			student.NeedsReview, student.ReviewUncertain, e = semesterFinalNeedsReview(ctx, tx, result.Context.SemesterID, result.Context.ClassID, result.Context.SubjectID, student.ID, f.snapshot, currentSnapshot)
 			if e != nil {
 				return e
 			}

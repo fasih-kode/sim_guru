@@ -76,18 +76,7 @@ func semesterFinalVersions(ctx context.Context, tx *sql.Tx, semester, class, sub
 		if err = rows.Scan(&v.Version, &v.Value, &v.Type, &v.Recommendation, &v.Reason, &v.Actor, &v.At, &raw); err != nil {
 			return nil, err
 		}
-		var snapshot semesterFinalSnapshot
-		if err = json.Unmarshal(raw, &snapshot); err != nil {
-			return nil, err
-		}
-		v.Student = snapshot.Student
-		var evidence struct {
-			Weights struct{ NH, ASTS, ASAS int } `json:"weights"`
-		}
-		if err = json.Unmarshal(snapshot.Evidence, &evidence); err != nil {
-			return nil, err
-		}
-		v.Weights = AssessmentWeights{NH: evidence.Weights.NH, ASTS: evidence.Weights.ASTS, ASAS: evidence.Weights.ASAS}
+		v.Student, v.Weights = semesterFinalHistoricalDetails(raw)
 		out = append(out, v)
 	}
 	return out, rows.Err()
@@ -186,8 +175,8 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 	}
 	var version, finalID int64
 	var finalScore int
-	var savedSnapshot, savedHash []byte
-	if err = tx.QueryRowContext(ctx, `SELECT id,version,final_score,snapshot,snapshot_sha256 FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4 ORDER BY version DESC LIMIT 1 FOR UPDATE`, semester, class, subject, student).Scan(&finalID, &version, &finalScore, &savedSnapshot, &savedHash); err != nil {
+	var savedSnapshot []byte
+	if err = tx.QueryRowContext(ctx, `SELECT id,version,final_score,snapshot FROM app.semester_final_versions WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND student_id=$4 ORDER BY version DESC LIMIT 1 FOR UPDATE`, semester, class, subject, student).Scan(&finalID, &version, &finalScore, &savedSnapshot); err != nil {
 		return err
 	}
 	if version != expected {
@@ -208,7 +197,7 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 	if !equalHash(hash, currentHash[:]) {
 		return ErrConflict
 	}
-	_, uncertain, err := semesterFinalNeedsReview(ctx, tx, semester, class, subject, fmtID(student), savedSnapshot, savedHash, currentHash[:])
+	_, uncertain, err := semesterFinalNeedsReview(ctx, tx, semester, class, subject, fmtID(student), savedSnapshot, snapshot)
 	if err != nil {
 		return err
 	}

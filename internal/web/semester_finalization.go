@@ -142,7 +142,7 @@ func (a *application) semesterFinalization(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	data.Exception = data.Preview.CanFinalizeException
-	if data.Preview.CanFinalize || data.Exception || historical {
+	if !data.Preview.ReviewUncertain && (data.Preview.CanFinalize || data.Exception || historical) {
 		if data.Preview.CanFinalize {
 			data.Score = data.Preview.Student.Recommendation
 		}

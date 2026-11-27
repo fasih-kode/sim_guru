@@ -56,7 +56,7 @@ func TestDirectTPFinalLegacyEvidenceCompatibilityIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !preview.Finalized || preview.NeedsReview {
+	if !preview.Finalized || preview.NeedsReview || preview.ReviewUncertain {
 		t.Fatalf("format lama tidak boleh memicu tinjauan: %+v", preview)
 	}
 	recommendations, err := s.SemesterRecommendations(ctx, f.Teacher, f.Semester, f.Class, f.Subject)
@@ -67,7 +67,7 @@ func TestDirectTPFinalLegacyEvidenceCompatibilityIntegration(t *testing.T) {
 	for _, item := range recommendations.Students {
 		if item.ID == fmtID(f.StudentA) {
 			found = true
-			if item.NeedsReview || item.Status != "Final" {
+			if item.NeedsReview || item.ReviewUncertain || item.Status != "Final" {
 				t.Fatalf("daftar Final lama: %+v", item)
 			}
 		}
@@ -102,8 +102,25 @@ func TestDirectTPFinalLegacyEvidenceCompatibilityIntegration(t *testing.T) {
 	if err != nil || !uncertain.Finalized || !uncertain.ReviewUncertain || uncertain.NeedsReview {
 		t.Fatalf("bukti tidak lengkap: %+v %v", uncertain, err)
 	}
-	if err = s.ReviewSemesterFinal(ctx, f.Teacher, f.Semester, f.Class, f.Subject, f.StudentB, 1, 55, "Retensi uji", uncertain.SnapshotToken, "00000000-0000-4000-8000-000000000099", "retain"); err == nil {
-		t.Fatal("review bukti tak terverifikasi harus ditolak")
+	for i, action := range []string{"retain", "revision"} {
+		key := fmt.Sprintf("00000000-0000-4000-8000-%012d", 99+i)
+		err = s.ReviewSemesterFinal(ctx, f.Teacher, f.Semester, f.Class, f.Subject, f.StudentB, 1, 55, "Peninjauan sintetis", uncertain.SnapshotToken, key, action)
+		var invalid ValidationError
+		if !errors.As(err, &invalid) || !strings.Contains(string(invalid), "Bukti Final historis") {
+			t.Fatalf("tindakan %s harus ditolak karena bukti tidak pasti, mendapat %v", action, err)
+		}
+	}
+	var versions, retentions int
+	var sameSnapshot bool
+	var storedHash []byte
+	if err = fixture.QueryRow(`SELECT
+		(SELECT count(*) FROM app.semester_final_versions WHERE semester_id=$1 AND student_id=$2),
+		(SELECT count(*) FROM app.semester_final_retentions r JOIN app.semester_final_versions f ON f.id=r.final_version_id WHERE f.semester_id=$1 AND f.student_id=$2),
+		v.snapshot=$3::jsonb,v.snapshot_sha256
+		FROM app.semester_final_versions v WHERE v.semester_id=$1 AND v.student_id=$2 AND v.version=1`,
+		f.Semester, f.StudentB, string(partialSnapshot)).Scan(&versions, &retentions, &sameSnapshot, &storedHash); err != nil ||
+		versions != 1 || retentions != 0 || !sameSnapshot || !equalHash(storedHash, partialHash[:]) {
+		t.Fatalf("perubahan histori setelah penolakan: versi=%d retensi=%d snapshot=%t err=%v", versions, retentions, sameSnapshot, err)
 	}
 	if _, err = fixture.Exec(`UPDATE app.semester_calendars SET ends_on='2020-12-30' WHERE semester_id=$1`, f.Semester); err != nil {
 		t.Fatal(err)

@@ -11,9 +11,10 @@ import (
 )
 
 type Store struct {
-	DB          *sql.DB
-	Photos      TeacherAttendancePhotoStorage
-	StaffPhotos StaffAttendancePhotoStorage
+	DB                                                                *sql.DB
+	CalendarWriter, PlacementWriter, ScoreWriter, ApplicabilityWriter *sql.DB
+	Photos                                                            TeacherAttendancePhotoStorage
+	StaffPhotos                                                       StaffAttendancePhotoStorage
 }
 
 type rowScanner interface{ Scan(...any) error }
@@ -614,7 +615,12 @@ func (s *Store) CreatePlacement(ctx context.Context, actor, studentID, classID i
 		return 0, err
 	}
 	if start != nil {
-		if err = foundationHistory(ctx, tx, actor, "placement_date", id, nil, map[string]any{"StartsOn": start, "Version": 1}, "Tanggal mulai penempatan awal oleh Admin"); err != nil {
+		if s.PlacementWriter != nil {
+			_, err = tx.ExecContext(ctx, `SELECT academic_write.record_initial_placement_date($1)`, id)
+		} else {
+			err = foundationHistory(ctx, tx, actor, "placement_date", id, nil, map[string]any{"StartsOn": start, "Version": 1}, "Tanggal mulai penempatan awal oleh Admin")
+		}
+		if err != nil {
 			return 0, err
 		}
 	}

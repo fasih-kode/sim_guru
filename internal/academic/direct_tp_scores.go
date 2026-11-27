@@ -32,7 +32,14 @@ type DirectTPScore struct {
 }
 
 func (s *Store) beginDirectTP(ctx context.Context, actor int64) (*sql.Tx, error) {
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	return s.beginDirectTPWrite(ctx, s.DB, actor)
+}
+
+func (s *Store) beginDirectTPWrite(ctx context.Context, db *sql.DB, actor int64) (*sql.Tx, error) {
+	if db == nil {
+		db = s.DB
+	}
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return nil, err
 	}
@@ -92,12 +99,14 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 		return ValidationError("Konteks atau daftar nilai tidak valid.")
 	}
 	items := make([]directTPParsed, 0, len(inputs))
-	seen := make(map[[2]int64]bool, len(inputs))
+	rawByCell := make(map[[2]int64]string, len(inputs))
 	for _, in := range inputs {
-		if in.StudentID < 1 || in.ObjectiveID < 1 || in.ExpectedVersion < -1 || seen[[2]int64{in.StudentID, in.ObjectiveID}] {
+		cell := [2]int64{in.StudentID, in.ObjectiveID}
+		_, duplicate := rawByCell[cell]
+		if in.StudentID < 1 || in.ObjectiveID < 1 || in.ExpectedVersion < -1 || duplicate {
 			return ValidationError("Siswa atau TP tidak valid atau duplikat.")
 		}
-		seen[[2]int64{in.StudentID, in.ObjectiveID}] = true
+		rawByCell[cell] = in.Value
 		cents, present, err := parseInitialScore(in.Value)
 		if err != nil {
 			return err
@@ -121,7 +130,7 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 		return err
 	}
 	digest := sha256.Sum256(payload)
-	tx, err := s.beginDirectTP(ctx, actor)
+	tx, err := s.beginDirectTPWrite(ctx, s.ScoreWriter, actor)
 	if err != nil {
 		return err
 	}
@@ -169,8 +178,12 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 		if applicability != directTPApplicable {
 			return ErrForbidden
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT id FROM app.student_placements WHERE id=$1 FOR SHARE`, placement).Scan(&placement); err != nil {
-			return err
+		// Pada kontrak baru, trigger memiliki row lock P dan memvalidasi ulang
+		// setelah G. Koneksi writer tidak memerlukan UPDATE atau helper lock.
+		if s.ScoreWriter == nil {
+			if err = tx.QueryRowContext(ctx, `SELECT id FROM app.student_placements WHERE id=$1 FOR SHARE`, placement).Scan(&placement); err != nil {
+				return err
+			}
 		}
 		var exists bool
 		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM app.direct_tp_codes WHERE objective_id=$1)`, item.ObjectiveID).Scan(&exists)
@@ -229,7 +242,14 @@ func (s *Store) SaveDirectTPScores(ctx context.Context, actor, semester, class, 
 		return dbError(err)
 	}
 	for _, c := range changes {
-		if c.initial == 0 {
+		if s.ScoreWriter != nil {
+			raw := rawByCell[[2]int64{c.item.StudentID, c.item.ObjectiveID}]
+			if c.initial == 0 {
+				_, err = tx.ExecContext(ctx, `SELECT app.ux02e_write_initial_tp($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, year, semester, class, subject, c.item.ObjectiveID, c.item.StudentID, c.placement, teacher, actor, raw, batch)
+			} else {
+				_, err = tx.ExecContext(ctx, `SELECT app.ux02e_write_tp_correction($1,$2,$3,$4,$5,$6)`, c.initial, c.version+1, formatScore(c.old), raw, actor, batch)
+			}
+		} else if c.initial == 0 {
 			_, err = tx.ExecContext(ctx, `INSERT INTO app.direct_tp_initial_scores(school_year_id,semester_id,class_id,subject_id,objective_id,student_id,placement_id,owner_teacher_id,recorded_by,score,submission_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::numeric,$11)`, year, semester, class, subject, c.item.ObjectiveID, c.item.StudentID, c.placement, teacher, actor, formatScore(c.item.Cents), batch)
 		} else {
 			_, err = tx.ExecContext(ctx, `INSERT INTO app.direct_tp_score_corrections(initial_score_id,version,before_score,after_score,corrected_by,submission_id) VALUES($1,$2,$3::numeric,$4::numeric,$5,$6)`, c.initial, c.version+1, formatScore(c.old), formatScore(c.item.Cents), actor, batch)
