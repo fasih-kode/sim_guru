@@ -1,0 +1,55 @@
+{{define "learning-objective-correction"}}
+{{$c := .LearningObjectiveCorrection}}
+<section class="panel max-w-5xl">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div><p class="text-sm text-gray-500">{{$c.State.Context.SemesterName}} · {{$c.State.Context.ClassName}} · {{$c.State.Context.SubjectName}}</p><h2 class="mt-2 text-lg font-semibold text-gray-900">Koreksi uraian TP #{{$c.State.Objective.ID}}</h2></div>
+    <a class="button-secondary" href="{{$c.ReturnURL}}">Kembali ke daftar TP</a>
+  </div>
+  {{if $c.Stale}}<div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Data berubah setelah formulir dibuka. Periksa uraian aktif dan mulai pratinjau baru.</div>{{end}}
+  <div class="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4"><p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Uraian aktif</p><p class="mt-2 whitespace-pre-wrap text-sm text-gray-800">{{$c.State.Objective.Definition}}</p><p class="mt-3 text-xs text-gray-500">Versi uraian: {{$c.State.Version}} · Kegiatan: {{$c.State.ActivityCount}} · Siswa dengan nilai: {{$c.State.ScoredStudentCount}} · Siswa dengan Final: {{$c.State.FinalStudentCount}}</p></div>
+
+  {{if $c.State.RoutineAllowed}}
+  <form method="post" action="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi/rutin" class="space-y-4">
+    {{.CSRF}}<input type="hidden" name="expected_version" value="{{$c.State.Version}}"><input type="hidden" name="snapshot_token" value="{{$c.State.RoutineToken}}"><input type="hidden" name="submission_key" value="{{$c.Submission}}">
+    <div><label for="objective-new-definition">Uraian baru</label><textarea id="objective-new-definition" name="definition" rows="5" required>{{if $c.Definition}}{{$c.Definition}}{{else}}{{$c.State.Objective.Definition}}{{end}}</textarea></div>
+    {{if $c.State.HasActivities}}<p class="text-sm text-gray-600">Kegiatan sudah ditautkan, tetapi belum memiliki nilai dan konteks belum memiliki Final. Tautan kegiatan saja tidak mengunci koreksi rutin; ID TP dan seluruh relasi tetap sama.</p>{{else}}<p class="text-sm text-gray-600">TP ini belum memiliki kegiatan, nilai, atau Final. Perubahan rutin mempertahankan ID TP yang sama.</p>{{end}}
+    <button class="button-primary" type="submit">Simpan koreksi rutin</button>
+  </form>
+  {{else}}
+  <form method="post" action="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi/pratinjau" class="space-y-4">
+    {{.CSRF}}<input type="hidden" name="expected_version" value="{{$c.State.Version}}"><input type="hidden" name="submission_key" value="{{$c.Submission}}">
+    <div><label for="objective-change-type">Jenis perubahan</label><select id="objective-change-type" name="change_type" required><option value="">Pilih jenis perubahan</option><option value="redaksi" {{if eq $c.ChangeType "redaksi"}}selected{{end}}>Redaksi</option><option value="substansi" {{if eq $c.ChangeType "substansi"}}selected{{end}}>Substansi</option></select><p class="mt-1 text-xs text-gray-500">Tentukan sendiri jenis perubahan; sistem tidak menebaknya dari kemiripan uraian.</p></div>
+    <div><label for="objective-new-definition">Uraian baru</label><textarea id="objective-new-definition" name="definition" rows="5" required>{{$c.Definition}}</textarea></div>
+    <div><label for="objective-change-reason">Alasan koreksi</label><textarea id="objective-change-reason" name="reason" rows="3" maxlength="500" required>{{$c.Reason}}</textarea></div>
+    {{if $c.State.HasFinals}}<p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Konteks ini sudah memiliki Final. Pratinjau akan menampilkan siswa dan bukti terdampak. Final lama tidak berubah otomatis dan hanya dapat ditinjau ulang melalui alur Final individual.</p>{{else}}<p class="text-sm text-gray-600">TP sudah digunakan. Perubahan harus ditinjau melalui pratinjau dampak dan dicatat dalam riwayat.</p>{{end}}
+    <button class="button-primary" type="submit">Pratinjau dampak</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+
+{{define "learning-objective-correction-preview"}}
+{{$c := .LearningObjectiveCorrection}}{{$p := $c.Preview}}
+<section class="panel max-w-5xl">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p class="text-sm text-gray-500">{{$c.State.Context.SemesterName}} · {{$c.State.Context.ClassName}} · {{$c.State.Context.SubjectName}}</p><h2 class="mt-2 text-lg font-semibold">Pratinjau dampak koreksi TP #{{$c.State.Objective.ID}}</h2></div><a class="button-secondary" href="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi">Kembali mengubah</a></div>
+  <dl class="grid gap-4 md:grid-cols-2"><div class="rounded-lg border border-gray-200 p-4"><dt class="text-xs font-semibold uppercase text-gray-500">Uraian sebelumnya</dt><dd class="mt-2 whitespace-pre-wrap text-sm">{{$p.DefinitionBefore}}</dd></div><div class="rounded-lg border border-blue-200 bg-blue-50 p-4"><dt class="text-xs font-semibold uppercase text-blue-700">Uraian baru</dt><dd class="mt-2 whitespace-pre-wrap text-sm text-blue-950">{{$p.DefinitionAfter}}</dd></div></dl>
+  <p class="mt-4 text-sm"><strong>Jenis:</strong> {{$p.ChangeType}} · <strong>Alasan:</strong> {{$p.Reason}}</p>
+  {{if $c.State.HasFinals}}<p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Final lama tetap tersimpan dengan snapshot semula. Final yang sumbernya berubah akan ditandai Perlu Ditinjau; tidak ada Final yang diterbitkan ulang otomatis.</p>{{end}}
+  <section class="mt-5"><h3 class="font-semibold">Kegiatan dan bukti penilaian</h3><p class="mt-1 text-sm text-gray-600">{{$c.State.ActivityCount}} kegiatan terkait · {{$c.State.ScoredStudentCount}} siswa unik memiliki nilai terkait · {{$c.State.FinalStudentCount}} siswa unik memiliki Final</p><div class="table-surface mt-3"><table class="app-table"><thead><tr><th>Kegiatan</th><th>Jenis</th><th>Tanggal</th><th>Siswa dengan nilai</th></tr></thead><tbody>{{range $p.State.Activities}}<tr><td>{{.Name}}</td><td>{{.Type}}</td><td>{{.Date}}</td><td>{{.ScoredStudentCount}}</td></tr>{{else}}<tr><td colspan="4" class="p-4 text-center text-gray-500">Belum ada kegiatan terkait.</td></tr>{{end}}</tbody></table></div></section>
+  {{if $c.State.HasFinals}}<section class="mt-5"><h3 class="font-semibold">Siswa dengan Final yang berpotensi terdampak</h3><div class="table-surface mt-3"><table class="app-table"><thead><tr><th>Siswa</th><th>Nilai Final</th><th>Jenis</th><th>Versi</th></tr></thead><tbody>{{range $p.ImpactedFinals}}<tr><td>{{.StudentName}}</td><td>{{.FinalValue}}</td><td>{{.Type}}</td><td>{{.Version}}</td></tr>{{else}}<tr><td colspan="4" class="p-4 text-center text-gray-500">Tidak ada Final yang tercatat.</td></tr>{{end}}</tbody></table></div>
+    {{if gt $p.PageCount 1}}<nav class="mt-3 flex flex-wrap items-center justify-between gap-2" aria-label="Halaman siswa terdampak"><span class="text-sm text-gray-500">Halaman {{$p.Page}} dari {{$p.PageCount}}</span><div class="flex gap-2">
+      {{if gt $p.Page 1}}<form method="post" action="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi/pratinjau" class="inline-flex">{{$.CSRF}}<input type="hidden" name="expected_version" value="{{$p.ExpectedVersion}}"><input type="hidden" name="definition" value="{{$p.DefinitionAfter}}"><input type="hidden" name="change_type" value="{{$p.ChangeType}}"><input type="hidden" name="reason" value="{{$p.Reason}}"><input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$p.SubmissionKey}}"><input type="hidden" name="page" value="{{$p.PreviousPage}}"><button class="button-secondary" type="submit">Sebelumnya</button></form>{{end}}
+      {{if lt $p.Page $p.PageCount}}<form method="post" action="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi/pratinjau" class="inline-flex">{{$.CSRF}}<input type="hidden" name="expected_version" value="{{$p.ExpectedVersion}}"><input type="hidden" name="definition" value="{{$p.DefinitionAfter}}"><input type="hidden" name="change_type" value="{{$p.ChangeType}}"><input type="hidden" name="reason" value="{{$p.Reason}}"><input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$p.SubmissionKey}}"><input type="hidden" name="page" value="{{$p.NextPage}}"><button class="button-secondary" type="submit">Berikutnya</button></form>{{end}}
+    </div></nav>{{end}}
+  </section>{{end}}
+  <form method="post" action="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi/konfirmasi" class="mt-6 flex flex-wrap gap-3">{{.CSRF}}<input type="hidden" name="expected_version" value="{{$p.ExpectedVersion}}"><input type="hidden" name="definition" value="{{$p.DefinitionAfter}}"><input type="hidden" name="change_type" value="{{$p.ChangeType}}"><input type="hidden" name="reason" value="{{$p.Reason}}"><input type="hidden" name="snapshot_token" value="{{$p.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$p.SubmissionKey}}"><button class="button-primary" type="submit">Konfirmasi koreksi TP</button><a class="button-secondary" href="{{$c.ReturnURL}}">Batalkan</a></form>
+</section>
+{{end}}
+
+{{define "learning-objective-history"}}
+{{$c := .LearningObjectiveCorrection}}
+{{if $c.Saved}}<div class="mb-4">{{template "notification-success" "Koreksi uraian TP berhasil dicatat."}}</div>{{end}}
+<section class="panel max-w-5xl"><div class="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p class="text-sm text-gray-500">{{$c.State.Context.SemesterName}} · {{$c.State.Context.ClassName}} · {{$c.State.Context.SubjectName}}</p><h2 class="mt-2 text-lg font-semibold">Riwayat Perubahan TP #{{$c.State.Objective.ID}}</h2><p class="mt-2 whitespace-pre-wrap text-sm">Uraian aktif: {{$c.State.Objective.Definition}}</p></div><div class="flex flex-wrap gap-2"><a class="button-secondary" href="{{$c.ReturnURL}}">Kembali ke daftar</a><a class="button-primary" href="/guru/tujuan-pembelajaran/{{$c.State.Objective.ID}}/koreksi">Koreksi uraian</a></div></div>
+  <div class="table-surface"><table class="app-table"><thead><tr><th>Versi</th><th>Perubahan</th><th>Alasan</th><th>Pelaku · waktu WIB</th></tr></thead><tbody>{{range $c.History}}<tr><td>{{.Version}}</td><td><details><summary>{{.ChangeType}}</summary><p class="mt-2 whitespace-pre-wrap"><strong>Sebelum:</strong> {{.DefinitionBefore}}</p><p class="mt-2 whitespace-pre-wrap"><strong>Sesudah:</strong> {{.DefinitionAfter}}</p></details></td><td>{{if .Reason}}{{.Reason}}{{else}}—{{end}}</td><td>{{.Actor}}<br>{{.At}}</td></tr>{{else}}<tr><td colspan="4" class="p-5 text-center text-gray-500">Belum ada riwayat koreksi uraian.</td></tr>{{end}}</tbody></table></div>
+</section>
+{{end}}

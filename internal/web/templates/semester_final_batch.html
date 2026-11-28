@@ -1,0 +1,14 @@
+{{define "semester-final-batch"}}
+<section class="panel max-w-5xl">
+ <a class="text-sm text-brand-600 hover:underline" href="{{.SemesterFinalBatch.ReturnURL}}">← Kembali ke rekomendasi semester</a>
+ <h2 class="mt-3 text-xl font-semibold">Pratinjau Finalisasi Massal</h2>
+ <p class="mt-2 text-sm">{{.SemesterFinalBatch.Preview.Context.SemesterName}} · {{.SemesterFinalBatch.Preview.Context.ClassName}} · {{.SemesterFinalBatch.Preview.Context.SubjectName}}</p>
+ <p class="mt-2 text-sm">Guru: {{.SemesterFinalBatch.Preview.TeacherName}} · Bobot NH {{.SemesterFinalBatch.Preview.Weights.NH}}% · ASTS {{.SemesterFinalBatch.Preview.Weights.ASTS}}% · ASAS {{.SemesterFinalBatch.Preview.Weights.ASAS}}%</p>
+ <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Konfirmasi akan menyimpan histori Final resmi untuk {{len .SemesterFinalBatch.Preview.Items}} siswa. Nilai Final sama dengan rekomendasi masing-masing.</p>
+ <form method="post" action="/guru/rekomendasi-semester/massal" class="mt-4">{{.CSRF}}
+ <input type="hidden" name="context" value="{{.SemesterFinalBatch.Context}}"><input type="hidden" name="submission_key" value="{{.SemesterFinalBatch.SubmissionKey}}">
+ <div class="divide-y divide-gray-200 rounded-lg border border-gray-200">{{range .SemesterFinalBatch.Preview.Items}}
+ <div class="p-3 text-sm"><p class="font-semibold">{{.Student.Name}} · {{.Student.NIS}}</p><p>NH {{if .Student.NH}}{{.Student.NH}}{{else}}—{{end}} · ASTS {{if .Student.ASTS}}{{.Student.ASTS}}{{else}}—{{end}} · ASAS {{if .Student.ASAS}}{{.Student.ASAS}}{{else}}—{{end}} · Rekomendasi <strong>{{.Student.Recommendation}}</strong></p><input type="hidden" name="student_id" value="{{.StudentID}}"><input type="hidden" name="snapshot_token" value="{{.SnapshotToken}}"></div>{{end}}</div>
+ <button class="button-primary mt-5" type="submit">Tetapkan Final untuk {{len .SemesterFinalBatch.Preview.Items}} Siswa</button></form>
+</section>
+{{end}}

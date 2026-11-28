@@ -24,7 +24,20 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 		{"wali kelas satu halaman", "/absensi/harian", "", "", "attendance", []string{"wali_kelas"}, 0},
 		{"kepala sekolah satu halaman", "/absensi/harian", "", "", "attendance", []string{"kepala_sekolah"}, 0},
 		{"role gabungan tanpa duplikasi", "/absensi/harian", "Kehadiran Siswa", "daily-attendance", "attendance", []string{"petugas_absensi", "kesiswaan", "wali_kelas"}, 4},
-		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Guru Mapel", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 3},
+		{"jurnal Guru Mapel", "/jurnal-saya/123/versi/1", "Mengajar", "teaching-journal", "guru-mapel", []string{"guru_mapel"}, 3},
+		{"Buku Nilai Guru Mapel", "/guru/buku-nilai", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"TP Guru Mapel", "/guru/tujuan-pembelajaran", "Penilaian", "learning-objectives", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"kegiatan Guru Mapel", "/guru/kegiatan-penilaian", "Riwayat & Koreksi", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 2},
+		{"daftar ujian historis", "/guru/nilai-ujian-saya", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"koreksi ujian", "/guru/nilai-ujian/123/koreksi", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"nilai ujian Guru Mapel", "/guru/nilai-asts-asas", "Penilaian", "direct-tp-gradebook", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"rekap nilai TP Guru Mapel", "/guru/rekap-nilai-tp", "Penilaian", "assessment-tp-recap", "guru-mapel", []string{"guru_mapel"}, 4},
+		{"input nilai tetap pada tab kegiatan", "/guru/kegiatan-penilaian/123/nilai", "Riwayat & Koreksi", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 2},
+		{"nilai historis milik guru", "/guru/nilai-awal-saya", "Riwayat & Koreksi", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 2},
+		{"koreksi nilai historis", "/guru/nilai-awal/123/koreksi", "Riwayat & Koreksi", "assessment-score-history", "guru-mapel", []string{"guru_mapel"}, 2},
+		{"remedial pada tab kegiatan", "/guru/nilai-awal/123/remedial", "Riwayat & Koreksi", "assessment-activities", "guru-mapel", []string{"guru_mapel"}, 2},
+		{"pedoman TP Kurikulum", "/akademik/pedoman-tp", "Struktur Kurikulum", "curriculum-tp-guidance", "curriculum-subjects", []string{"kurikulum"}, 4},
+		{"bobot Kurikulum", "/akademik/bobot-penilaian", "Struktur Kurikulum", "curriculum-assessment-weights", "curriculum-subjects", []string{"kurikulum"}, 4},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,6 +74,10 @@ func TestSharedNavigationFiltersRolesAndKeepsSingleActiveTab(t *testing.T) {
 			case "attendance":
 				if !strings.Contains(body, `nav-link nav-student-attendance-parent is-active`) {
 					t.Fatal("parent Kehadiran Siswa tidak ditandai aktif")
+				}
+			case "curriculum-subjects":
+				if !strings.Contains(body, `nav-link nav-curriculum-parent is-active`) {
+					t.Fatal("parent Struktur Kurikulum tidak ditandai aktif")
 				}
 			}
 		})
@@ -112,7 +129,7 @@ func TestSidebarRoleInventoryHasNoStandaloneHeadingsOrDuplicateLinks(t *testing.
 	}{
 		{"Admin", []string{"admin"}, []string{"Beranda", "Master Data", "Pengguna &amp; Akses", "Kehadiran"}, []string{"KOORDINASI KASUS", "nav-submenu"}},
 		{"Kurikulum", []string{"kurikulum"}, []string{"Beranda", "Kalender Akademik", "Struktur Kurikulum", "Pengaturan Jadwal", "Siswa &amp; Penempatan", "Koreksi Absensi Pelajaran"}, []string{"nav-submenu", "KOORDINASI KASUS"}},
-		{"Guru Mapel", []string{"guru_mapel"}, []string{"Beranda", "Kehadiran Guru", "Guru Mapel"}, []string{"Kehadiran Pegawai", "Koreksi Absensi Pelajaran"}},
+		{"Guru Mapel", []string{"guru_mapel"}, []string{"Beranda", "Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi"}, []string{"Kehadiran Pegawai", "Koreksi Absensi Pelajaran"}},
 		{"Wali Kelas", []string{"wali_kelas"}, []string{"Beranda", "Kehadiran Guru", "Kasus Siswa", "Kelas Saya", "Kehadiran Siswa"}, []string{"KOORDINASI KASUS", "WALI KELAS"}},
 		{"Guru BK", []string{"bk"}, []string{"Beranda", "Kasus Siswa"}, []string{"KOORDINASI KASUS", "Kehadiran Siswa"}},
 		{"Kesiswaan", []string{"kesiswaan"}, []string{"Beranda", "Kasus Siswa", "Kehadiran Siswa"}, []string{"KOORDINASI KASUS"}},
@@ -120,10 +137,10 @@ func TestSidebarRoleInventoryHasNoStandaloneHeadingsOrDuplicateLinks(t *testing.
 		{"Pegawai TU", []string{"pegawai_tu"}, []string{"Beranda", "Kehadiran Pegawai"}, []string{"KEHADIRAN PEGAWAI"}},
 		{"Pengelola Kehadiran Guru", []string{"pengelola_kehadiran_guru"}, []string{"Beranda", "Penanganan Kehadiran Guru"}, []string{"nav-submenu"}},
 		{"Petugas Absensi", []string{"petugas_absensi"}, []string{"Beranda", "Kehadiran Siswa"}, []string{"MENU", "nav-submenu"}},
-		{"Guru Mapel + Kesiswaan", []string{"guru_mapel", "kesiswaan"}, []string{"Beranda", "Guru Mapel", "Kehadiran Guru", "Kasus Siswa", "Kehadiran Siswa"}, []string{"KOORDINASI KASUS", "WALI KELAS"}},
+		{"Guru Mapel + Kesiswaan", []string{"guru_mapel", "kesiswaan"}, []string{"Beranda", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi", "Kehadiran Guru", "Kasus Siswa", "Kehadiran Siswa"}, []string{"KOORDINASI KASUS", "WALI KELAS"}},
 		{"Admin + Kurikulum", []string{"admin", "kurikulum"}, []string{"Master Data", "Pengguna &amp; Akses", "Kalender Akademik", "Struktur Kurikulum"}, []string{"nav-submenu"}},
-		{"Kurikulum + Guru Mapel", []string{"kurikulum", "guru_mapel"}, []string{"Kehadiran Guru", "Guru Mapel", "Kalender Akademik"}, []string{"Koreksi Absensi Pelajaran"}},
-		{"Wali Kelas + Guru Mapel", []string{"wali_kelas", "guru_mapel"}, []string{"Kehadiran Guru", "Guru Mapel", "Kelas Saya", "Kasus Siswa"}, []string{"nav-submenu"}},
+		{"Kurikulum + Guru Mapel", []string{"kurikulum", "guru_mapel"}, []string{"Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi", "Kalender Akademik"}, []string{"Koreksi Absensi Pelajaran"}},
+		{"Wali Kelas + Guru Mapel", []string{"wali_kelas", "guru_mapel"}, []string{"Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi", "Kelas Saya", "Kasus Siswa"}, []string{"nav-submenu"}},
 		{"TU + Pengelola Kehadiran Guru", []string{"pegawai_tu", "pengelola_kehadiran_guru"}, []string{"Kehadiran Pegawai", "Penanganan Kehadiran Guru"}, []string{"KEHADIRAN PEGAWAI"}},
 		{"Kesiswaan + Petugas Absensi", []string{"kesiswaan", "petugas_absensi"}, []string{"Kasus Siswa", "Kehadiran Siswa"}, []string{"KOORDINASI KASUS"}},
 	}
@@ -177,5 +194,35 @@ func TestSidebarRoleChangesDoNotExpandServerAuthorization(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusForbidden || called {
 		t.Fatalf("role gabungan non-Admin mendapat status %d atau handler dijalankan", w.Code)
+	}
+}
+
+func TestSubjectTeacherWorkGroupsRetainAllRoutes(t *testing.T) {
+	user := &auth.User{ID: 42, Active: true, Roles: []string{"guru_mapel", "kurikulum"}}
+	groups := map[string][]string{
+		"Mengajar":          {"/jadwal-saya", "/jadwal-saya/absensi", "/jurnal-saya"},
+		"Penilaian":         {"/guru/tujuan-pembelajaran", "/guru/buku-nilai", "/guru/rekomendasi-semester", "/guru/rekap-nilai-tp"},
+		"Riwayat & Koreksi": {"/guru/kegiatan-penilaian", "/guru/nilai-awal-saya"},
+	}
+	for group, routes := range groups {
+		tabs := sectionNavigationTabs(group, "", user)
+		if len(tabs) != len(routes) {
+			t.Fatalf("%s: %d tab, ingin %d", group, len(tabs), len(routes))
+		}
+		for _, route := range routes {
+			found := false
+			for _, tab := range tabs {
+				if tab.Href == route {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%s kehilangan %s", group, route)
+			}
+		}
+		if len(sectionNavigationTabs(group, "", &auth.User{Roles: []string{"admin"}})) != 0 {
+			t.Errorf("admin tanpa guru mapel mendapat navigasi %s", group)
+		}
 	}
 }

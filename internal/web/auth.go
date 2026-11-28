@@ -63,6 +63,8 @@ type view struct {
 	NavActive, NavGroup                 string
 	NavigationSection, NavigationActive string
 	NavigationTabs                      []navigationTab
+	AssessmentContext                   *assessmentContextView
+	GradebookNavigation                 *gradebookNavigationView
 	Dashboard                           *dashboardPresentation
 	AdditionalDashboards                []*dashboardPresentation
 	HomeAttendance                      *homeAttendanceShortcuts
@@ -83,6 +85,29 @@ type view struct {
 	Transition                          *transitionView
 	LessonAttendance                    *lessonAttendanceView
 	TeachingJournal                     *teachingJournalView
+	LearningObjectives                  *learningObjectivesView
+	LearningObjectiveCorrection         *learningObjectiveCorrectionView
+	HistoricalTPPreview                 *historicalTPPreviewView
+	HistoricalAssessmentLink            *historicalAssessmentLinkView
+	HistoricalAssessmentActivity        *historicalAssessmentActivityView
+	HistoricalAssessmentScores          *historicalAssessmentScoreView
+	TPCriteria                          *tpCriteriaView
+	TPGuidance                          *academic.TPGuidance
+	AssessmentActivities                *assessmentActivitiesView
+	AssessmentScores                    *assessmentScoresView
+	AssessmentOwnedScores               *assessmentOwnedScoresView
+	AssessmentCorrection                *assessmentCorrectionView
+	AssessmentRemedial                  *assessmentRemedialView
+	AssessmentTPRecap                   *assessmentTPRecapView
+	DirectTPGradebook                   *directTPGradebookView
+	DirectTPApplicability               *directTPApplicabilityView
+	SemesterRecommendations             *semesterRecommendationView
+	SemesterFinalization                *semesterFinalView
+	SemesterFinalBatch                  *semesterFinalBatchView
+	ExamInitial                         *examInitialView
+	ExamOwnedScores                     *examOwnedScoresView
+	ExamCorrection                      *examCorrectionView
+	ExamRemedial                        *examRemedialView
 }
 
 func principal(r *http.Request) *auth.User {
@@ -95,6 +120,15 @@ func (a *application) render(w http.ResponseWriter, r *http.Request, name string
 	v.NavActive, v.NavGroup = sidebarState(r.URL.Path, v.User)
 	v.NavigationSection, v.NavigationActive = sectionNavigationState(r.URL.Path, v.User)
 	v.NavigationTabs = sectionNavigationTabs(v.NavigationSection, v.NavigationActive, v.User)
+	v.AssessmentContext = assessmentContextForView(v)
+	gradebookRosterDate := r.URL.Query().Get("date")
+	if r.Method == http.MethodPost {
+		gradebookRosterDate = r.PostForm.Get("date")
+	}
+	v.GradebookNavigation = gradebookNavigationForView(v, gradebookRosterDate)
+	if v.NavigationSection == "Penilaian" {
+		assessmentContextNavigation(v.NavigationTabs, v.AssessmentContext)
+	}
 	v.LiveList = liveListPage(v.Page)
 	if name == "page" && v.LiveList && r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-List-Request") == "true" {
 		name = "list-fragment"
@@ -158,6 +192,49 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 	case path == "/jurnal-saya" || strings.HasPrefix(path, "/jurnal-saya/"):
 		if user != nil && user.HasRole("guru_mapel") {
 			return "teaching-journal", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/tujuan-pembelajaran" || path == "/guru/tujuan-pembelajaran/historis" || path == "/guru/tujuan-pembelajaran/historis/hasil" || path == "/guru/kriteria-tp":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "learning-objectives", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/nilai-asts-asas" || path == "/guru/nilai-ujian-saya" || strings.HasPrefix(path, "/guru/nilai-ujian/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "direct-tp-gradebook", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/rekomendasi-semester" || strings.HasPrefix(path, "/guru/rekomendasi-semester/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "semester-recommendations", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/buku-nilai" || strings.HasPrefix(path, "/guru/buku-nilai/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "direct-tp-gradebook", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/rekap-nilai-tp":
+		if user != nil && user.HasRole("guru_mapel") {
+			return "assessment-tp-recap", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/kegiatan-penilaian" || strings.HasPrefix(path, "/guru/kegiatan-penilaian/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			if strings.HasSuffix(path, "/nilai") {
+				return "assessment-activity-scores", "guru-mapel"
+			}
+			return "assessment-activities", "guru-mapel"
+		}
+		return "", ""
+	case strings.HasPrefix(path, "/guru/nilai-awal/") && strings.HasSuffix(path, "/remedial"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "assessment-activity-scores", "guru-mapel"
+		}
+		return "", ""
+	case path == "/guru/nilai-awal-saya" || strings.HasPrefix(path, "/guru/nilai-awal/"):
+		if user != nil && user.HasRole("guru_mapel") {
+			return "assessment-score-history", "guru-mapel"
 		}
 		return "", ""
 	case path == "/":
@@ -226,6 +303,10 @@ func sidebarState(path string, user *auth.User) (active, group string) {
 		return "lesson-periods", "curriculum-schedule"
 	case path == "/akademik/struktur-kurikulum":
 		return "curriculum-structure", "curriculum-subjects"
+	case path == "/akademik/pedoman-tp":
+		return "tp-guidance", "curriculum-subjects"
+	case path == "/akademik/bobot-penilaian":
+		return "assessment-weights", "curriculum-subjects"
 	case path == "/akademik/batasan-jadwal":
 		return "schedule-constraints", "curriculum-schedule"
 	case path == "/akademik/waktu-sekolah":

@@ -1,0 +1,31 @@
+{{define "exam-score-remedial"}}
+<section class="panel mb-5">
+  <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-ujian/{{.ExamRemedial.Detail.Score.ID}}/koreksi">← Kembali ke koreksi nilai awal</a>
+  <div class="mt-4">
+    <h2 class="text-xl font-semibold text-gray-900">Remedial ASTS/ASAS</h2>
+    <p class="mt-1 text-sm text-gray-600">{{if eq .ExamRemedial.Detail.Score.Component "asts"}}ASTS{{else}}ASAS{{end}} · Tanggal ujian {{.ExamRemedial.Detail.Score.Date}}</p>
+    <p class="mt-1 text-sm text-gray-500">{{.ExamRemedial.Detail.Score.SemesterName}} · {{.ExamRemedial.Detail.Score.ClassName}} · {{.ExamRemedial.Detail.Score.SubjectName}}</p>
+    <p class="mt-1 text-sm text-gray-500">{{.ExamRemedial.Detail.Score.StudentName}}</p>
+  </div>
+</section>
+<section class="panel">
+  <div class="grid gap-3 sm:grid-cols-3">
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3"><span class="block text-xs text-gray-500">Nilai awal asli</span><strong>{{.ExamRemedial.Detail.Score.InitialValue}}</strong></div>
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3"><span class="block text-xs text-gray-500">Nilai awal berlaku setelah koreksi</span><strong>{{.ExamRemedial.Detail.Score.CorrectedValue}}</strong></div>
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-3"><span class="block text-xs text-blue-700">Nilai efektif saat ini</span><strong class="text-blue-900">{{.ExamRemedial.Detail.Effective}}</strong></div>
+  </div>
+  <p class="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Remedial mencatat hasil penilaian ulang siswa dan tidak mengubah nilai awal maupun histori koreksi.</p>
+  {{if .ExamRemedial.Detail.CanRecord}}<form method="post" action="/guru/nilai-ujian/{{.ExamRemedial.Detail.Score.ID}}/remedial" class="mt-6 grid gap-4 sm:grid-cols-2">
+    {{.CSRF}}<input type="hidden" name="submission_key" value="{{.ExamRemedial.SubmissionKey}}">
+    <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-value">Nilai remedial</label><input id="remedial-value" name="value" type="text" inputmode="decimal" value="{{.ExamRemedial.Value}}" required autocomplete="off"><p class="mt-1 text-xs text-gray-500">Angka 0–100, maksimal dua angka desimal.</p></div>
+    <div><label class="mb-1 block text-sm font-medium text-gray-700" for="remedial-date">Tanggal pelaksanaan</label><input id="remedial-date" name="remedial_date" type="date" value="{{.ExamRemedial.Date}}" required></div>
+    <div class="sm:col-span-2"><button class="button-primary" type="submit">Catat Remedial</button></div>
+  </form>{{else}}<p class="mt-4 text-sm text-gray-600">Penugasan aktif diperlukan untuk mencatat remedial baru.</p>{{end}}
+  <div class="mt-8">
+    <h3 class="text-lg font-semibold text-gray-900">Riwayat Remedial</h3>
+    {{if .ExamRemedial.Detail.History}}
+    <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200"><table class="app-table min-w-[560px]"><thead><tr><th>Tanggal</th><th>Nilai</th><th>Dicatat oleh</th><th>Waktu pencatatan</th></tr></thead><tbody>{{range .ExamRemedial.Detail.History}}<tr><td>{{.Date}}</td><td class="font-semibold">{{.Value}}</td><td>{{.Actor}}</td><td>{{.Recorded}}</td></tr>{{end}}</tbody></table></div>
+    {{else}}<p class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">Belum ada remedial yang dicatat untuk nilai ini.</p>{{end}}
+  </div>
+</section>
+{{end}}

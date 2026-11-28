@@ -67,6 +67,9 @@ type academicView struct {
 	JournalCutoverDate                    string
 	JournalHistoricalDate                 string
 	JournalHistoricalCandidates           []academic.TeachingJournalHistoricalCandidate
+	AssessmentWeight                      academic.AssessmentWeights
+	AssessmentWeightInput                 academic.AssessmentWeights
+	AssessmentWeightFormSubmitted         bool
 }
 
 type placementView struct {

@@ -57,8 +57,38 @@ func TestMigrationsIntegration(t *testing.T) {
 		t.Fatal("migration up is not idempotent")
 	}
 	current, target, err := p.GetVersions(ctx)
-	if err != nil || current != target || target != 36 {
+	if err != nil || current != target || target < 60 {
 		t.Fatal("unexpected migration version")
+	}
+	var retentionSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_retentions') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.semester_final_retentions'::regclass AND tgname='semester_final_retentions_append_only' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.semester_final_retentions'::regclass AND contype='u')`).Scan(&retentionSchema); err != nil || !retentionSchema {
+		t.Fatal("missing immutable Final retention audit")
+	}
+	var exceptionSchema bool
+	if err = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='semester_final_versions' AND column_name='final_type' AND is_nullable='NO')
+		AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='semester_final_versions' AND column_name='recommendation_score' AND is_nullable='YES')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_type_check' AND convalidated)`).Scan(&exceptionSchema); err != nil || !exceptionSchema {
+		t.Fatal("missing Final type or exception constraint")
+	}
+	var batchSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_batches') IS NOT NULL
+		AND to_regclass('app.semester_final_batch_items') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_batches_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_batch_items_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.semester_final_batches'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (recorded_by, submission_key)%')`).Scan(&batchSchema); err != nil || !batchSchema {
+		t.Fatal("missing immutable Final batch tables or submission uniqueness")
+	}
+	var semesterFinalSchema bool
+	if err = db.QueryRow(`SELECT to_regclass('app.semester_final_versions') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_versions_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_lock_new_objectives' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='semester_final_lock_new_sumatif' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_recommendation_score_check' AND contype='c')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_final_score_check' AND contype='c')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='semester_final_versions_unique' AND contype='u')`).Scan(&semesterFinalSchema); err != nil || !semesterFinalSchema {
+		t.Fatal("missing immutable semester final table, score constraints, or routine structure guards")
 	}
 	var exists bool
 	if err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='app')").Scan(&exists); err != nil || !exists {
@@ -88,6 +118,56 @@ func TestMigrationsIntegration(t *testing.T) {
 	}
 	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.logical_lessons') IS NOT NULL AND to_regclass('app.teaching_journal_lineage_transitions') IS NOT NULL AND to_regclass('app.teaching_journal_lineage_decisions') IS NOT NULL AND to_regclass('app.teaching_journals') IS NOT NULL AND to_regclass('app.teaching_journal_versions') IS NOT NULL AND to_regclass('app.teaching_journal_version_periods') IS NOT NULL AND to_regclass('app.teaching_journal_history') IS NOT NULL`).Scan(&exists); err != nil || !exists {
 		t.Fatal("missing teaching journal foundation tables")
+	}
+	var activitySchema bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activities') IS NOT NULL AND to_regclass('app.assessment_activity_objectives') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='learning_objectives_id_context_unique' AND contype='u') AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_activities_id_context_unique' AND contype='u') AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_objectives'::regclass AND contype='f')`).Scan(&activitySchema); err != nil || !activitySchema {
+		t.Fatal("missing CP10-04 activity tables, context keys, or composite foreign keys")
+	}
+	var scoreSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_initial_scores') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_initial_scores_occurrence_student_unique' AND contype='u')
+		AND (SELECT count(*)=5 FROM pg_constraint WHERE conrelid='app.assessment_activity_initial_scores'::regclass AND contype='f')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='student_placements_id_student_year_unique' AND contype='u')`).Scan(&scoreSchema); err != nil || !scoreSchema {
+		t.Fatal("missing CP10-05 initial score table, uniqueness, or composite foreign keys")
+	}
+	var historicalScoreSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT
+		to_regclass('app.historical_assessment_score_batches') IS NOT NULL
+		AND to_regclass('app.historical_assessment_initial_score_audits') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_score_batches'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (actor_id, submission_key)%')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_initial_score_audits'::regclass AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (assessment_activity_id, learning_objective_id, student_id)%')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='app.historical_assessment_initial_score_audits'::regclass AND contype='f' AND condeferrable)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.assessment_activity_initial_scores'::regclass AND tgname='historical_initial_score_guard' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.assessment_activity_initial_scores'::regclass AND tgname='historical_initial_score_immutable' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_score_batches'::regclass AND tgname='historical_score_batch_append_only' AND tgenabled='O')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.historical_assessment_initial_score_audits'::regclass AND tgname='historical_score_detail_append_only' AND tgenabled='O')`).Scan(&historicalScoreSchema); err != nil || !historicalScoreSchema {
+		t.Fatal("missing CP10-23 append-only score provenance, deferred integrity, idempotency, or guards")
+	}
+	var historicalScoreEvidenceSchema bool
+	if err = db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='historical_assessment_initial_score_audits' AND column_name='source_score')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='historical_score_source_score_range_check' AND contype='c' AND convalidated)
+		AND EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='app' AND indexname='historical_score_source_locator_lookup_idx' AND indexdef LIKE 'CREATE INDEX%')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='historical_score_detail_insert' AND tgenabled='O')`).Scan(&historicalScoreEvidenceSchema); err != nil || !historicalScoreEvidenceSchema {
+		t.Fatal("missing structured source score, normalized locator uniqueness, or evidence guard")
+	}
+	var scoreCorrections bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_corrections') IS NOT NULL
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_score_corrections_version_unique' AND contype='u')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_corrections_append_only' AND NOT tgisinternal)
+		AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_score_corrections'::regclass AND contype='f')`).Scan(&scoreCorrections); err != nil || !scoreCorrections {
+		t.Fatal("missing CP10-06 append-only corrections, version uniqueness, or foreign keys")
+	}
+	var scoreRemedials bool
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass('app.assessment_activity_score_remedials') IS NOT NULL
+		AND (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='app.assessment_activity_score_remedials'::regclass AND contype='f')
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_remedials_append_only' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='assessment_score_remedials_sumatif_guard' AND NOT tgisinternal)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_activity_score_remedials_score_check' AND contype='c')
+		AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='app' AND table_name='assessment_activity_score_remedials' AND column_name='submission_key' AND udt_name='uuid')
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_score_remedials_submission_key_required' AND contype='c' AND NOT convalidated)
+		AND EXISTS(SELECT 1 FROM pg_constraint WHERE conname='assessment_score_remedials_submission_unique' AND contype='u' AND pg_get_constraintdef(oid) LIKE 'UNIQUE (recorded_by, submission_key)%')`).Scan(&scoreRemedials); err != nil || !scoreRemedials {
+		t.Fatal("missing CP10-07 remedial table, constraints, or immutable/sumatif triggers")
 	}
 	var historicalMappingTable, historicalMappingUnique, historicalMappingAppendOnly bool
 	if err = db.QueryRowContext(ctx, `SELECT

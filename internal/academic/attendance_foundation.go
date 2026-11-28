@@ -150,6 +150,14 @@ func (s *Store) SaveSemesterCalendar(ctx context.Context, actor int64, c Semeste
 	if e := foundationReason(reason); e != nil {
 		return e
 	}
+	if s.CalendarWriter != nil {
+		days, err := json.Marshal(c.SchoolDays)
+		if err != nil {
+			return err
+		}
+		return execAcademicWriter(ctx, s.CalendarWriter, `SELECT academic_write.set_calendar($1,$2,$3,$4::date,$5::date,$6::jsonb,$7)`,
+			actor, c.SemesterID, c.Version, c.StartsOn, c.EndsOn, days, reason)
+	}
 	tx, e := s.begin(ctx, actor, "kurikulum")
 	if e != nil {
 		return e
@@ -200,6 +208,10 @@ func (s *Store) SaveSchoolDateException(ctx context.Context, actor, semester, ve
 	}
 	if !reset && (strings.TrimSpace(x.Label) == "" || utf8.RuneCountInString(x.Label) > 200 || !utf8.ValidString(x.Label) || strings.ContainsRune(x.Label, 0)) {
 		return ValidationError("Keterangan tanggal wajib diisi, maksimal 200 karakter.")
+	}
+	if s.CalendarWriter != nil {
+		return execAcademicWriter(ctx, s.CalendarWriter, `SELECT academic_write.set_calendar_exception($1,$2,$3,$4::date,$5,$6,$7,$8)`,
+			actor, semester, version, x.Date, x.SchoolDay, x.Label, reset, reason)
 	}
 	tx, e := s.begin(ctx, actor, "kurikulum")
 	if e != nil {
@@ -284,6 +296,9 @@ func validatePlacementStart(ctx context.Context, tx *sql.Tx, placement, year int
 func (s *Store) SavePlacementStart(ctx context.Context, actor, id, version int64, date, reason string) error {
 	if e := foundationReason(reason); e != nil {
 		return e
+	}
+	if s.PlacementWriter != nil {
+		return s.savePlacementWithWriter(ctx, actor, id, version, date, reason)
 	}
 	tx, e := s.begin(ctx, actor, "admin")
 	if e != nil {

@@ -105,9 +105,18 @@ func (s *Store) PreviewPlacementStartBatch(ctx context.Context, actor int64, b P
 	if e = s.authorize(ctx, tx, actor, "admin"); e != nil {
 		return PlacementStartPreview{}, e
 	}
+	if s.PlacementWriter != nil {
+		if _, err := civilDate(b.Date); err != nil {
+			return PlacementStartPreview{}, err
+		}
+		return placementWriterPreview(ctx, tx, actor, b, true)
+	}
 	return placementStartPreview(ctx, tx, b)
 }
 func (s *Store) ApplyPlacementStartBatch(ctx context.Context, actor int64, b PlacementStartBatch, digest string) (int, error) {
+	if s.PlacementWriter != nil {
+		return s.applyPlacementWithWriter(ctx, actor, b, digest, true)
+	}
 	tx, e := s.begin(ctx, actor, "admin")
 	if e != nil {
 		return 0, e

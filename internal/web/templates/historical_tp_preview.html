@@ -1,0 +1,58 @@
+{{define "historical-tp-preview"}}
+{{$v := .HistoricalTPPreview}}{{$in := $v.Input}}
+<section class="panel max-w-5xl">
+ <h2 class="text-lg font-semibold">Pratinjau bukti TP historis</h2>
+ <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Pratinjau tidak menyimpan data. Konfirmasi khusus dapat menambahkan TP setelah pemeriksaan bukti; nilai dan Final lama tidak diubah.</p>
+ <form method="post" action="/guru/tujuan-pembelajaran/historis" class="mt-5 space-y-4">
+ {{.CSRF}}
+ <div><label for="historical-context">Semester · kelas · mata pelajaran</label><select id="historical-context" name="context" required><option value="">Pilih penugasan</option>{{range $v.Contexts}}<option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and (eq .SemesterID $in.SemesterID) (eq .ClassID $in.ClassID) (eq .SubjectID $in.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>{{end}}</select></div>
+ <div><label for="historical-definition">Uraian TP historis</label><textarea id="historical-definition" name="definition" rows="4" maxlength="4000" required>{{$in.Definition}}</textarea></div>
+ <div><label for="historical-reason">Alasan</label><textarea id="historical-reason" name="reason" rows="3" maxlength="500" required>{{$in.Reason}}</textarea></div>
+ <div class="grid gap-4 md:grid-cols-2"><div><label for="historical-date">Tanggal penilaian sebenarnya, jika diketahui</label><input id="historical-date" type="date" name="assessment_date" value="{{$in.AssessmentDate}}"></div><div><label for="historical-date-source">Asal informasi tanggal</label><input id="historical-date-source" name="date_source" maxlength="500" value="{{$in.DateSource}}"></div></div>
+ <fieldset class="rounded-lg border border-gray-200 p-4 space-y-3"><legend class="font-semibold">Referensi pembelajaran</legend>
+ <p class="text-sm text-gray-600">Untuk sumber aplikasi, isi ID jurnal; tanggal dan guru yang diisi akan dibandingkan dengan metadata jurnal. Identitas dokumen dan lokasi arsip hanya digunakan untuk arsip manual.</p>
+ <label for="learning-kind">Jenis sumber</label><select id="learning-kind" name="learning_kind"><option value="manual" {{if eq $in.Learning.Kind "manual"}}selected{{end}}>Arsip manual</option><option value="app" {{if eq $in.Learning.Kind "app"}}selected{{end}}>Jurnal aplikasi</option></select>
+ <label for="learning-id">ID jurnal aplikasi</label><input id="learning-id" name="learning_id" maxlength="500" value="{{$in.Learning.SourceID}}">
+ <label for="learning-date">Tanggal pembelajaran</label><input id="learning-date" type="date" name="learning_date" value="{{$in.Learning.Date}}">
+ <label for="learning-document">Identitas dokumen</label><input id="learning-document" name="learning_document" maxlength="500" value="{{$in.Learning.Document}}">
+ <label for="learning-archive">Lokasi arsip</label><input id="learning-archive" name="learning_archive" maxlength="500" value="{{$in.Learning.Archive}}">
+ <label for="learning-teacher">Guru penanggung jawab</label><input id="learning-teacher" name="learning_teacher" maxlength="500" value="{{$in.Learning.Teacher}}"></fieldset>
+ <fieldset class="rounded-lg border border-gray-200 p-4 space-y-3"><legend class="font-semibold">Referensi Sumatif</legend>
+ <p class="text-sm text-gray-600">Untuk sumber aplikasi, isi ID kegiatan; tanggal penilaian dan guru yang diisi akan dibandingkan dengan metadata kegiatan. Identitas dokumen, lokasi arsip, dan sumber hasil hanya digunakan untuk arsip manual.</p>
+ <label for="assessment-kind">Jenis sumber</label><select id="assessment-kind" name="assessment_kind"><option value="manual" {{if eq $in.Assessment.Kind "manual"}}selected{{end}}>Arsip manual</option><option value="app" {{if eq $in.Assessment.Kind "app"}}selected{{end}}>Kegiatan aplikasi</option></select>
+ <label for="assessment-id">ID kegiatan aplikasi</label><input id="assessment-id" name="assessment_id" maxlength="500" value="{{$in.Assessment.SourceID}}">
+ <label for="assessment-document">Identitas kegiatan atau dokumen</label><input id="assessment-document" name="assessment_document" maxlength="500" value="{{$in.Assessment.Document}}">
+ <label for="assessment-archive">Lokasi arsip</label><input id="assessment-archive" name="assessment_archive" maxlength="500" value="{{$in.Assessment.Archive}}">
+ <label for="assessment-teacher">Guru penanggung jawab</label><input id="assessment-teacher" name="assessment_teacher" maxlength="500" value="{{$in.Assessment.Teacher}}">
+ <label for="result-source">Sumber hasil penilaian</label><input id="result-source" name="result_source" maxlength="500" value="{{$in.Assessment.ResultSource}}"></fieldset>
+ <button class="button-primary" type="submit">Lihat pratinjau</button>
+ </form>
+ {{with $v.Preview}}
+ <div class="mt-6 space-y-3"><h3 class="font-semibold">Hasil pratinjau · {{.Context.SemesterName}} · {{.Context.ClassName}} · {{.Context.SubjectName}}</h3>
+ <p>Pembelajaran: {{.LearningStatus}}</p><p>Sumatif: {{.AssessmentStatus}}</p><p>Metadata yang cocok tidak membuktikan hubungan substansi dengan TP. Arsip manual membutuhkan verifikasi manual.</p>
+ <p>{{.DateNotice}}</p><p>Seluruh siswa teridentifikasi: <strong>{{.StudentCount}}</strong> · Kandidat anggota kelas: <strong>{{.MemberCount}}</strong> · Bukan anggota kelas pada tanggal penilaian: <strong>{{.NonMemberCount}}</strong> · Belum dapat diverifikasi: <strong>{{.UnknownCount}}</strong>. Klasifikasi ini bukan penetapan kewajiban penilaian.</p><p>Final terbaru dalam konteks yang berpotensi memerlukan peninjauan struktur: <strong>{{.FinalCount}}</strong>. Potensi ini mencakup semua Final konteks, termasuk siswa yang bukan kandidat pada tanggal tersebut.</p>
+ <p>Bobot saat ini: {{if .Weights.Configured}}NH {{.Weights.NH}}% · ASTS {{.Weights.ASTS}}% · ASAS {{.Weights.ASAS}}%{{else}}Belum diatur{{end}}. Dampak numerik setelah penambahan TP: <strong>Belum dapat dihitung</strong>. Jika NH 0%, ketidaklengkapan NH tidak menghalangi Final normal.</p>
+ <p class="rounded-lg border border-amber-200 p-4">TP historis yang berlaku dan belum mempunyai nilai sah dapat membuat NH berbobot positif belum lengkap. Final lama tetap berlaku dan dapat memerlukan tinjauan struktur. Tidak ada nilai yang diimpor.</p>
+ <form method="post" action="/guru/tujuan-pembelajaran/historis" class="space-y-3">{{$.CSRF}}
+ <input type="hidden" name="action" value="confirm"><input type="hidden" name="context" value="{{$v.Context}}"><input type="hidden" name="definition" value="{{$in.Definition}}"><input type="hidden" name="reason" value="{{$in.Reason}}"><input type="hidden" name="assessment_date" value="{{$in.AssessmentDate}}"><input type="hidden" name="date_source" value="{{$in.DateSource}}">
+ <input type="hidden" name="learning_kind" value="{{$in.Learning.Kind}}"><input type="hidden" name="learning_id" value="{{$in.Learning.SourceID}}"><input type="hidden" name="learning_document" value="{{$in.Learning.Document}}"><input type="hidden" name="learning_archive" value="{{$in.Learning.Archive}}"><input type="hidden" name="learning_teacher" value="{{$in.Learning.Teacher}}"><input type="hidden" name="learning_date" value="{{$in.Learning.Date}}">
+ <input type="hidden" name="assessment_kind" value="{{$in.Assessment.Kind}}"><input type="hidden" name="assessment_id" value="{{$in.Assessment.SourceID}}"><input type="hidden" name="assessment_document" value="{{$in.Assessment.Document}}"><input type="hidden" name="assessment_archive" value="{{$in.Assessment.Archive}}"><input type="hidden" name="assessment_teacher" value="{{$in.Assessment.Teacher}}"><input type="hidden" name="result_source" value="{{$in.Assessment.ResultSource}}"><input type="hidden" name="snapshot_token" value="{{.SnapshotToken}}"><input type="hidden" name="submission_key" value="{{$v.Submission}}">
+ <p>Isi bagian dokumen dan metode yang benar-benar diperiksa. Metadata saja tidak membuktikan substansi.</p>
+ <label for="learning-section">Bagian bukti pembelajaran yang diperiksa</label><input id="learning-section" name="learning_section" maxlength="500" required>
+ <label for="assessment-section">Bagian bukti Sumatif yang diperiksa</label><input id="assessment-section" name="assessment_section" maxlength="500" required>
+ <label for="verification-method">Metode pemeriksaan</label><input id="verification-method" name="verification_method" maxlength="500" required>
+ <label for="verified-result-source">Sumber hasil Sumatif yang diperiksa</label><input id="verified-result-source" name="verified_result_source" maxlength="500" required>
+ <label><input type="checkbox" name="verified" value="yes" required> Saya telah memeriksa sumber pembelajaran dan Sumatif yang disebutkan serta memahami dampaknya.</label><button type="submit" class="button-primary">Konfirmasi penambahan TP historis</button></form>
+ <div class="table-surface"><table class="app-table"><thead><tr><th>Siswa</th><th>Relevansi bersyarat</th><th>NH saat ini</th><th>Status saat ini</th><th>Rekomendasi saat ini</th><th>Final terbaru</th></tr></thead><tbody>{{range .Students}}<tr><td>{{.Name}}</td><td>{{.Relevance}}</td><td>{{.NH}}</td><td>{{.Status}}</td><td>{{.Recommendation}}</td><td>{{if .FinalVersion}}{{.FinalValue}} · versi {{.FinalVersion}}{{else}}—{{end}}</td></tr>{{else}}<tr><td colspan="6">Tidak ada siswa yang dapat ditampilkan.</td></tr>{{end}}</tbody></table></div>
+ {{if gt .PageCount 1}}<nav class="flex flex-wrap items-center gap-3" aria-label="Halaman siswa"><span>Halaman {{.Page}} dari {{.PageCount}}</span>
+ <form method="post" action="/guru/tujuan-pembelajaran/historis" class="flex gap-2">{{$.CSRF}}
+ <input type="hidden" name="context" value="{{$v.Context}}"><input type="hidden" name="definition" value="{{$in.Definition}}"><input type="hidden" name="reason" value="{{$in.Reason}}"><input type="hidden" name="assessment_date" value="{{$in.AssessmentDate}}"><input type="hidden" name="date_source" value="{{$in.DateSource}}">
+ <input type="hidden" name="learning_kind" value="{{$in.Learning.Kind}}"><input type="hidden" name="learning_id" value="{{$in.Learning.SourceID}}"><input type="hidden" name="learning_document" value="{{$in.Learning.Document}}"><input type="hidden" name="learning_archive" value="{{$in.Learning.Archive}}"><input type="hidden" name="learning_teacher" value="{{$in.Learning.Teacher}}"><input type="hidden" name="learning_date" value="{{$in.Learning.Date}}">
+ <input type="hidden" name="assessment_kind" value="{{$in.Assessment.Kind}}"><input type="hidden" name="assessment_id" value="{{$in.Assessment.SourceID}}"><input type="hidden" name="assessment_document" value="{{$in.Assessment.Document}}"><input type="hidden" name="assessment_archive" value="{{$in.Assessment.Archive}}"><input type="hidden" name="assessment_teacher" value="{{$in.Assessment.Teacher}}"><input type="hidden" name="result_source" value="{{$in.Assessment.ResultSource}}"><input type="hidden" name="snapshot_token" value="{{.SnapshotToken}}">
+ {{if gt .Page 1}}<button class="button-secondary" name="page" value="{{.PreviousPage}}">Sebelumnya</button>{{end}}{{if lt .Page .PageCount}}<button class="button-secondary" name="page" value="{{.NextPage}}">Berikutnya</button>{{end}}</form>
+ </nav>{{end}}</div>
+ {{end}}
+</section>
+{{end}}
+
+{{define "historical-tp-result"}}<section class="panel"><h2 class="text-lg font-semibold">TP historis tersimpan</h2><p>TP dan audit berhasil disimpan. Identitas TP: {{.HistoricalTPPreview.ResultID}}. Identitas audit: {{.HistoricalTPPreview.ResultAuditID}}.</p><p>{{.HistoricalTPPreview.ResultDefinition}}</p><a class="button-secondary" href="/guru/tujuan-pembelajaran/historis">Kembali ke pratinjau</a></section>{{end}}

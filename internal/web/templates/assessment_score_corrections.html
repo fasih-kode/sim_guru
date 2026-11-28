@@ -1,0 +1,45 @@
+{{define "assessment-owned-scores"}}
+<section class="panel">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
+    <div><h2 class="text-lg font-semibold text-gray-900">Nilai awal yang saya catat</h2><p class="mt-1 text-sm text-gray-500">Daftar ini hanya memuat nilai awal yang dicatat oleh akun Anda. Akses historis ini tidak memberi akses ke catatan guru lain.</p></div>
+  </div>
+  <form method="get" action="/guru/nilai-awal-saya" class="table-toolbar table-toolbar--search-only mb-4">
+    <div class="table-search"><label class="sr-only" for="owned-score-search">Cari nilai milik saya</label><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="owned-score-search" type="search" name="q" data-instant-search maxlength="120" value="{{.AssessmentOwnedScores.Page.Search}}" placeholder="Cari siswa, kegiatan, kelas, mapel, atau TP"></div>
+  </form>
+  {{if .AssessmentOwnedScores.Page.Items}}
+  <div class="table-surface"><table class="app-table"><thead><tr><th>Tanggal</th><th>Siswa</th><th>Kegiatan</th><th>Konteks</th><th>TP</th><th>Nilai awal asli</th><th>Nilai awal terkoreksi</th><th>Nilai efektif</th><th>Tindakan</th></tr></thead><tbody>
+    {{range .AssessmentOwnedScores.Page.Items}}<tr><td>{{.Date}}</td><td>{{.StudentName}}</td><td>{{.ActivityName}}<span class="mt-1 block text-xs text-gray-500">{{if eq .ActivityType "formatif"}}Formatif{{else}}Sumatif{{end}}</span></td><td>{{.SemesterName}}<span class="mt-1 block text-xs text-gray-500">{{.ClassName}} · {{.SubjectName}}</span></td><td class="max-w-sm whitespace-pre-wrap">{{.Objective}}</td><td>{{.InitialValue}}</td><td>{{.CorrectedValue}}</td><td class="font-semibold">{{.EffectiveValue}}</td><td><a class="button-secondary" href="/guru/nilai-awal/{{.ID}}/koreksi">Koreksi</a></td></tr>{{end}}
+  </tbody></table></div>
+  {{if or .AssessmentOwnedScores.PreviousURL .AssessmentOwnedScores.NextURL}}<nav class="mt-4 flex items-center justify-between" aria-label="Halaman nilai milik saya">{{if .AssessmentOwnedScores.PreviousURL}}<a class="button-secondary" href="{{.AssessmentOwnedScores.PreviousURL}}">Sebelumnya</a>{{else}}<span></span>{{end}}<span class="text-sm text-gray-500">Halaman {{.AssessmentOwnedScores.Page.Page}} dari {{.AssessmentOwnedScores.Page.TotalPages}}</span>{{if .AssessmentOwnedScores.NextURL}}<a class="button-secondary" href="{{.AssessmentOwnedScores.NextURL}}">Berikutnya</a>{{end}}</nav>{{end}}
+  {{else}}<p class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">{{if .AssessmentOwnedScores.Page.Search}}Tidak ada nilai milik Anda yang cocok dengan pencarian.{{else}}Belum ada nilai awal yang Anda catat.{{end}}</p>{{end}}
+</section>
+{{end}}
+
+{{define "assessment-score-correction"}}
+<section class="panel mb-5">
+  <a class="text-sm font-medium text-brand-600 hover:text-brand-700" href="/guru/nilai-awal-saya">← Kembali ke Nilai Milik Saya</a>
+  <div class="mt-4"><h2 class="text-xl font-semibold text-gray-900">{{.AssessmentCorrection.Detail.Score.ActivityName}}</h2><p class="mt-1 text-sm text-gray-600">{{if eq .AssessmentCorrection.Detail.Score.ActivityType "formatif"}}Formatif{{else}}Sumatif{{end}} · {{.AssessmentCorrection.Detail.Score.Date}}</p><p class="mt-1 text-sm text-gray-500">{{.AssessmentCorrection.Detail.Score.SemesterName}} · {{.AssessmentCorrection.Detail.Score.ClassName}} · {{.AssessmentCorrection.Detail.Score.SubjectName}}</p></div>
+</section>
+<section class="panel">
+  {{if .Error}}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{{.Error}}</div>{{end}}
+  {{if .Message}}<div class="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" role="status">{{.Message}}</div>{{end}}
+  <dl class="grid gap-4 sm:grid-cols-2">
+    <div><dt class="text-sm text-gray-500">Siswa</dt><dd class="mt-1 font-medium">{{.AssessmentCorrection.Detail.Score.StudentName}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Tujuan Pembelajaran</dt><dd class="mt-1 font-medium">{{.AssessmentCorrection.Detail.Score.Objective}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Nilai awal asli (tetap)</dt><dd class="mt-1 font-semibold">{{.AssessmentCorrection.Detail.Score.InitialValue}}</dd></div>
+    <div><dt class="text-sm text-gray-500">Nilai awal terkoreksi</dt><dd class="mt-1 font-semibold">{{.AssessmentCorrection.Detail.Score.CorrectedValue}}</dd></div>
+    <div><dt class="text-sm text-gray-500">{{if eq .AssessmentCorrection.Detail.Score.ActivityType "sumatif"}}Nilai efektif Sumatif{{else}}Nilai berlaku Formatif{{end}}</dt><dd class="mt-1 font-semibold">{{.AssessmentCorrection.Detail.Score.EffectiveValue}}</dd></div>
+  </dl>
+  <p class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">Koreksi digunakan untuk memperbaiki kesalahan pencatatan nilai awal. Jika siswa mengikuti penilaian ulang, gunakan menu Remedial.</p>
+  <form method="post" class="mt-6 max-w-xl space-y-4">
+    {{.CSRF}}<input type="hidden" name="expected_version" value="{{.AssessmentCorrection.ExpectedVersion}}">
+    <div><label for="correction-value">Nilai baru</label><input id="correction-value" name="value" type="text" inputmode="decimal" required maxlength="6" value="{{.AssessmentCorrection.Value}}" placeholder="0–100, maksimal dua desimal"><p class="mt-1 text-xs text-gray-500">Gunakan angka 0–100, misalnya 86,00.</p></div>
+    <div><label for="correction-reason">Alasan koreksi</label><textarea id="correction-reason" name="reason" rows="3" maxlength="500" required>{{.AssessmentCorrection.Reason}}</textarea></div>
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan Koreksi</button>
+  </form>
+</section>
+<section class="panel mt-5">
+  <h3 class="text-lg font-semibold text-gray-900">Riwayat Perubahan</h3>
+  {{if .AssessmentCorrection.Detail.History}}<ol class="mt-4 space-y-3">{{range .AssessmentCorrection.Detail.History}}<li class="rounded-lg border border-gray-200 p-4"><div class="flex flex-wrap justify-between gap-2"><strong>Koreksi {{.Version}} · {{.Before}} → {{.After}}</strong><span class="text-sm text-gray-500">{{.At}} WIB · {{.Actor}}</span></div><p class="mt-2 text-sm text-gray-700">{{.Reason}}</p></li>{{end}}</ol>{{else}}<p class="mt-3 text-sm text-gray-600">Belum ada koreksi nilai awal. Nilai awal terkoreksi sama dengan nilai awal asli. {{if eq .AssessmentCorrection.Detail.Score.ActivityType "sumatif"}}Nilai efektif Sumatif dapat berbeda apabila terdapat remedial.{{else}}Nilai berlaku Formatif sama dengan nilai awal terkoreksi.{{end}}</p>{{end}}
+</section>
+{{end}}

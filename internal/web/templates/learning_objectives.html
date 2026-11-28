@@ -1,0 +1,78 @@
+{{define "learning-objectives"}}
+<p class="mb-4 flex flex-wrap gap-2"><a class="button-secondary" href="/guru/kriteria-tp">Pengaturan kriteria ketercapaian TP</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/historis">Pratinjau TP historis</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/relasi-historis">Koreksi relasi Sumatif historis</a></p>
+{{template "assessment-context" .}}
+
+{{if .LearningObjectives.SelectedSet}}
+<section class="panel max-w-5xl">
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-gray-900">{{.LearningObjectives.Selected.ClassName}} · {{.LearningObjectives.Selected.SubjectName}}</h2>
+    <p class="mt-1 text-sm text-gray-500">{{.LearningObjectives.Selected.SemesterName}}</p>
+  </div>
+  <form method="post" action="/guru/tujuan-pembelajaran" class="mb-8 space-y-4">
+    {{.CSRF}}
+    <input type="hidden" name="semester_id" value="{{.LearningObjectives.Selected.SemesterID}}">
+    <input type="hidden" name="class_id" value="{{.LearningObjectives.Selected.ClassID}}">
+    <input type="hidden" name="subject_id" value="{{.LearningObjectives.Selected.SubjectID}}">
+    <div>
+      <label for="learning-objective-definition">Uraian Tujuan Pembelajaran</label>
+      <textarea id="learning-objective-definition" name="definition" rows="4" required>{{.LearningObjectives.Definition}}</textarea>
+    </div>
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan TP</button>
+  </form>
+
+  <div>
+    <h3 class="mb-3 text-base font-semibold text-gray-900">TP yang sudah dibuat</h3>
+    <div class="table-surface">
+      <table class="app-table">
+        <thead><tr><th>No.</th><th>Tujuan Pembelajaran</th><th>Dibuat pada (WIB)</th><th>Aksi</th></tr></thead>
+        <tbody>
+          {{range $i,$objective := .LearningObjectives.Objectives}}
+          <tr><td>{{rowNumber 1 $i}}</td><td class="whitespace-pre-wrap">{{$objective.Definition}}</td><td>{{$objective.CreatedAt}}</td><td><div class="flex flex-wrap gap-2"><a class="button-secondary" href="/guru/tujuan-pembelajaran/{{$objective.ID}}/koreksi">Koreksi uraian</a><a class="button-secondary" href="/guru/tujuan-pembelajaran/{{$objective.ID}}/riwayat">Riwayat</a></div></td></tr>
+          {{else}}
+          <tr><td colspan="4" class="p-5 text-center text-gray-500">Belum ada TP untuk konteks ini.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{if .LearningObjectives.Objectives}}
+  <section class="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+    <div class="mb-4">
+      <h3 class="text-base font-semibold text-gray-900">Salin definisi TP</h3>
+      <p class="mt-1 text-sm leading-6 text-gray-500">Hanya uraian TP yang disalin. TP tujuan menjadi data baru dan tetap independen dari TP sumber.</p>
+    </div>
+    {{if .LearningObjectives.CopyTargets}}
+    <form method="post" action="/guru/tujuan-pembelajaran/salin" class="space-y-4">
+      {{.CSRF}}
+      <input type="hidden" name="source_context" value="{{.LearningObjectives.Selected.SemesterID}}:{{.LearningObjectives.Selected.ClassID}}:{{.LearningObjectives.Selected.SubjectID}}">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label for="learning-objective-copy-source">TP sumber</label>
+          <select id="learning-objective-copy-source" name="source_id" required>
+            <option value="">Pilih TP sumber</option>
+            {{range .LearningObjectives.Objectives}}
+            <option value="{{.ID}}">{{.Definition}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div>
+          <label for="learning-objective-copy-target">Konteks kelas tujuan</label>
+          <select id="learning-objective-copy-target" name="target_context" required>
+            <option value="">Pilih penugasan tujuan</option>
+            {{range .LearningObjectives.CopyTargets}}
+            <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}">{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+      <button class="button-secondary" type="submit">Salin TP</button>
+    </form>
+    {{else}}
+    <p class="text-sm text-gray-600">Belum ada kelas lain dengan penugasan resmi yang berlaku untuk akun Anda.</p>
+    {{end}}
+  </section>
+  {{end}}
+</section>
+{{end}}
+{{end}}

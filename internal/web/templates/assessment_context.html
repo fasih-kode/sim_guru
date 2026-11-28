@@ -1,0 +1,18 @@
+{{define "assessment-context"}}{{$c := .AssessmentContext}}
+<section class="panel mb-5 max-w-5xl assessment-context">
+  <h2 class="text-lg font-semibold text-gray-900">Konteks penugasan</h2>
+  {{if $c.SelectedSet}}<p class="assessment-context-summary"><span>{{$c.Selected.SemesterName}}</span><span>{{$c.Selected.ClassName}}</span><span>{{$c.Selected.SubjectName}}</span></p>{{end}}
+  {{if $c.Contexts}}
+  <form method="get" action="{{$c.Action}}" class="assessment-context-form" {{if $.GradebookNavigation}}data-gradebook-context{{end}}>
+    <div class="assessment-context-select"><label for="assessment-context">Semester · Kelas · Mata pelajaran</label>
+      <select id="assessment-context" name="context" required><option value="">Pilih konteks penugasan</option>
+        {{range $c.Contexts}}<option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $c.SelectedSet (eq .SemesterID $c.Selected.SemesterID) (eq .ClassID $c.Selected.ClassID) (eq .SubjectID $c.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>{{end}}
+      </select>
+    </div>
+    {{if $c.Exam}}<input type="hidden" name="tab" value="{{$c.ExamTab}}"><div><label for="roster-date">Tanggal roster</label><input id="roster-date" type="date" name="date" value="{{$c.Date}}" required></div>{{else if $.GradebookNavigation}}{{with $.GradebookNavigation.Date}}<input type="hidden" name="date" value="{{.}}">{{end}}{{end}}
+    <button class="button-secondary" type="submit">{{if $c.SelectedSet}}Ubah Konteks{{else}}Lihat konteks{{end}}</button>
+  </form>
+  {{else}}<p class="mt-3 text-sm text-gray-500">Belum ada penugasan resmi yang berlaku.</p>{{end}}
+  {{if $c.Exam}}<p class="mt-3"><a class="text-sm font-medium text-brand-600" href="/guru/nilai-ujian-saya">Lihat nilai ASTS/ASAS milik saya dan koreksi →</a></p><p class="mt-2 text-sm text-gray-600">Tanggal roster menentukan siswa yang berada di kelas pada tanggal tersebut.</p>{{end}}
+</section>
+{{end}}

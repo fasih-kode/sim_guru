@@ -1,6 +1,23 @@
 {{define "table-action-icon"}}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>{{end}}
 {{define "settings-semester"}}<form method="get"><label for="settings-semester">Semester</label><select id="settings-semester" name="semester_id" data-instant-filter>{{range .Academic.Semesters}}<option value="{{.ID}}" {{if eq .ID $.Academic.SelectedSemesterID}}selected{{end}}>{{.YearName}} · Semester {{.Number}}{{if .Active}} · aktif{{end}}</option>{{end}}</select></form>{{end}}
 
+{{define "assessment-weights"}}
+<section class="panel max-w-4xl">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">{{template "settings-semester" .}}</div>
+<p class="mb-5 text-sm leading-6 text-gray-500">Atur satu bobot yang berlaku untuk seluruh sekolah pada semester terpilih. Total NH, ASTS, dan ASAS harus tepat 100%. Komponen boleh berbobot 0%. Belum ada bobot bawaan; nilai hanya tersimpan setelah Kurikulum mengaturnya.</p>
+{{if .Academic.AssessmentWeight.Configured}}<div class="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600"><p>Konfigurasi saat ini: <strong>NH {{.Academic.AssessmentWeight.NH}}% · ASTS {{.Academic.AssessmentWeight.ASTS}}% · ASAS {{.Academic.AssessmentWeight.ASAS}}%</strong></p><p class="mt-1">Terakhir disimpan oleh {{.Academic.AssessmentWeight.ActorName}} · {{.Academic.AssessmentWeight.UpdatedAt}}</p></div>{{else}}<div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Bobot belum diatur untuk semester ini. Belum ada pembagian yang ditetapkan.</div>{{end}}
+<form method="post" action="/akademik/bobot-penilaian?semester_id={{.Academic.SelectedSemesterID}}" class="space-y-5">
+{{.CSRF}}<input type="hidden" name="version" value="{{.Academic.AssessmentWeight.Version}}">
+<div class="grid gap-4 sm:grid-cols-3">
+<div><label for="assessment-weight-nh">Harian / TP (NH), %</label><input id="assessment-weight-nh" name="nh" type="number" min="0" max="100" step="1" value="{{if .Academic.AssessmentWeightFormSubmitted}}{{.Academic.AssessmentWeightInput.NH}}{{else if .Academic.AssessmentWeight.Configured}}{{.Academic.AssessmentWeight.NH}}{{end}}" required></div>
+<div><label for="assessment-weight-asts">ASTS, %</label><input id="assessment-weight-asts" name="asts" type="number" min="0" max="100" step="1" value="{{if .Academic.AssessmentWeightFormSubmitted}}{{.Academic.AssessmentWeightInput.ASTS}}{{else if .Academic.AssessmentWeight.Configured}}{{.Academic.AssessmentWeight.ASTS}}{{end}}" required></div>
+<div><label for="assessment-weight-asas">ASAS, %</label><input id="assessment-weight-asas" name="asas" type="number" min="0" max="100" step="1" value="{{if .Academic.AssessmentWeightFormSubmitted}}{{.Academic.AssessmentWeightInput.ASAS}}{{else if .Academic.AssessmentWeight.Configured}}{{.Academic.AssessmentWeight.ASAS}}{{end}}" required></div>
+</div>
+<p class="text-xs text-gray-500">Contoh pengujian: NH 60%, ASTS 20%, ASAS 20%. Ini hanya contoh, bukan nilai bawaan.</p>
+<div class="button-group button-group--primary" role="group" aria-label="Simpan bobot penilaian"><button class="button-primary" type="submit">{{template "icon-save" .}}Simpan Bobot</button></div>
+</form></section>
+{{end}}
+
 {{define "curriculum-structure"}}
 <div class="mb-5 flex flex-wrap items-end justify-between gap-4">{{template "settings-semester" .}}<div class="button-group button-group--primary" role="group" aria-label="Pengaturan struktur"><button type="button" class="button-primary" data-modal-open="curriculum-rule-modal">{{template "icon-plus" .}}Tambah aturan JP</button><button type="button" class="button-secondary" data-modal-open="copy-curriculum-modal">{{template "icon-import" .}}Salin semester</button><a class="button-secondary" href="/akademik/jadwal?semester_id={{.Academic.SelectedSemesterID}}">{{template "icon-view" .}}Jadwal</a></div></div>
 <p class="mb-5 text-sm text-gray-500">Atur bawaan tingkat, lalu pengecualian rombel jika diperlukan. Contoh Matematika 7A 2 JP, 7B 5 JP. Angka dan pembagian pertemuan dapat diubah setiap semester; versi jadwal terbit tetap tersimpan.</p>

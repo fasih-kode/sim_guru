@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +23,26 @@ import (
 )
 
 func Database(t *testing.T, path string) *sql.DB {
+	return databaseForTarget(t, path, "", 0)
+}
+
+// DatabaseForTarget menambahkan verifikasi nama dan OID sebelum pemeriksaan
+// migration atau akses fixture khusus.
+func DatabaseForTarget(t *testing.T, path, expectedName string, expectedOID int64) *sql.DB {
+	if expectedName == "" || expectedOID <= 0 {
+		t.Fatal("target database test tidak valid")
+	}
+	return databaseForTarget(t, path, expectedName, expectedOID)
+}
+
+func validateDatabaseTarget(actual string, actualOID int64, expectedName string, expectedOID int64) error {
+	if actual != expectedName || actualOID != expectedOID {
+		return fmt.Errorf("database test target tidak cocok: nama=%q OID=%d; butuh nama=%q OID=%d", actual, actualOID, expectedName, expectedOID)
+	}
+	return nil
+}
+
+func databaseForTarget(t *testing.T, path, expectedName string, expectedOID int64) *sql.DB {
 	t.Helper()
 	if err := godotenv.Load(path); err != nil && !os.IsNotExist(err) {
 		t.Fatal("cannot load test configuration")
@@ -36,16 +58,75 @@ func Database(t *testing.T, path string) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	var actual string
+	var actualOID int64
 	var privileged bool
-	if err = db.QueryRow(`SELECT current_database(),rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user`).Scan(&actual, &privileged); err != nil || privileged || !strings.HasSuffix(actual, "_test") {
+	if err = db.QueryRow(`SELECT current_database(),(SELECT oid FROM pg_database WHERE datname=current_database()),rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user`).Scan(&actual, &actualOID, &privileged); err != nil || privileged || !strings.HasSuffix(actual, "_test") {
 		t.Fatal("unsafe test database")
 	}
-	provider, err := migrations.Provider(db)
+	if expectedName != "" {
+		if err = validateDatabaseTarget(actual, actualOID, expectedName, expectedOID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	metadataDB := db
+	if os.Getenv("TEST_FIXTURE_DATABASE_URL") != "" {
+		metadataDB = FixtureDatabase(t)
+	}
+	provider, err := migrations.Provider(metadataDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = provider.Up(context.Background()); err != nil {
+	current, target, err := provider.GetVersions(context.Background())
+	if err != nil {
 		t.Fatal(err)
+	}
+	if current != target {
+		t.Fatal("test database migrations must be applied separately before tests")
+	}
+	return db
+}
+
+// FixtureDatabase hanya untuk seed/metadata pada database test terisolasi.
+// Koneksi ini tidak boleh diberikan kepada service yang sedang diuji.
+func FixtureDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	fixtureDSN := os.Getenv("TEST_FIXTURE_DATABASE_URL")
+	runtimeDSN := os.Getenv("TEST_DATABASE_URL")
+	role := os.Getenv("TEST_FIXTURE_ROLE")
+	expectedOID, err := strconv.ParseInt(os.Getenv("TEST_FIXTURE_DATABASE_OID"), 10, 64)
+	fixtureURL, e1 := url.Parse(fixtureDSN)
+	runtimeURL, e2 := url.Parse(runtimeDSN)
+	if err != nil || expectedOID <= 0 || role == "" || fixtureDSN == "" || e1 != nil || e2 != nil || fixtureURL.Path != runtimeURL.Path || !strings.HasSuffix(fixtureURL.Path, "_test") || fixtureDSN == runtimeDSN {
+		t.Fatal("konfigurasi fixture terisolasi tidak valid")
+	}
+	db, err := database.Open(context.Background(), fixtureDSN)
+	if err != nil {
+		t.Fatal("koneksi fixture tidak tersedia")
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if _, err = db.Exec(`SELECT set_config('role',$1,false)`, role); err != nil {
+		t.Fatal("role fixture tidak tersedia")
+	}
+	var name, fixturePort string
+	var oid int64
+	var actualRole string
+	var owner string
+	var rolePrivileged bool
+	var fixtureStart time.Time
+	if err = db.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database()),current_setting('port'),pg_postmaster_start_time(),(SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()),(SELECT rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user)`).Scan(&name, &actualRole, &oid, &fixturePort, &fixtureStart, &owner, &rolePrivileged); err != nil || name != strings.TrimPrefix(fixtureURL.Path, "/") || actualRole != role || actualRole != owner || rolePrivileged || oid != expectedOID {
+		t.Fatal("identitas fixture tidak aman")
+	}
+	runtimeDB, err := database.Open(context.Background(), runtimeDSN)
+	if err != nil {
+		t.Fatal("koneksi runtime tidak tersedia")
+	}
+	defer runtimeDB.Close()
+	var runtimeName, runtimeRole, runtimePort string
+	var runtimeOID int64
+	var runtimeStart time.Time
+	if err = runtimeDB.QueryRow(`SELECT current_database(),current_user,(SELECT oid FROM pg_database WHERE datname=current_database()),current_setting('port'),pg_postmaster_start_time()`).Scan(&runtimeName, &runtimeRole, &runtimeOID, &runtimePort, &runtimeStart); err != nil || runtimeName != name || runtimeOID != oid || runtimeRole != "sim_guru_app" || runtimeRole == actualRole || runtimePort != fixturePort || !runtimeStart.Equal(fixtureStart) {
+		t.Fatal("identitas runtime dan fixture tidak aman")
 	}
 	return db
 }

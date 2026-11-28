@@ -195,7 +195,7 @@ func TestCurriculumSidebarUsesSharedTabsWithoutRoleDuplicates(t *testing.T) {
 	for _, tc := range []struct {
 		section string
 		want    int
-	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 2}, {"Pengaturan Jadwal", 6}, {"Siswa & Penempatan", 5}} {
+	}{{"Kalender Akademik", 4}, {"Struktur Kurikulum", 4}, {"Pengaturan Jadwal", 6}, {"Siswa & Penempatan", 5}} {
 		if got := len(sectionNavigationTabs(tc.section, "", curriculum)); got != tc.want {
 			t.Errorf("jumlah tab Kurikulum %q = %d, ingin %d", tc.section, got, tc.want)
 		}
@@ -233,10 +233,10 @@ func TestTeacherAttendanceAndSubjectTeacherUseSharedNavigationTabs(t *testing.T)
 		want  []string
 		avoid []string
 	}{
-		{"guru mapel saja", []string{"guru_mapel"}, []string{"Kehadiran Guru", "Guru Mapel"}, []string{"Kehadiran Saya", "Rekap Kehadiran Saya", "Jadwal Saya", "Absensi Pelajaran", "nav-submenu"}},
-		{"wali kelas saja", []string{"wali_kelas"}, []string{"Kehadiran Guru"}, []string{"Guru Mapel", "Kehadiran Saya", "Rekap Kehadiran Saya", "nav-submenu"}},
-		{"kurikulum dan guru mapel", []string{"kurikulum", "guru_mapel"}, []string{"Kalender Akademik", "Kehadiran Guru", "Guru Mapel"}, []string{"Koreksi Absensi Pelajaran", "nav-submenu"}},
-		{"admin dan guru mapel", []string{"admin", "guru_mapel"}, []string{"Master Data", "Kehadiran Guru", "Guru Mapel"}, []string{"nav-submenu"}},
+		{"guru mapel saja", []string{"guru_mapel"}, []string{"Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi"}, []string{"Kehadiran Saya", "Rekap Kehadiran Saya", "Jadwal Saya", "Absensi Pelajaran", "nav-submenu"}},
+		{"wali kelas saja", []string{"wali_kelas"}, []string{"Kehadiran Guru"}, []string{"Mengajar", "Penilaian", "Riwayat &amp; Koreksi", "Kehadiran Saya", "Rekap Kehadiran Saya", "nav-submenu"}},
+		{"kurikulum dan guru mapel", []string{"kurikulum", "guru_mapel"}, []string{"Kalender Akademik", "Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi"}, []string{"Koreksi Absensi Pelajaran", "nav-submenu"}},
+		{"admin dan guru mapel", []string{"admin", "guru_mapel"}, []string{"Master Data", "Kehadiran Guru", "Mengajar", "Penilaian", "Riwayat &amp; Koreksi"}, []string{"nav-submenu"}},
 	} {
 		t.Run("sidebar "+tc.name, func(t *testing.T) {
 			body := navigationPageForTest(t, &auth.User{Roles: tc.roles}, "/")
@@ -262,10 +262,10 @@ func TestTeacherAttendanceAndSubjectTeacherUseSharedNavigationTabs(t *testing.T)
 	}{
 		{"guru mapel kehadiran", "/kehadiran-saya", "Kehadiran Guru", "teacher-attendance", "teacher-attendance", []string{"guru_mapel"}},
 		{"wali kelas rekap", "/kehadiran-saya/rekap", "Kehadiran Guru", "teacher-recap", "teacher-attendance", []string{"wali_kelas"}},
-		{"guru mapel jadwal", "/jadwal-saya", "Guru Mapel", "my-schedule", "guru-mapel", []string{"guru_mapel"}},
-		{"guru mapel absensi detail", "/jadwal-saya/absensi/catatan/9", "Guru Mapel", "lesson-attendance", "guru-mapel", []string{"guru_mapel"}},
-		{"kurikulum guru mapel", "/jadwal-saya/absensi", "Guru Mapel", "lesson-attendance", "guru-mapel", []string{"kurikulum", "guru_mapel"}},
-		{"admin guru mapel", "/jadwal-saya/absensi", "Guru Mapel", "lesson-attendance", "guru-mapel", []string{"admin", "guru_mapel"}},
+		{"guru mapel jadwal", "/jadwal-saya", "Mengajar", "my-schedule", "guru-mapel", []string{"guru_mapel"}},
+		{"guru mapel absensi detail", "/jadwal-saya/absensi/catatan/9", "Mengajar", "lesson-attendance", "guru-mapel", []string{"guru_mapel"}},
+		{"kurikulum guru mapel", "/jadwal-saya/absensi", "Mengajar", "lesson-attendance", "guru-mapel", []string{"kurikulum", "guru_mapel"}},
+		{"admin guru mapel", "/jadwal-saya/absensi", "Mengajar", "lesson-attendance", "guru-mapel", []string{"admin", "guru_mapel"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -297,8 +297,12 @@ func TestTeacherAttendanceAndSubjectTeacherUseSharedNavigationTabs(t *testing.T)
 	}{
 		{"Kehadiran Guru", []string{"guru_mapel"}, 2},
 		{"Kehadiran Guru", []string{"wali_kelas"}, 2},
-		{"Guru Mapel", []string{"guru_mapel"}, 3},
-		{"Guru Mapel", []string{"kurikulum"}, 0},
+		{"Mengajar", []string{"guru_mapel"}, 3},
+		{"Penilaian", []string{"guru_mapel"}, 4},
+		{"Riwayat & Koreksi", []string{"guru_mapel"}, 2},
+		{"Mengajar", []string{"kurikulum"}, 0},
+		{"Penilaian", []string{"kurikulum"}, 0},
+		{"Riwayat & Koreksi", []string{"kurikulum"}, 0},
 	} {
 		user := &auth.User{Roles: tc.roles}
 		if got := len(sectionNavigationTabs(tc.section, "", user)); got != tc.want {

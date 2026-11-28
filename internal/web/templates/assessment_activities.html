@@ -1,0 +1,104 @@
+{{define "assessment-activities"}}
+<section class="panel mb-5 max-w-5xl">
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-gray-900">Pilih konteks penugasan</h2>
+    <p class="mt-1 text-sm leading-6 text-gray-500">Daftar hanya memuat kelas, mata pelajaran, dan semester yang sedang menjadi penugasan resmi Anda.</p>
+  </div>
+  {{if .AssessmentActivities.Contexts}}
+  <form method="get" action="/guru/kegiatan-penilaian" class="flex flex-wrap items-end gap-3">
+    <div class="min-w-0 flex-1">
+      <label for="assessment-context">Semester · Kelas · Mata pelajaran</label>
+      <select id="assessment-context" name="context" required>
+        <option value="">Pilih konteks penugasan</option>
+        {{range .AssessmentActivities.Contexts}}
+        <option value="{{.SemesterID}}:{{.ClassID}}:{{.SubjectID}}" {{if and $.AssessmentActivities.SelectedSet (eq .SemesterID $.AssessmentActivities.Selected.SemesterID) (eq .ClassID $.AssessmentActivities.Selected.ClassID) (eq .SubjectID $.AssessmentActivities.Selected.SubjectID)}}selected{{end}}>{{.SemesterName}} · {{.ClassName}} · {{.SubjectName}}</option>
+        {{end}}
+      </select>
+    </div>
+    <button class="button-secondary" type="submit">Lihat Kegiatan</button>
+  </form>
+  {{else}}
+  <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Belum ada penugasan resmi yang berlaku untuk akun Anda.</p>
+  {{end}}
+</section>
+
+{{if .AssessmentActivities.SelectedSet}}
+<p class="mb-5 flex flex-wrap gap-3"><a class="button-secondary" href="/guru/kegiatan-penilaian/historis">Koreksi Kegiatan Sumatif Historis</a><a class="button-secondary" href="/guru/kegiatan-penilaian/nilai-historis">Pencatatan Nilai Sumatif Historis</a></p>
+<section class="panel max-w-5xl">
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-gray-900">{{.AssessmentActivities.Selected.ClassName}} · {{.AssessmentActivities.Selected.SubjectName}}</h2>
+    <p class="mt-1 text-sm text-gray-500">{{.AssessmentActivities.Selected.SemesterName}}</p>
+  </div>
+  <form method="post" action="/guru/kegiatan-penilaian" class="mb-8 space-y-4">
+    {{.CSRF}}
+    <input type="hidden" name="semester_id" value="{{.AssessmentActivities.Selected.SemesterID}}">
+    <input type="hidden" name="class_id" value="{{.AssessmentActivities.Selected.ClassID}}">
+    <input type="hidden" name="subject_id" value="{{.AssessmentActivities.Selected.SubjectID}}">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div>
+        <label for="assessment-name">Nama / bentuk kegiatan</label>
+        <input id="assessment-name" name="name" type="text" maxlength="200" value="{{.AssessmentActivities.Name}}" required>
+      </div>
+      <div>
+        <label for="assessment-type">Jenis kegiatan</label>
+        <select id="assessment-type" name="activity_type" required>
+          <option value="">Pilih jenis</option>
+          <option value="formatif" {{if eq .AssessmentActivities.Type "formatif"}}selected{{end}}>Formatif</option>
+          <option value="sumatif" {{if eq .AssessmentActivities.Type "sumatif"}}selected{{end}}>Sumatif</option>
+        </select>
+      </div>
+      <div>
+        <label for="assessment-date">Tanggal pelaksanaan</label>
+        <input id="assessment-date" name="activity_date" type="date" value="{{.AssessmentActivities.Date}}" required>
+      </div>
+    </div>
+    <fieldset class="space-y-2">
+      <legend class="mb-2 text-sm font-medium text-gray-700">Tujuan Pembelajaran yang dinilai</legend>
+      {{if .AssessmentActivities.Objectives}}
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {{range .AssessmentActivities.Objectives}}
+        <label class="flex items-start gap-2 rounded-lg border border-gray-200 p-3 font-normal">
+          <input class="mt-1" type="checkbox" name="objective_ids" value="{{.ID}}" {{if index $.AssessmentActivities.SelectedObjectiveIDs .ID}}checked{{end}}>
+          <span class="whitespace-pre-wrap text-sm text-gray-800">{{.Definition}}</span>
+        </label>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Belum ada TP pada konteks ini. Buat TP terlebih dahulu sebelum mencatat kegiatan.</p>
+      {{end}}
+    </fieldset>
+    {{if .AssessmentActivities.Objectives}}
+    <button class="button-primary" type="submit">{{template "icon-save" .}}Simpan Kegiatan</button>
+    {{end}}
+  </form>
+
+  <div>
+    <h3 class="mb-3 text-base font-semibold text-gray-900">Kegiatan yang sudah dicatat</h3>
+    <div class="hidden table-surface md:block">
+      <table class="app-table">
+        <thead><tr><th>Nama kegiatan</th><th>Jenis</th><th>Tanggal</th><th>TP terkait</th><th>Aksi</th></tr></thead>
+        <tbody>
+          {{range .AssessmentActivities.Activities}}
+          <tr><td>{{.Name}}</td><td>{{if eq .Type "formatif"}}Formatif{{else}}Sumatif{{end}}</td><td>{{.Date}}</td><td><ul class="list-disc space-y-1 pl-4">{{range .Objectives}}<li>{{.Definition}}</li>{{end}}</ul></td><td><a class="button-secondary whitespace-nowrap" href="/guru/kegiatan-penilaian/{{.ID}}/nilai">Input Nilai</a></td></tr>
+          {{else}}
+          <tr><td colspan="5" class="p-5 text-center text-gray-500">Belum ada kegiatan pada konteks ini.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div class="space-y-3 md:hidden">
+      {{range .AssessmentActivities.Activities}}
+      <article class="rounded-xl border border-gray-200 p-4">
+        <h4 class="font-semibold text-gray-900">{{.Name}}</h4>
+        <p class="mt-1 text-sm text-gray-600">{{if eq .Type "formatif"}}Formatif{{else}}Sumatif{{end}} · {{.Date}}</p>
+        <div class="mt-3 text-sm text-gray-700"><span class="font-medium">TP terkait</span><ul class="mt-1 list-disc space-y-1 pl-5">{{range .Objectives}}<li>{{.Definition}}</li>{{end}}</ul></div>
+        <a class="button-secondary mt-4 inline-flex" href="/guru/kegiatan-penilaian/{{.ID}}/nilai">Input Nilai</a>
+      </article>
+      {{else}}
+      <p class="py-4 text-center text-sm text-gray-500">Belum ada kegiatan pada konteks ini.</p>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}
