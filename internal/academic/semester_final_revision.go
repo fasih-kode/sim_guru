@@ -208,9 +208,10 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 		if score != finalScore {
 			return ValidationError("Untuk mempertahankan Final, gunakan nilai Final yang tersimpan.")
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO app.semester_final_retentions(final_version_id,recorded_by,reason,evidence_snapshot,evidence_sha256,submission_key,request_sha256) VALUES($1,$2,$3,$4::jsonb,$5,$6::uuid,$7)`, finalID, actor, reason, string(snapshot), currentHash[:], key, requestHash[:])
-		if err != nil {
-			return dbError(err)
+		if _, err = tx.ExecContext(ctx, `SELECT academic_write.append_final_retention(
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::uuid,$13)`,
+			actor, semester, class, subject, student, finalID, version, score, reason, snapshot, currentHash[:], key, requestHash[:]); err != nil {
+			return academicWriterError(dbError(err))
 		}
 		return tx.Commit()
 	}
@@ -227,9 +228,10 @@ func (s *Store) ReviewSemesterFinal(ctx context.Context, actor, semester, class,
 	} else {
 		return ValidationError("Bukti Sumatif sah belum mencukupi untuk versi Final baru; nilai lama dapat dipertahankan dengan alasan.")
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app.semester_final_versions(school_year_id,semester_id,class_id,subject_id,student_id,teacher_id,recorded_by,version,final_type,recommendation_score,final_score,reason,snapshot,snapshot_sha256,submission_key,request_sha256) SELECT sm.school_year_id,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::uuid,$15 FROM app.semesters sm WHERE sm.id=$1`, semester, class, subject, student, teacher, actor, version+1, finalType, recommendation, score, reason, string(snapshot), currentHash[:], key, requestHash[:])
-	if err != nil {
-		return dbError(err)
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.append_final_version(
+		$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid,$14)`,
+		actor, semester, class, subject, student, version, finalType, recommendation, score, reason, snapshot, currentHash[:], key, requestHash[:]); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }

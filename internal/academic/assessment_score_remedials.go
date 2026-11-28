@@ -134,7 +134,7 @@ func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreI
 		FROM app.assessment_activity_initial_scores sc
 		JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id
 		WHERE sc.id=$1 AND sc.recorded_by=$2 AND a.teacher_id=$3 AND a.activity_type='sumatif'
-		FOR UPDATE OF sc,a`, scoreID, actor, teacherID).Scan(&semesterID, &classID, &subjectID, &activityDate, &todayWIB)
+		`, scoreID, actor, teacherID).Scan(&semesterID, &classID, &subjectID, &activityDate, &todayWIB)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}
@@ -154,28 +154,9 @@ func (s *Store) RecordAssessmentScoreRemedial(ctx context.Context, actor, scoreI
 	if date > todayWIB {
 		return ValidationError("Tanggal remedial tidak boleh setelah hari ini.")
 	}
-	var remedialID int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO app.assessment_activity_score_remedials
-		(initial_score_id,score,remedial_date,recorded_by,submission_key)
-		VALUES($1,$2::numeric,$3::date,$4,$5::uuid)
-		ON CONFLICT (recorded_by,submission_key) DO NOTHING
-		RETURNING id`, scoreID, formatScore(cents), date, actor, submissionKey).Scan(&remedialID)
-	if errors.Is(err, sql.ErrNoRows) {
-		var existingScoreID int64
-		var existingValue, existingDate string
-		if err = tx.QueryRowContext(ctx, `SELECT initial_score_id,score::text,remedial_date::text
-			FROM app.assessment_activity_score_remedials
-			WHERE recorded_by=$1 AND submission_key=$2::uuid`, actor, submissionKey).
-			Scan(&existingScoreID, &existingValue, &existingDate); err != nil {
-			return err
-		}
-		if existingScoreID != scoreID || existingValue != formatScore(cents) || existingDate != date {
-			return ErrConflict
-		}
-		return tx.Commit()
-	}
-	if err != nil {
-		return dbError(err)
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.record_legacy_score_remedial($1,$2,$3::uuid,$4,$5::date)`,
+		actor, scoreID, submissionKey, formatScore(cents), date); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }

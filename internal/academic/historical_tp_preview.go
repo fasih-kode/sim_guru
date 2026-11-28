@@ -81,6 +81,7 @@ type HistoricalTPPreview struct {
 	FinalCount, Page, PageCount, PreviousPage, NextPage     int
 	StudentCount, MemberCount, NonMemberCount, UnknownCount int
 	SnapshotToken                                           string
+	displayHash                                             [32]byte
 }
 
 // PreviewHistoricalTP membaca seluruh data yang digunakan dalam satu snapshot.
@@ -146,11 +147,11 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 		return out, ValidationError("Pratinjau ini hanya tersedia untuk konteks yang sudah memiliki Final.")
 	}
 	var learningRaw, assessmentRaw string
-	out.LearningStatus, learningRaw, err = historicalTPReferenceStatus(ctx, tx, actor, teacher, in, true)
+	out.LearningStatus, learningRaw, err = historicalTPReferenceStatus(ctx, tx, actor, in, true)
 	if err != nil {
 		return out, err
 	}
-	out.AssessmentStatus, assessmentRaw, err = historicalTPReferenceStatus(ctx, tx, actor, teacher, in, false)
+	out.AssessmentStatus, assessmentRaw, err = historicalTPReferenceStatus(ctx, tx, actor, in, false)
 	if err != nil {
 		return out, err
 	}
@@ -261,8 +262,16 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 	if err != nil {
 		return out, err
 	}
-	hash := sha256.Sum256(data)
-	out.SnapshotToken = hex.EncodeToString(hash[:])
+	out.displayHash = sha256.Sum256(data)
+	input, err := json.Marshal(in)
+	if err != nil {
+		return out, err
+	}
+	var proof []byte
+	if err = tx.QueryRowContext(ctx, `SELECT academic_write.historical_tp_proof($1,$2::jsonb,$3)`, actor, string(input), out.displayHash[:]).Scan(&proof); err != nil {
+		return out, academicWriterError(err)
+	}
+	out.SnapshotToken = hex.EncodeToString(proof)
 	if page > 1 && (expectedToken == "" || expectedToken != out.SnapshotToken) {
 		return HistoricalTPPreview{}, ErrConflict
 	}
@@ -288,7 +297,7 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 	return out, nil
 }
 
-func historicalTPReferenceStatus(ctx context.Context, tx *sql.Tx, actor, teacher int64, in HistoricalTPPreviewInput, learning bool) (string, string, error) {
+func historicalTPReferenceStatus(ctx context.Context, tx *sql.Tx, actor int64, in HistoricalTPPreviewInput, learning bool) (string, string, error) {
 	ref := in.Assessment
 	if learning {
 		ref = in.Learning
@@ -303,25 +312,19 @@ func historicalTPReferenceStatus(ctx context.Context, tx *sql.Tx, actor, teacher
 	if err != nil || id < 1 {
 		return "Referensi tidak memadai", "", nil
 	}
-	var raw, date, teacherName string
-	if learning {
-		err = tx.QueryRowContext(ctx, `SELECT to_jsonb(j)::text,j.meeting_date::text,j.teacher_snapshot FROM app.teaching_journals j WHERE j.id=$1 AND j.semester_id=$2 AND j.class_id=$3 AND j.subject_id=$4 AND j.teacher_id=$5 AND j.owner_user_id=$6`, id, in.SemesterID, in.ClassID, in.SubjectID, teacher, actor).Scan(&raw, &date, &teacherName)
-	} else {
-		err = tx.QueryRowContext(ctx, `SELECT to_jsonb(a)::text,a.activity_date::text,t.name FROM app.assessment_activities a JOIN app.teachers t ON t.id=a.teacher_id WHERE a.id=$1 AND a.semester_id=$2 AND a.class_id=$3 AND a.subject_id=$4 AND a.teacher_id=$5 AND a.activity_type='sumatif'`, id, in.SemesterID, in.ClassID, in.SubjectID, teacher).Scan(&raw, &date, &teacherName)
+	input, err := json.Marshal(in)
+	if err != nil {
+		return "", "", err
 	}
+	var raw, date, teacherName string
+	err = tx.QueryRowContext(ctx, `SELECT event_date,teacher_name,fingerprint
+		FROM academic_write.historical_tp_metadata($1,$2::jsonb,$3)`, actor, string(input), learning).Scan(&date, &teacherName, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", ErrForbidden
 	}
 	if err != nil {
-		return "", "", err
+		return "", "", academicWriterError(err)
 	}
-	// Nama guru merupakan metadata yang ditampilkan dan harus ikut mengikat
-	// fingerprint ketika nama guru pada sumber aplikasi berubah.
-	metadata, err := json.Marshal(struct{ Row, Date, Teacher string }{raw, date, teacherName})
-	if err != nil {
-		return "", "", err
-	}
-	raw = string(metadata)
 	claimedDate := in.AssessmentDate
 	if learning {
 		claimedDate = ref.Date

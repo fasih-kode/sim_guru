@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -169,9 +168,10 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 	if activityID < 1 {
 		return ValidationError("Kegiatan penilaian tidak valid.")
 	}
-	values := make([]parsedInitialScore, 0, len(inputs))
+	values := make([]string, 0, len(inputs))
+	students := make([]int64, 0, len(inputs))
+	objectives := make([]int64, 0, len(inputs))
 	seen := make(map[[2]int64]bool)
-	studentSet, objectiveSet := make(map[int64]bool), make(map[int64]bool)
 	for _, input := range inputs {
 		if input.StudentID < 1 || input.ObjectiveID < 1 {
 			return ValidationError("Siswa atau Tujuan Pembelajaran tidak valid.")
@@ -185,16 +185,15 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 		if err != nil {
 			return err
 		}
-		if !present {
-			continue
+		if present {
+			students = append(students, input.StudentID)
+			objectives = append(objectives, input.ObjectiveID)
+			values = append(values, formatScore(parsed))
 		}
-		values = append(values, parsedInitialScore{studentID: input.StudentID, objectiveID: input.ObjectiveID, cents: parsed})
-		studentSet[input.StudentID], objectiveSet[input.ObjectiveID] = true, true
 	}
 	if len(values) == 0 {
 		return ValidationError("Isi sedikitnya satu nilai sebelum menyimpan.")
 	}
-	students, objectives := sortedKeys(studentSet), sortedKeys(objectiveSet)
 	tx, err := s.begin(ctx, actor, "guru_mapel")
 	if err != nil {
 		return err
@@ -205,10 +204,9 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 		return err
 	}
 	var activity AssessmentActivity
-	var yearID int64
-	err = tx.QueryRowContext(ctx, `SELECT id,school_year_id,semester_id,class_id,subject_id,teacher_id,activity_date::text
-		FROM app.assessment_activities WHERE id=$1 FOR UPDATE`, activityID).Scan(
-		&activity.ID, &yearID, &activity.SemesterID, &activity.ClassID, &activity.SubjectID, &activity.TeacherID, &activity.Date)
+	err = tx.QueryRowContext(ctx, `SELECT semester_id,class_id,subject_id,teacher_id
+		FROM app.assessment_activities WHERE id=$1`, activityID).Scan(
+		&activity.SemesterID, &activity.ClassID, &activity.SubjectID, &activity.TeacherID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -225,108 +223,10 @@ func (s *Store) SaveAssessmentActivityInitialScores(ctx context.Context, actor, 
 	if teacherID != activity.TeacherID {
 		return ErrForbidden
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT learning_objective_id FROM app.assessment_activity_objectives
-		WHERE activity_id=$1 AND learning_objective_id=ANY($2::bigint[]) ORDER BY learning_objective_id FOR SHARE`, activityID, objectives)
-	if err != nil {
-		return err
-	}
-	matched := make(map[int64]bool, len(objectives))
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		matched[id] = true
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	if err = rows.Close(); err != nil {
-		return err
-	}
-	if len(matched) != len(objectives) {
-		return ErrForbidden
-	}
-	// Relasi historis memerlukan jalur pencatatan nilai tersendiri; nilai TP lain
-	// pada kegiatan yang sama tetap dapat dicatat melalui jalur rutin.
-	var historicalLink bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS (
-		SELECT 1 FROM app.historical_assessment_objective_links
-		WHERE activity_id=$1 AND learning_objective_id=ANY($2::bigint[])
-	) OR EXISTS (
-		SELECT 1 FROM app.historical_assessment_activity_objectives d
-		JOIN app.historical_assessment_activity_insertions h ON h.id=d.audit_id
-		WHERE h.activity_id=$1 AND d.learning_objective_id=ANY($2::bigint[])
-	)`, activityID, objectives).Scan(&historicalLink); err != nil {
-		return err
-	}
-	if historicalLink {
-		return ValidationError("Nilai untuk relasi TP pada kegiatan historis memerlukan proses pencatatan historis tersendiri.")
-	}
-	placements := make(map[int64]int64, len(students))
-	rows, err = tx.QueryContext(ctx, `SELECT p.student_id,p.id
-		FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=ANY($2::bigint[])
-		AND p.starts_on IS NOT NULL AND p.starts_on<=$4::date
-		AND app.student_placement_class_at(p.id,$4::date)=$3 ORDER BY p.student_id FOR SHARE`, yearID, students, activity.ClassID, activity.Date)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var studentID, placementID int64
-		if err = rows.Scan(&studentID, &placementID); err != nil {
-			rows.Close()
-			return err
-		}
-		if _, exists := placements[studentID]; exists {
-			rows.Close()
-			return ValidationError("Riwayat penempatan siswa tidak tunggal pada tanggal kegiatan.")
-		}
-		placements[studentID] = placementID
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	if err = rows.Close(); err != nil {
-		return err
-	}
-	if len(placements) != len(students) {
-		return ErrForbidden
-	}
-	for _, value := range values {
-		placementID := placements[value.studentID]
-		result, insertErr := tx.ExecContext(ctx, `INSERT INTO app.assessment_activity_initial_scores
-			(assessment_activity_id,learning_objective_id,school_year_id,semester_id,class_id,subject_id,student_id,placement_id,activity_date_snapshot,score,recorded_by)
-			SELECT a.id,ao.learning_objective_id,a.school_year_id,a.semester_id,a.class_id,a.subject_id,$3,$4,a.activity_date,$5::numeric,$6
-			FROM app.assessment_activities a JOIN app.assessment_activity_objectives ao ON ao.activity_id=a.id
-				AND ao.learning_objective_id=$2
-			JOIN app.student_placements p ON p.id=$4 AND p.student_id=$3 AND p.school_year_id=a.school_year_id
-			WHERE a.id=$1 AND app.student_placement_class_at(p.id,a.activity_date)=a.class_id
-			ON CONFLICT (assessment_activity_id,learning_objective_id,student_id) DO NOTHING`,
-			activityID, value.objectiveID, value.studentID, placementID, formatScore(value.cents), actor)
-		if insertErr != nil {
-			return dbError(insertErr)
-		}
-		inserted, affectedErr := result.RowsAffected()
-		if affectedErr != nil {
-			return affectedErr
-		}
-		if inserted == 1 {
-			continue
-		}
-		var existing int64
-		if err = tx.QueryRowContext(ctx, `SELECT (score*100)::bigint FROM app.assessment_activity_initial_scores
-			WHERE assessment_activity_id=$1 AND learning_objective_id=$2 AND student_id=$3 FOR SHARE`,
-			activityID, value.objectiveID, value.studentID).Scan(&existing); errors.Is(err, sql.ErrNoRows) {
-			return ErrConflict
-		} else if err != nil {
-			return err
-		}
-		if existing != value.cents {
-			return ErrConflict
-		}
+	// Lock konteks dan penulisan ada dalam satu operasi terbatas pada transaksi ini.
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.save_legacy_initial_scores($1,$2,$3,$4,$5)`,
+		actor, activityID, students, objectives, values); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }
@@ -387,12 +287,3 @@ func parseInitialScore(raw string) (int64, bool, error) {
 }
 
 func formatScore(cents int64) string { return fmt.Sprintf("%d.%02d", cents/100, cents%100) }
-
-func sortedKeys(values map[int64]bool) []int64 {
-	out := make([]int64, 0, len(values))
-	for key := range values {
-		out = append(out, key)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}

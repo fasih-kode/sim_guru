@@ -44,13 +44,8 @@ func (s *Store) FinalizeSemesterException(ctx context.Context, actor, semester, 
 	if !allowed {
 		return ErrForbidden
 	}
-	var assignment int64
-	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4 AND effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date AND (effective_until IS NULL OR effective_until>=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date) ORDER BY id DESC LIMIT 1 FOR SHARE`, semester, class, subject, teacher).Scan(&assignment)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return err
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.lock_final_assignment($1,$2,$3,$4)`, actor, semester, class, subject); err != nil {
+		return academicWriterError(err)
 	}
 	payload := struct {
 		Type  string
@@ -103,9 +98,10 @@ func (s *Store) FinalizeSemesterException(ctx context.Context, actor, semester, 
 	if exists {
 		return ErrConflict
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app.semester_final_versions(school_year_id,semester_id,class_id,subject_id,student_id,teacher_id,recorded_by,version,final_type,recommendation_score,final_score,reason,snapshot,snapshot_sha256,submission_key,request_sha256) SELECT sm.school_year_id,$1,$2,$3,$4,$5,$6,1,'exception',NULL,$7,$8,$9::jsonb,$10,$11::uuid,$12 FROM app.semesters sm WHERE sm.id=$1`, semester, class, subject, studentID, teacher, actor, score, reason, string(snapshot), snapshotHash[:], key, requestHash[:])
-	if err != nil {
-		return dbError(err)
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.append_final_version(
+		$1,$2,$3,$4,$5,0,'exception',NULL,$6,$7,$8,$9,$10::uuid,$11)`,
+		actor, semester, class, subject, studentID, score, reason, snapshot, snapshotHash[:], key, requestHash[:]); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }

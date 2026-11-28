@@ -214,37 +214,20 @@ func (s *Store) CorrectAssessmentInitialScore(ctx context.Context, actor, scoreI
 	if err != nil {
 		return err
 	}
-	var initialCents int64
-	err = tx.QueryRowContext(ctx, `SELECT (sc.score*100)::bigint
-		FROM app.assessment_activity_initial_scores sc
+	var owned bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM app.assessment_activity_initial_scores sc
 		JOIN app.assessment_activities a ON a.id=sc.assessment_activity_id
-		WHERE sc.id=$1 AND sc.recorded_by=$2 AND a.teacher_id=$3
-		FOR UPDATE OF sc`, scoreID, actor, teacherID).Scan(&initialCents)
-	if errors.Is(err, sql.ErrNoRows) {
+		WHERE sc.id=$1 AND sc.recorded_by=$2 AND a.teacher_id=$3)`, scoreID, actor, teacherID).Scan(&owned)
+	if err != nil {
+		return err
+	}
+	if !owned {
 		return ErrForbidden
 	}
-	if err != nil {
-		return err
-	}
-	var currentCents int64
-	var currentVersion int64
-	err = tx.QueryRowContext(ctx, `SELECT (c.after_score*100)::bigint,c.version
-		FROM app.assessment_activity_score_corrections c WHERE c.initial_score_id=$1
-		ORDER BY c.version DESC LIMIT 1`, scoreID).Scan(&currentCents, &currentVersion)
-	if errors.Is(err, sql.ErrNoRows) {
-		currentCents, currentVersion = initialCents, 0
-	} else if err != nil {
-		return err
-	}
-	if currentVersion != expectedVersion {
-		return ErrConflict
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app.assessment_activity_score_corrections
-		(initial_score_id,version,before_score,after_score,reason,corrected_by)
-		VALUES($1,$2,$3::numeric,$4::numeric,$5,$6)`, scoreID, currentVersion+1,
-		formatScore(currentCents), formatScore(parsed), reason, actor)
-	if err != nil {
-		return dbError(err)
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.correct_legacy_initial_score($1,$2,$3,$4,$5)`,
+		actor, scoreID, expectedVersion, formatScore(parsed), reason); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }

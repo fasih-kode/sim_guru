@@ -340,13 +340,8 @@ func (s *Store) FinalizeSemesterNormal(ctx context.Context, actor, semesterID, c
 	if !allowed {
 		return ErrForbidden
 	}
-	var assignmentID int64
-	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4 AND effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date AND (effective_until IS NULL OR effective_until>=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date) ORDER BY id DESC LIMIT 1 FOR SHARE`, semesterID, classID, subjectID, teacherID).Scan(&assignmentID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return err
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.lock_final_assignment($1,$2,$3,$4)`, actor, semesterID, classID, subjectID); err != nil {
+		return academicWriterError(err)
 	}
 	result, err := s.semesterRecommendationsTx(ctx, tx, actor, semesterID, classID, subjectID)
 	if err != nil {
@@ -389,13 +384,10 @@ func (s *Store) FinalizeSemesterNormal(ctx context.Context, actor, semesterID, c
 	if alreadyFinal {
 		return ErrConflict
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app.semester_final_versions(
-		school_year_id,semester_id,class_id,subject_id,student_id,teacher_id,recorded_by,version,
-		recommendation_score,final_score,reason,snapshot,snapshot_sha256,submission_key,request_sha256)
-		SELECT sm.school_year_id,$1,$2,$3,$4,$5,$6,1,$7,$8,$9,$10::jsonb,$11,$12::uuid,$13
-		FROM app.semesters sm WHERE sm.id=$1`, semesterID, classID, subjectID, studentID, teacherID, actor, recommended, score, reason, string(snapshot), snapshotHash[:], submissionKey, requestHash[:])
-	if err != nil {
-		return dbError(err)
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.append_final_version(
+		$1,$2,$3,$4,$5,0,'normal',$6,$7,$8,$9,$10,$11::uuid,$12)`,
+		actor, semesterID, classID, subjectID, studentID, recommended, score, reason, snapshot, snapshotHash[:], submissionKey, requestHash[:]); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }

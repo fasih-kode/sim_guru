@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -47,11 +46,7 @@ func (s *Store) semesterFinalBatchRead(ctx context.Context, tx *sql.Tx, actor, s
 	if err != nil {
 		return out, err
 	}
-	teacher, err := learningObjectiveTeacherID(ctx, tx, actor)
-	if err != nil {
-		return out, err
-	}
-	err = tx.QueryRowContext(ctx, `SELECT name FROM app.teachers WHERE id=$1 AND active`, teacher).Scan(&out.TeacherName)
+	err = tx.QueryRowContext(ctx, `SELECT teacher_name FROM academic_write.final_batch_actor($1,NULL)`, actor).Scan(&out.TeacherName)
 	if err != nil {
 		return out, err
 	}
@@ -153,34 +148,31 @@ func (s *Store) FinalizeSemesterBatch(ctx context.Context, actor, semester, clas
 	if !allowed {
 		return ErrForbidden
 	}
-	var assignment int64
-	err = tx.QueryRowContext(ctx, `SELECT id FROM app.teaching_assignments WHERE semester_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_id=$4 AND effective_from<=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date AND (effective_until IS NULL OR effective_until>=(clock_timestamp() AT TIME ZONE 'Asia/Jakarta')::date) ORDER BY id DESC LIMIT 1 FOR SHARE`, semester, class, subject, teacher).Scan(&assignment)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return err
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.lock_final_assignment($1,$2,$3,$4)`, actor, semester, class, subject); err != nil {
+		return academicWriterError(err)
 	}
 	var old []byte
-	err = tx.QueryRowContext(ctx, `SELECT request_sha256 FROM app.semester_final_batches WHERE recorded_by=$1 AND submission_key=$2::uuid`, actor, key).Scan(&old)
-	if err == nil {
+	err = tx.QueryRowContext(ctx, `SELECT request_sha256 FROM academic_write.final_batch_actor($1,$2::uuid)`, actor, key).Scan(&old)
+	if err != nil {
+		return academicWriterError(err)
+	}
+	if old != nil {
 		if !equalHash(old, requestHash[:]) {
 			return ErrConflict
 		}
 		return tx.Commit()
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
 	}
 	preview, err := s.semesterFinalBatchRead(ctx, tx, actor, semester, class, subject, items)
 	if err != nil {
 		return err
 	}
 	type prepared struct {
-		item     SemesterFinalBatchItem
-		snapshot []byte
-		hash     [32]byte
-		score    int
+		Student     int64  `json:"student"`
+		Score       int    `json:"score"`
+		Snapshot    []byte `json:"snapshot"`
+		Hash        []byte `json:"snapshot_hash"`
+		Submission  string `json:"submission"`
+		RequestHash []byte `json:"request_hash"`
 	}
 	ready := make([]prepared, 0, len(items))
 	for i, item := range preview.Items {
@@ -205,14 +197,6 @@ func (s *Store) FinalizeSemesterBatch(ctx context.Context, actor, semester, clas
 		if e != nil {
 			return fmt.Errorf("rekomendasi Final tidak valid: %w", e)
 		}
-		ready = append(ready, prepared{item, snapshot, hash, score})
-	}
-	var batch int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO app.semester_final_batches(semester_id,class_id,subject_id,teacher_id,recorded_by,submission_key,request_sha256) VALUES($1,$2,$3,$4,$5,$6::uuid,$7) RETURNING id`, semester, class, subject, teacher, actor, key, requestHash[:]).Scan(&batch)
-	if err != nil {
-		return dbError(err)
-	}
-	for _, entry := range ready {
 		var uuid [16]byte
 		if _, err = rand.Read(uuid[:]); err != nil {
 			return err
@@ -221,16 +205,17 @@ func (s *Store) FinalizeSemesterBatch(ctx context.Context, actor, semester, clas
 		uuid[8] = uuid[8]&0x3f | 0x80
 		h := hex.EncodeToString(uuid[:])
 		submission := h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
-		request, _ := json.Marshal(finalizationPayload{semester, class, subject, entry.item.StudentID, entry.score, "", entry.item.SnapshotToken})
+		request, _ := json.Marshal(finalizationPayload{semester, class, subject, item.StudentID, score, "", item.SnapshotToken})
 		individualHash := sha256.Sum256(request)
-		var id int64
-		err = tx.QueryRowContext(ctx, `INSERT INTO app.semester_final_versions(school_year_id,semester_id,class_id,subject_id,student_id,teacher_id,recorded_by,version,recommendation_score,final_score,reason,snapshot,snapshot_sha256,submission_key,request_sha256) SELECT sm.school_year_id,$1,$2,$3,$4,$5,$6,1,$7,$7,'',$8::jsonb,$9,$10::uuid,$11 FROM app.semesters sm WHERE sm.id=$1 RETURNING id`, semester, class, subject, entry.item.StudentID, teacher, actor, entry.score, string(entry.snapshot), entry.hash[:], submission, individualHash[:]).Scan(&id)
-		if err != nil {
-			return dbError(err)
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO app.semester_final_batch_items(batch_id,student_id,final_version_id) VALUES($1,$2,$3)`, batch, entry.item.StudentID, id); err != nil {
-			return dbError(err)
-		}
+		ready = append(ready, prepared{item.StudentID, score, snapshot, hash[:], submission, individualHash[:]})
+	}
+	batch, err := json.Marshal(ready)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `SELECT academic_write.append_final_batch($1,$2,$3,$4,$5::uuid,$6,$7::jsonb)`,
+		actor, semester, class, subject, key, requestHash[:], string(batch)); err != nil {
+		return academicWriterError(dbError(err))
 	}
 	return tx.Commit()
 }
