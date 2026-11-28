@@ -164,6 +164,27 @@ Delapan entry matriks dijalankan dengan filter nama eksplisit dan race detector,
 
 Delapan tes tetap **siap dalam cakupan tercatat**, kini termasuk jadwal terbit pada entri Beranda. **155 entri lainnya belum siap untuk eksekusi full suite.** Angka ini termasuk tes yang perlu perubahan, bukti ACL, target lain, opt-in atau clearance. Status itu tidak menandakan bahwa semuanya pernah gagal. Pilot tulis TP dan guard CP10-21 tetap **BLOCKED**. Pengujian migration, seluruh paket integration, E2E, dan penulisan bisnis TP **NOT RUN**. Ledger/Final identik untuk seluruh tes terpilih. Statistik cleanup dalam matriks kini 49 tes karena subtes jadwal memiliki cleanup terverifikasi.
 
+## Kompatibilitas audit dampak TP historis
+
+| Format | Isi audit dampak |
+|---|---|
+| Sebelum 00068 | `preview` dan `all_students` menyimpan rincian per siswa dan hasil rekomendasi yang ditampilkan. |
+| `authoritative-context-v1` (00068) | Konteks dan daftar versi Final baseline, tanpa daftar siswa yang dinilai atau klasifikasi masing-masing. |
+| `student-impact-v2` (00069) | Konteks serta satu entri per siswa yang dievaluasi sebelum pagination, berisi `student_id`, `relevance` dan, jika tersedia, `final_id` serta `final_version` terbaru. Klasifikasi stabil meliputi `candidate_member`, `not_member`, dan `unverified`. Identitas TP, tanggal efektif/asal tanggal, bukti pembelajaran/Sumatif, dan fingerprint tetap pada kolom audit yang ada. Proyeksi dampak tidak menyimpan nama, tanggal lahir, NISN, nomor telepon, atau nilai siswa. |
+
+Go membentuk daftar dari klasifikasi pratinjau yang sama sebelum pagination. Fingerprint HMAC yang sudah ada kini mengikat hash tampilan serta hash byte proyeksi dampak. Di bawah lock yang sama, PostgreSQL memverifikasi fingerprint, struktur, cakupan siswa yang lengkap tanpa duplikasi, dan kecocokan ID/versi Final terbaru per siswa sebelum satu transaksi menulis TP dan audit append-only. Migration 00069 mengganti signature fungsi konfirmasi karena 00068 menyisipkan audit di dalam fungsi database. Pemilik, `search_path`, pemanggil yang berhak, dan trigger append-only tetap sama. Berlakukan Go dan 00069 bersamaan. Pratinjau 00068 yang belum dikonfirmasi memerlukan pratinjau ulang. Replay permintaan yang sudah tercatat tetap memakai hash permintaan lama.
+
+| Uji terfokus PostgreSQL dengan race detector | Hasil |
+|---|---|
+| Sumber jurnal aplikasi | **PASS**. Jurnal final/terlaksana dalam konteks yang sah diterima. ID jurnal dan tanggal bukti tercatat. |
+| Sumber Sumatif aplikasi | **PASS**. Kegiatan Sumatif yang sah diterima. ID kegiatan dan tanggal penilaian tercatat. |
+| Audit per siswa | **PASS**. Masing-masing audit memuat 12 siswa dari dua halaman, tiga klasifikasi, ID Final terbaru versi 2, serta fingerprint yang sama dengan pratinjau. |
+| Replay | **PASS**. Kedua permintaan baru dan satu permintaan yang sudah diproses pada 00068 mengembalikan ID semula. |
+| Referensi lintas konteks | **PASS**. Jurnal dan Sumatif asing ditolak pada pratinjau dan konfirmasi. Tidak ada audit parsial. |
+| Preservasi | **PASS**. Seluruh tiga audit baseline (dua v1 dan satu fixture representatif pra-00068) tetap identik berdasarkan SHA-256 baris lengkap. Manifest 112 tabel identik pada batas migrasi. Sesudah tes, hanya TP, kode/counter TP, dan audit berubah sesuai dua konfirmasi. Final, snapshot/hash dan histori lain tetap identik. |
+
+Database sintetis OID 73160 pada cluster `7712449350873102267` mencapai ledger 69. Manifest 112 tabel bisnis database sumber clone cocok dengan rekaman sebelumnya. Sebagian checksum file internal katalog cluster eksperimen berubah saat pembacaan dan startup. File database proyek yang diperiksa identik. Empat writer tetap NOLOGIN, nol sesi tersisa, dan cluster berhenti. Full integration dan delapan skenario konkurensi **NOT RUN** pada tindak lanjut ini. **GO untuk review independen, HOLD untuk perubahan TEST** sampai supervisor menetapkan rollout.
+
 ## Batas kepercayaan penulisan Final 00068 — terverifikasi
 
 Keputusan supervisor menetapkan Go sebagai otoritas keputusan akademik. Operasi normal, pengecualian, massal, revisi dan retensi kini memanggil fungsi terbatas dalam transaksi Go yang sama setelah pemeriksaan sesi, kepemilikan, pratinjau, rekomendasi atau kelayakan, dan ReviewUncertain. PostgreSQL mengulang pemeriksaan aktor aktif, relasi guru dan konteks, penugasan aktif serta penempatan untuk versi pertama, pemilik historis aktif untuk versi lanjutan dan retensi, versi terbaru, nilai/alasan, dan penggunaan ulang submission. Trigger, FK dan constraint tetap aktif. Tidak ada mekanisme penandatanganan keputusan baru.

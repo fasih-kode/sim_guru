@@ -72,6 +72,13 @@ type HistoricalTPPreviewStudent struct {
 	FinalVersion                                            int64
 }
 
+type historicalTPImpactStudent struct {
+	StudentID    int64  `json:"student_id"`
+	Relevance    string `json:"relevance"`
+	FinalID      int64  `json:"final_id,omitempty"`
+	FinalVersion int64  `json:"final_version,omitempty"`
+}
+
 type HistoricalTPPreview struct {
 	Input                                                   HistoricalTPPreviewInput
 	Context                                                 LearningObjectiveContext
@@ -82,6 +89,7 @@ type HistoricalTPPreview struct {
 	StudentCount, MemberCount, NonMemberCount, UnknownCount int
 	SnapshotToken                                           string
 	displayHash                                             [32]byte
+	impact                                                  []byte
 }
 
 // PreviewHistoricalTP membaca seluruh data yang digunakan dalam satu snapshot.
@@ -176,32 +184,38 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 	 (p.class_id=$2 OR EXISTS(SELECT 1 FROM app.student_class_moves m WHERE m.placement_id=p.id AND (m.from_class_id=$2 OR m.to_class_id=$2))
 	 OR EXISTS(SELECT 1 FROM app.student_school_returns r WHERE r.placement_id=p.id AND r.target_class_id=$2))
 	 UNION SELECT student_id FROM app.semester_final_versions WHERE semester_id=$3 AND class_id=$2 AND subject_id=$4
-	 ) SELECT st.id,st.name,coalesce(f.final_score::text,''),coalesce(f.version,0),
+	 ) SELECT st.id,st.name,coalesce(f.final_score::text,''),coalesce(f.id,0),coalesce(f.version,0),
 	 coalesce((SELECT count(*) FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=st.id AND p.starts_on IS NULL),0),
 	 coalesce((SELECT count(*) FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=st.id),0),
 	 coalesce((SELECT count(*) FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=st.id AND p.starts_on IS NOT NULL AND p.starts_on<=nullif($5,'')::date AND app.student_placement_class_at(p.id,nullif($5,'')::date)=$2),0),
 	 coalesce((SELECT count(*) FROM app.student_placements p WHERE p.school_year_id=$1 AND p.student_id=st.id AND p.starts_on IS NOT NULL AND p.starts_on<=nullif($5,'')::date AND app.student_placement_class_at(p.id,nullif($5,'')::date) IS NOT NULL),0)
 	 FROM candidates c JOIN app.students st ON st.id=c.student_id LEFT JOIN LATERAL
-	 (SELECT final_score,version FROM app.semester_final_versions WHERE semester_id=$3 AND class_id=$2 AND subject_id=$4 AND student_id=st.id ORDER BY version DESC LIMIT 1) f ON true
+	 (SELECT id,final_score,version FROM app.semester_final_versions WHERE semester_id=$3 AND class_id=$2 AND subject_id=$4 AND student_id=st.id ORDER BY version DESC LIMIT 1) f ON true
 	 ORDER BY st.name,st.id LIMIT 251`, yearID, in.ClassID, in.SemesterID, in.SubjectID, in.AssessmentDate)
 	if err != nil {
 		return out, err
 	}
+	impact := make([]historicalTPImpactStudent, 0)
 	for rows.Next() {
 		var st HistoricalTPPreviewStudent
+		var finalID int64
 		var unknown, placements, member, placed int
-		if err = rows.Scan(&st.ID, &st.Name, &st.FinalValue, &st.FinalVersion, &unknown, &placements, &member, &placed); err != nil {
+		if err = rows.Scan(&st.ID, &st.Name, &st.FinalValue, &finalID, &st.FinalVersion, &unknown, &placements, &member, &placed); err != nil {
 			rows.Close()
 			return out, err
 		}
 		st.Relevance = "Belum dapat diverifikasi"
+		relevance := "unverified"
 		if dateKnown && placements > 0 && unknown == 0 && placed <= 1 {
 			if member == 1 {
 				st.Relevance = "Kandidat anggota kelas"
+				relevance = "candidate_member"
 			} else {
 				st.Relevance = "Bukan anggota kelas pada tanggal penilaian"
+				relevance = "not_member"
 			}
 		}
+		impact = append(impact, historicalTPImpactStudent{st.ID, relevance, finalID, st.FinalVersion})
 		if st.FinalVersion > 0 {
 			out.FinalCount++
 		}
@@ -263,12 +277,19 @@ func (s *Store) previewHistoricalTPTx(ctx context.Context, tx *sql.Tx, actor int
 		return out, err
 	}
 	out.displayHash = sha256.Sum256(data)
+	out.impact, err = json.Marshal(impact)
+	if err != nil {
+		return out, err
+	}
+	// Ikat proyeksi audit ke fingerprint yang sama sebelum hasil dipaginasi.
+	impactHash := sha256.Sum256(out.impact)
+	proofHash := sha256.Sum256(append(out.displayHash[:], impactHash[:]...))
 	input, err := json.Marshal(in)
 	if err != nil {
 		return out, err
 	}
 	var proof []byte
-	if err = tx.QueryRowContext(ctx, `SELECT academic_write.historical_tp_proof($1,$2::jsonb,$3)`, actor, string(input), out.displayHash[:]).Scan(&proof); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT academic_write.historical_tp_proof($1,$2::jsonb,$3)`, actor, string(input), proofHash[:]).Scan(&proof); err != nil {
 		return out, academicWriterError(err)
 	}
 	out.SnapshotToken = hex.EncodeToString(proof)

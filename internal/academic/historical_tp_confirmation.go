@@ -108,8 +108,8 @@ func (s *Store) confirmHistoricalLearningObjectiveTx(ctx context.Context, tx *sq
 		return 0, err
 	}
 	var id int64
-	err = tx.QueryRowContext(ctx, `SELECT academic_write.confirm_historical_tp($1,$2,$3)`,
-		actor, payload, preview.displayHash[:]).Scan(&id)
+	err = tx.QueryRowContext(ctx, `SELECT academic_write.confirm_historical_tp($1,$2,$3,$4)`,
+		actor, payload, preview.displayHash[:], preview.impact).Scan(&id)
 	if err != nil {
 		return 0, academicWriterError(dbError(err))
 	}
